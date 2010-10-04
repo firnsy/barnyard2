@@ -1,0 +1,274 @@
+2010-XX-YY - Barnyard 2.1.9-beta1
+  [*] Additions
+     * spo_database. Support of encrypted connections to postgresql is now
+       available. See README.database for the appropriate options.
+
+     * spo_sguil. Fixed issue with duplication of alerts.
+
+  [*] Improvements
+
+     * spooler. Fixed early termination of non-readable files, causing the
+       dreaded SEGFAULT.
+
+     * classifications. Tweaked output for classification identification if the
+       appropriate node can't be found.
+
+
+2010-03-05 - Barnyard 2.1.8
+  [*] Additions
+     * spo_database. Support of encrypted connections to mysql is now available.
+       See the example configuration file for the appropriate options.
+
+     * spo_sguil. Fixed issue with duplication of alerts.
+
+  [*] Improvements
+     * OpenBSD. Thanks to Markus Lude, we now stomped a few bugs that prevented
+       a clean build on OpenBSD platforms. Thanks mate!
+
+     * Log Files. Fixed missing command line parameter "-l" testing to enable
+       log file setting form the command line.
+
+     * Status Returns. The status return codes should now be a little saner when
+       scripting the barnyard2 process. We welcome any suggestions for
+       improvements to these return codes.
+
+     * spooler. The spooler now incorporates an improved event cache that will 
+       in time facilitate improved correlation for TCP portscans and similar
+       events.
+
+
+2009-11-06 - Barnyard 2.1.7
+  [*] Additions
+     * Statistics. Similar to that of Snort, barnyard2 will now print a number
+       of statistics upon application termination.
+
+  [*] Improvements
+     * core. Barnyard2 has had the appropriate changes from snort 2.8.5.1 pushed
+       into the core.
+     
+     * database. Fixed a duplication issue introduced with the alignment of the
+       snort 2.8.4.1 code base. Thanks to Jonathan Tullet.
+
+     * spooler. Fixed issue with duplicate processing due to waldo file not
+       being updated.
+
+     * alert_cef. Fixed crumping of the alert_cef plugin that was caused by a
+       recent alignment to Snort's output plugins.
+
+     * alert_fast. Small clean up in alert_fast to remove unused portions.
+
+     * RPM spec. The RPM spec has been updated thanks to Tom McLaughlin.
+
+     * log_tcpdump. The output of tcpdump will now match the linktype being
+       used by the packet. The output format can be explicitly defined or auto
+       adapting.
+       
+
+2009-07-15 - Barnyard 2.1.6 
+  [*] Improvements
+     * Waldo Files. Waldo files not being honoured has been fixed. The issue of
+       no new waldo files being created or updated was caused by a number of key
+       logical checks not being performed.
+
+     * Reference Files. The reference file can NOW be specified on the command
+       line via the "-R" option.
+
+     * Map Files. The core logic parsing of map files has been improved to avoid
+       splitting inappropriately. The WARNING about "command attempt" should no
+       longer raise its ugly head.
+
+     * spo_database. The sleeping logic in MySQL has been modified to make use
+       of nanosleep() and not sleep(). This should allow trapping of signals a
+       little easier.
+
+
+2009-05-30 - Barnyard 2.1.5
+  [*] Additions
+     * Output Plugins. We are now attempting to support all Snort output plugins
+       except for alert_sf_socket.
+
+     * Reference System. A new config directive "reference-map" has been added
+       in order to better align with Snort's Reference System. The list of
+       references is typically stored in reference.config. This directive is
+       required to be defined in the configuration file or at the command line.
+
+  [*] Improvements
+     * core. Barnyard2 has had the appropriate changes from snort 2.8.4.1 pushed
+       into the core.
+     
+       In addition an issue with non-unique pid files being generated when
+       multiple instances were running has been fixed. Thanks to Jon. B. Bayer
+
+     * maps. The maps have now been restructured to provide more consistency to
+       the Snort structures.
+
+     * spooler. The spooler function has been reworked and now provides the
+       appropriate event caching and correlation that was being performed in
+       individual output plugins. The end result is less code in the output
+       plugins and easier maintenance.
+
+       In addition an issue with referencing a free'd pointer has been found
+       and fixed. Thanks to Jon. B. Bayer.
+
+     * spo_database. MySQL reconnection support is more robust with continuing
+       reconnection attempts.
+       NOTE: The reconnection is blocking if other output plugins are enabled.
+
+
+2009-04-18 - Barnyard 2.1.4
+  [*] Improvements
+     * core. Barnyard2 has had the appropriate changes from snort 2.8.4 pushed
+       into the core.
+
+     * map. The retrieval of sid messages from the map structures has been
+       updated and does not restrict to specific generator id's. This will be
+       re-addressed if sid to gid maps ever happen. Thanks to Jason Wallace.
+
+     * spooler. Fixed an issue with blank permissions when creating waldo 
+       files from scratch. Thanks to Jason Wallace.
+
+
+2009-03-07 - Barnyard 2.1.3
+  [*] Improvements
+     * spooler. Fixed regression with waldo file operations, where unreliable
+       creation, reading and writing would cause unexpected SEGFAULTs. I hate
+       SEGFAULTS!
+
+
+2009-02-20 - Barnyard 2.1.2
+  [*] Improvements
+     * spo_alert_syslog. Fixed whitespace issues in output to allow for easier
+       parsing using command line or external scripts.
+
+     * spo_database. Ensure alert events are not flagged when packet info is
+       available. There is no indication of what mode Snort is in (alert, or
+       log) when information is written to the file.
+
+     * spooler. Fixed overly verbose spooler messages when using waldo files.
+
+
+2009-01-29 - Barnyard 2.1.1
+  [*] Improvements
+     * spo_alert_syslog. Ability to add hostname to displayed log events has
+       been included. This is useful for multiple snort instances on different
+       sensors logging to the same syslog server.
+
+     * spo_sguil. Fixed inconsistencies between the documentated and the actual
+       configuration requirements for the sguil output plugin. The parameters
+       can be either comma (",") or space (" ") separated. The documentation 
+       refers to space separated only.
+
+
+2008-12-04 - Barnyard 2.1.0
+  [*] Improvements
+     * core. Barnyard2 has been completely rewritten from the snort-2.8.3.1
+       code base to enable a complete GPL version. If there are any remaining
+       issues or concerns regarding licensing then please let us know. All
+       Snort wrapper functions are inhereted throughout. Yay Snort!!!
+
+     * spooler. The spooler has been re-organised, cleaned up and has had some
+       optimisation tweaks provided.
+
+     * Waldo. Waldo support has been completely revamped. I/O is now performed
+       as the file descriptor level and uses the fixed WaldoData structure
+       format defined in spooler.h
+
+     * spo_sguil. Significant overhaul and also released, with permission from
+       Bamm Vischer under GPL.
+
+
+2008-11-11 - Barnyard 2.0.5
+  [*] Improvements
+     * spo_sguil. Modifed the parameter parsing of the configuration to now 
+       expect "key=value" pairs and not "key value" pairs. This aligns with
+       traditional spo_database plugin.
+
+     * FreeBSD. A number of bugs have been discovered and subsequently squished
+       on FreeBSD systems. Slowly getting a hang of the autotools framework ;)
+
+     * Spooling. Fixed a bug preventing batch processing of files defined by
+       relative addressing.
+
+     * Xrefs. When Xref data is explicitly requested by the "xref" flag but an
+       alert does not have any it will now explicityly indicate similarly as
+       shown: "Xref => none".
+
+
+2008-07-06 - Barnyard 2.0.4
+  [*] Additions
+     * Syslog support. Two new syslog output plugins have been added to the
+       collection. The plugins allow logging to either the local machines
+       syslog daemon or alternatively to a remote syslog daemon over UDP.
+
+     * CEF support. One of the aforementioned syslog plugins use the open
+       standard Common Event Format (CEF) from ArcSight. I obtained the CEF
+       message structure from Colin Grady, because I'm still waiting for
+       ArcSight to send me their "open" standard after numerous emails :(
+
+  [*] Improvements
+     * spo_sguil. Removed two instances of while(1) loops that would cause a
+       lockup when the sguil daemon was not up or not responding. It now
+       listens for global signals and should exit cleanly when told to do so.
+
+     * Spooling. Some minor cleanup was performed in the spooling section to
+       improve code layout and readability.
+
+
+2008-06-02 - Barnyard 2.0.3
+  [*] Additions
+     * spo_sguil. Added post init configuration ability to allow testing of the
+       sguil plugin. Work in progress.
+
+  [*] Improvements
+     * spo_sguil. Fixed major incompatibilities with the sguil communications
+       channel including:
+         - network/host byte order mismatch of event ID's, and
+         - timestamp rendering
+
+     * GetUniqueName. Modified the prioritisation of obtaining/configuring the
+       ability to generate a unique machine name. Order of priority is now:
+         1. hostname directive
+         2. actual machine name
+
+
+2008-06-01 - Barnyard 2.0.2
+  [*] Additions
+      * More databases (experimental). The spo_databsae plugin was able to be 
+        ported across with little effort. This means there is now database
+        support for MSSQL, MYSQL, Postgresql, any unixOBDC and Oracle. Awesome!
+
+      * Sguil support (experimental). We have started converting the original 
+        Sguil plugin to the new API. This is a big milestone as it will now
+        allow us to start working on a more contemporary frontend for Sguil.
+
+      * Waldo files. The waldo file is now supported providing bookmarking for
+        file processing in the event of a barnyard crash or similar.
+
+  [*] Improvements
+      * Fixed segfault bugs in the event spooling routines of in spo_log_ascii
+        and spo_sguil.
+
+      * Cleaned up output format of spo_alert_fast.
+
+
+2008-05-10 - Barnyard 2.0.1
+  [*] Additions
+      * Unified2 support. Since the release of Snort 2.8.0 a new output plugin 
+        named 'unified2' will address all the shortfalls of the original 
+        unified output plugin. The new format supports multiple records in the
+        one format as well as expansion for additional records such as packet
+        statistics, etc in the future.
+        
+      * 64-bit support. Support for 64-bit systems has been considered from the
+        outset. However, given that we don't have any 64-bit machines to test
+        the current builds on we will wait for community feedback on this.
+      
+  [*] Improvements
+      * Plugin structure. Given that we initially fused majority of the current
+        Snort core with the original barnyard code and improved from there we 
+        have attained/retained a similar output plugin API to that of Snort.
+        This requires only slight modification to existing Snort output plugins
+        to work with Barnyard. This may change to full compatibility in the
+        future depending on feedback.
+
+      

@@ -1,0 +1,57 @@
+
+------------------------------------------------------------------------------
+0. SUMMARY
+------------------------------------------------------------------------------
+
+The sguil output plug-in enables barnyard to talk to the sguil daemon.
+
+This README contains some quick information about how to set up and 
+configure sguil logging with in barnyard.
+
+Questions or comments about the sguil plugin can be directed to the
+SecurixLive development team <dev@securixlive.com>.
+
+
+------------------------------------------------------------------------------
+1. SGUIL SETUP
+------------------------------------------------------------------------------
+
+To get this plug-in working you must have a sguil set up and configured
+properly. Take the the following steps to get things working.
+
+   1) More to follow ...
+
+
+------------------------------------------------------------------------------
+2. PLUGIN CONFIGURATION
+------------------------------------------------------------------------------
+
+You must add some information to the barnyard configuration file 
+to enable sguil logging. The configuration file distributed with barnyard
+has some sample configuration lines.
+
+The configuration line will be of the following format:
+
+   output sguil: [parameter list]
+
+Arguments:
+
+   [parameter list] - The parameter list consists of key value
+       pairs. The proper format is a list of key=value pairs each
+       separated a space.
+
+       All parameters are optional but may be necessary depending
+       on how you have configured your sguil daemons and associated
+	   databases.
+
+       agent_port - the name of the sguil agent port you are connecting to. The
+	       default value is assumed to be 7735.
+
+       sensor_name - specify your own name for this snort sensor. If you do not
+	       specify a name one will be generated automatically.
+
+Example:
+
+    output sguil: agent_port=7000 sensor_name=thor
+
+

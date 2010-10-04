@@ -1,0 +1,111 @@
+
+-------------------------------------------------------------------------------
+0. BARNYARD2 QUICK INSTALL
+-------------------------------------------------------------------------------
+
+The "generic" notes for putting this thing together are below.  Here's the
+short version.
+
+The quick install notes for getting people up and running in with minimal fuss
+are below. Detailed instructions will follow later.
+
+1.  *** Make sure you have libpcap HEADERS installed!!! ***
+2.  ./configure
+3.  make
+4.  make install
+5.  Create a sample rules file (eg. look at etc/barnyard2.conf)
+6.  barnyard2 -?
+7.  If you've used barnyard before, there may be a little variance in the
+    commandline parameters. 
+8.  Have fun!
+
+
+-------------------------------------------------------------------------------
+1. BARNYARD2 CONFIGURE-TIME SWITCHES
+-------------------------------------------------------------------------------
+
+`--enable-debug'
+    Enable debugging options (bugreports and developers only).
+     
+`--with-tcl=DIR'
+    Support for Tcl, turn this on if you want to use the Sguil plugin. An
+	alternative location can be supplied for non-standard Tcl installs.
+
+`--with-libpcap-includes=DIR'
+    Specify location for pcap header files.
+    
+`--with-mysql=DIR'
+    Support for mysql, turn this on if you want to use ACID/BASE with MySQL.
+    NOTE: Specifying a directory will be deprecated in the future.
+    
+`--with-mysql-libraries=DIR'
+    Specify location for mysql client library.
+    
+`--with-mysql-includes=DIR'
+    Specify location for mysql header files.
+    
+`--with-odbc=DIR'
+    Support for ODBC databases, turn this on if you want to use ACID/BASE with
+	a non-listed DB.
+    
+`--with-postgresql=DIR'
+    Support for Postgresql databases, turn this on if you want to use ACID/BASE
+	with PostgreSQL.
+    
+`--with-oracle=DIR'
+    Support for Oracle databases, turn this on if you want to use ACID/BASE
+	with Oracle.
+    
+
+-------------------------------------------------------------------------------
+2. BASIC INSTALLATION
+-------------------------------------------------------------------------------
+
+   These are generic installation instructions.
+
+   The `configure' shell script attempts to guess correct values for various
+system-dependent variables used during compilation.  It uses those values to
+create a `Makefile' in each directory of the package. It may also create one or
+more `.h' files containing system-dependent definitions.  Finally, it creates a
+shell script `config.status' that you can run in the future to recreate the
+current configuration, a file `config.cache' that saves the results of its
+tests to speed up reconfiguring, and a file `config.log' containing compiler
+output (useful mainly for debugging `configure').
+
+   If you need to do unusual things to compile the package, please try to
+figure out how `configure' could check whether to do them, and mail diffs or
+instructions to the address given in the `README' so they can be considered for
+the next release.  If at some point `config.cache' contains results you don't
+want to keep, you may remove or edit it.
+
+   The file `configure.in' is used to create `configure' by a program called
+`autoconf'.  You only need `configure.in' if you want to change it or
+regenerate `configure' using a newer version of `autoconf'.
+
+The simplest way to compile this package is:
+
+  1. `cd' to the directory containing the package's source code and type
+     `./configure' to configure the package for your system.  If you're using
+	 `csh' on an old version of System V, you might need to type
+	 `sh ./configure' instead to prevent `csh' from trying to execute
+	 `configure' itself.
+
+     Running `configure' takes awhile.  While running, it prints some messages
+	 telling which features it is checking for.
+
+  2. Type `make' to compile the package.
+
+  3. Optionally, type `make check' to run any self-tests that come with the
+     package.
+
+  4. Type `make install' to install the programs and any data files and
+     documentation.
+
+  5. You can remove the program binaries and object files from the source code
+     directory by typing `make clean'.  To also remove the files that
+	 `configure' created (so you can compile the package for a different kind
+	 of computer), type `make distclean'.  There is also a
+	 `make maintainer-clean' target, but that is intended mainly for the
+	 package's developers.  If you use it, you may have to get all sorts of
+	 other programs in order to regenerate files that came with the
+	 distribution.

@@ -1,0 +1,162 @@
+
+------------------------------------------------------------------------------
+0. SUMMARY
+------------------------------------------------------------------------------
+
+Barnyard2 - version 2-1.8
+
+This README contains some quick information about how to set up and 
+configure barnyard2 to ensure it works as it should.
+
+If you have any questions or comments about the barnyard2 then please direct
+them to the SecurixLive.com Team <dev@securixlive.com>.
+
+Distribution Site:
+http://www.securixlive.com/barnyard2
+
+
+------------------------------------------------------------------------------
+1. COPYRIGHT
+------------------------------------------------------------------------------
+
+Copyright (C)2008-2010 Ian Firns	 <firnsy@securixlive.com>
+Copyright (C)2008-2010 SecurixLive   <dev@securixlive.com>
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License Version 2 as
+published by the Free Software Foundation.  You may not use, modify or
+distribute this program under any other version of the GNU General
+Public License.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+
+Some of this code has been taken from Snort, which was developed by 
+Martin Roesch and The Snort Team (http://www.snort.org/team.html).
+
+Some of this code has been taken from barnyard, which was developed by 
+Martin Roesch and Andrew R. Baker.
+
+Some of this code has been taken from tcpdump, which was developed
+by the Network Research Group at Lawrence Berkeley National Lab,
+and is copyrighted by the University of California Regents.
+
+
+------------------------------------------------------------------------------
+2. DESCRIPTION
+------------------------------------------------------------------------------
+
+Barnyard2 is an open source interpreter for Snort unified2 binary output files.
+Its primary use is allowing Snort to write to disk in an efficient manner and
+leaving the task of parsing binary data into various formats to a separate
+process that will not cause Snort to miss network traffic.
+
+Barnyard2 has 3 modes of operation: 
+  1. batch (or one-shot), 
+  2. continual, and 
+  3. continual w/ bookmark.  
+  
+In batch (or one-shot) mode, barnyard2 will process the explicitly specified
+file(s) and exit.
+
+In continual mode, barnyard2 will start with a location to look and a specified
+file pattern and continue to process new data (and new spool files) as they
+appear.
+
+Continual mode w/ bookmarking will also use a checkpoint file (or waldo file in
+the snort world) to track where it is. In the event the barnyard2 process ends
+while a waldo file is in use, barnyard2 will resume processing at the last
+entry as listed in the waldo file.
+
+The "-f", "-w", and "-o" options are used to determine which mode barnyard2
+will run in.  It is legal for both the "-f" and "-w" options to be used on the
+command line at the same time, however any data that exists in the waldo file
+will override the command line data from the "-f" and "-d" options. See the
+command directives section below for more detail.
+
+Barnyard2 processing is controlled by two main types of directives: input
+processors and output plugins. The input processors read information in from a
+specific format ( currently the spo_unified2 output module of Snort ) and 
+output them in one of several ways.
+
+
+------------------------------------------------------------------------------
+3. USAGE
+------------------------------------------------------------------------------
+
+Command line: 
+
+	barnyard2 [-options]
+
+
+    Gernal Options:
+
+        -c <file>  Use configuration file <file>
+        -C <file>  Read the classification map from <file>
+        -D         Run barnyard2 in background (daemon) mode
+        -e         Display the second layer header info
+        -E         Log alert messages to NT Eventlog. (Win32 only)
+        -F         Turn off fflush() calls after binary log writes
+        -g <gname> Run barnyard2 gid as <gname> group (or gid) after initialization
+        -G <file>  Read the gen-msg map from <file>
+        -h <name>  Define the hostname <name>. For logging purposes only
+        -i <if>    Define the interface <if>. For logging purposes only
+        -I         Add Interface name to alert output
+        -l <ld>    Log to directory <ld>
+        -m <umask> Set umask = <umask>
+        -O         Obfuscate the logged IP addresses
+        -q         Quiet. Don't show banner and status report
+        -r <id>    Include 'id' in barnyard2_intf<id>.pid file name
+        -R <file>  Read the reference map from <file>
+        -S <file>  Read the sid-msg map from <file>
+        -t <dir>   Chroots process to <dir> after initialization
+        -T         Test and report on the current barnyard2 configuration
+        -u <uname> Run barnyard2 uid as <uname> user (or uid) after initialization
+        -U         Use UTC for timestamps
+        -v         Be verbose
+        -V         Show version number
+        -?         Show this information
+    
+    Continual Processing Options:
+        -a <dir>   Archive processed files to <dir>
+        -f <base>  Use <base> as the base filename pattern
+        -d <dir>   Spool files from <dir>
+        -n         Only process new events
+        -w <file>  Enable bookmarking using <file>
+	
+    Batch Processing Mode Options:
+        -o         Enable batch processing mode
+	
+
+    Longname options and their corresponding single char version
+        --reference <file>                Same as -R
+        --classification <file>           Same as -C
+        --gen-msg <file>                  Same as -G
+        --sid-msg <file>                  Same as -S
+        --alert-on-each-packet-in-stream  Call output plugins on each packet in an alert stream
+        --process-new-records-only        Same as -n
+        --pid-path <dir>                  Specify the directory for the barnyard2 PID file
+        --help                            Same as -?
+        --version                         Same as -V
+        --create-pidfile                  Create PID file, even when not in Daemon mode
+        --nolock-pidfile                  Do not try to lock barnyard2 PID file
+        --max-mpls-labelchain-len         Specify the max MPLS label chain
+        --mpls-payload-type               Specify the protocol (ipv4, ipv6, ethernet) that is encapsulated by MPLS
+
+
+Examples:
+
+  1. Using barnyard2 in continuous mode with a waldo file
+
+    # ./barnyard2 -c /etc/barnyard2.conf -d /var/snort -f snort.u2 -w /var/snort/snort.waldo
+
+  2. Using barnyard2 in batch mode
+
+    # ./barnyard2 -c /etc/barnyard2.conf -o file1.u2 file2.u2 file3.u2
+

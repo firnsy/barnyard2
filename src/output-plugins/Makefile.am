@@ -5,6 +5,7 @@ noinst_LIBRARIES = libspo.a
 
 libspo_a_SOURCES = \
 spo_alert_arubaaction.c spo_alert_arubaaction.h \
+spo_alert_bro.c spo_alert_bro.h \
 spo_alert_cef.c spo_alert_cef.h \
 spo_alert_fast.c spo_alert_fast.h \
 spo_alert_full.c spo_alert_full.h \

@@ -56,6 +56,7 @@
 
 /* built-in output plugins */
 #include "output-plugins/spo_alert_arubaaction.h"
+#include "output-plugins/spo_alert_bro.h"
 #include "output-plugins/spo_alert_cef.h"
 #include "output-plugins/spo_alert_fast.h"
 #include "output-plugins/spo_alert_full.h"
@@ -338,6 +339,10 @@ void RegisterOutputPlugins(void)
 
 #ifdef HAVE_LIBPRELUDE
     AlertPreludeSetup();
+#endif
+
+#ifdef BROCCOLI
+    AlertBroSetup();
 #endif
 
     AlertTestSetup();

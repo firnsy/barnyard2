@@ -928,6 +928,43 @@ if test "x$enable_aruba" = "xyes"; then
     CPPFLAGS="$CPPFLAGS -DARUBA"
 fi
 
+AC_ARG_ENABLE(bro,
+[  --enable-bro             Enable Bro output plugin],
+       enable_bro="$enableval", enable_bro="no")
+AC_ARG_WITH(broccoli, 
+[  --with-broccoli=DIR            Prefix where libbroccoli is installed 
+                                 for Bro output plugin support (optional)],
+    [ with_broccoli="$withval" ],
+    [ with_broccoli="no" ])
+if test "x$enable_bro" = "xyes"; then
+  if test -d $withval; then
+    broccoli_directory="$withval $default_directory";
+  else
+    broccoli_directory="$default_directory /usr/local/bro";
+  fi
+
+  AC_MSG_CHECKING(for broccoli)
+
+  for i in $broccoli_directory; do
+    if test -x "$i/bin/broccoli-config"; then
+      BROCCOLI_DIR="$i"
+    fi
+  done
+
+  if test -z "$BROCCOLI_DIR"; then
+    tmp=""
+    for i in $broccoli_directory; do
+      tmp="$tmp $i/include"
+    done
+    FAIL_MESSAGE("Broccoli header file (broccoli.h)", $tmp)
+  fi
+
+  AC_MSG_RESULT(yes)
+  LDFLAGS="${LDFLAGS} `${BROCCOLI_DIR}/bin/broccoli-config --libs`"
+  CPPFLAGS="${CPPFLAGS} `${BROCCOLI_DIR}/bin/broccoli-config --cflags`"
+  LIBS="${LIBS} -lbroccoli"
+fi
+
 # let's make some fixes..
 
 CFLAGS=`echo $CFLAGS | sed -e 's/-I\/usr\/include //g'`

@@ -16,7 +16,7 @@ http://www.securixlive.com/barnyard2
 1. COPYRIGHT
 ------------------------------------------------------------------------------
 
-Copyright (C)2008-2010 Ian Firns	 <firnsy@securixlive.com>
+Copyright (C)2008-2010 Ian Firns     <firnsy@securixlive.com>
 Copyright (C)2008-2010 SecurixLive   <dev@securixlive.com>
 
 This program is free software; you can redistribute it and/or modify
@@ -89,7 +89,7 @@ output them in one of several ways.
 
 Command line: 
 
-	barnyard2 [-options]
+    barnyard2 [-options]
 
 
     Gernal Options:
@@ -126,10 +126,10 @@ Command line:
         -d <dir>   Spool files from <dir>
         -n         Only process new events
         -w <file>  Enable bookmarking using <file>
-	
+
     Batch Processing Mode Options:
         -o         Enable batch processing mode
-	
+
 
     Longname options and their corresponding single char version
         --reference <file>                Same as -R

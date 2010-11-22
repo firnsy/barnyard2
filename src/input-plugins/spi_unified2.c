@@ -111,17 +111,12 @@ void Unified2Init(char *args)
 /* Partial reads should rarely, if ever, happen.  Thus we should not actually
    call lseek very often 
  */
-
-
-/* TODO: remove static component since we can carry the header in spooler->record->header */
-static Unified2RecordHeader u2hdr;
-
 int Unified2ReadRecordHeader(void *sph)
 {
     ssize_t             bytes_read;
     Spooler             *spooler = (Spooler *)sph;
 
-    if( !spooler->record.header )
+    if( NULL == spooler->record.header )
     {
         // SnortAlloc will FatalError if memory can't be assigned.
         spooler->record.header = SnortAlloc(sizeof(Unified2RecordHeader));
@@ -133,15 +128,15 @@ int Unified2ReadRecordHeader(void *sph)
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Header: Reading at byte position %u\n", position););
 #endif
 
-    bytes_read = read( spooler->fd, &u2hdr + spooler->offset, sizeof(Unified2RecordHeader) - spooler->offset);
+    bytes_read = read( spooler->fd, spooler->record.header + spooler->offset, sizeof(Unified2RecordHeader) - spooler->offset);
     
-    if(bytes_read == -1)
+    if (bytes_read == -1)
     {
         LogMessage("ERROR: Read error: %s\n", strerror(errno));
         return BARNYARD2_FILE_ERROR;
     }
 
-    if(bytes_read + spooler->offset != sizeof(Unified2RecordHeader))
+    if (bytes_read + spooler->offset != sizeof(Unified2RecordHeader))
     {
         if(bytes_read + spooler->offset == 0)
         {
@@ -152,8 +147,9 @@ int Unified2ReadRecordHeader(void *sph)
         return BARNYARD2_READ_PARTIAL;
     }
 
-    memcpy(spooler->record.header, &u2hdr, sizeof(Unified2RecordHeader));
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Header: Type=%u (%u bytes)\n", ntohl(u2hdr.type), ntohl(u2hdr.length)););
+    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Header: Type=%u (%u bytes)\n",
+                ntohl(((Unified2RecordHeader *)spooler->record.header)->type),
+                ntohl(((Unified2RecordHeader *)spooler->record.header)->length)););
 
     spooler->offset = 0;
     return 0;
@@ -161,114 +157,63 @@ int Unified2ReadRecordHeader(void *sph)
 
 int Unified2ReadRecord(void *sph)
 {
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Reading record type=%u (%u bytes)\n", ntohl(u2hdr.type), ntohl(u2hdr.length)););
-
-    switch (ntohl(u2hdr.type))
-    {
-        case UNIFIED2_IDS_EVENT:
-            return Unified2ReadEventRecord(sph);
-            break;
-        case UNIFIED2_IDS_EVENT_IPV6:
-            return Unified2ReadEvent6Record(sph);
-            break;
-        case UNIFIED2_PACKET:
-            return Unified2ReadPacketRecord(sph);
-            break;
-        default:
-            FatalError("Unknown record type read: %u\n", ntohl(u2hdr.type));
-            break;
-    }
-
-    return -1;
-}
-
-int Unified2ReadEventRecord(void *sph)
-{
     ssize_t             bytes_read;
-    int                 record_size;
+    uint32_t            record_type;
+    uint32_t            record_length;
     Spooler             *spooler = (Spooler *)sph;
 
-    record_size = sizeof(Unified2Event);
+    /* convert once */
+    record_type = ntohl(((Unified2RecordHeader *)spooler->record.header)->type);
+    record_length = ntohl(((Unified2RecordHeader *)spooler->record.header)->length);
 
-    if(!spooler->record.data)
-    {
-        // SnortAlloc will FatalError if memory can't be assigned.
-        spooler->record.data=SnortAlloc(record_size);
-    }
-
-    if (spooler->offset < record_size) 
-    {
-#if DEBUG
-        int position = lseek(spooler->fd, 0, SEEK_CUR);
-        DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Record: Reading at byte position %u\n", position););
-#endif
-        /* in case we don't have it already */
-
-        bytes_read = read(spooler->fd, spooler->record.data + spooler->offset, 
-                    record_size - spooler->offset);
-
-        if(bytes_read == -1)
-        {
-            LogMessage("ERROR: read error: %s\n", strerror(errno));
-            return BARNYARD2_FILE_ERROR;
-        }
-            
-        if(bytes_read + spooler->offset != record_size)
-        {
-            spooler->offset += bytes_read;
-            return BARNYARD2_READ_PARTIAL;
-        }
-
-#ifdef DEBUG
-        Unified2PrintEventRecord((Unified2Event *)spooler->record.data);
-#endif
-
-        spooler->offset = 0;
-
-        return 0;
-    }
-
-    return -1;
-}
-
-int Unified2ReadEvent6Record(void *sph)
-{
-    ssize_t             bytes_read;
-    int                 record_size;
-    Spooler             *spooler = (Spooler *)sph;
-
-    record_size = sizeof(Unified2Event6);
+    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Reading record type=%u (%u bytes)\n", 
+                record_type, record_length););
 
     if(!spooler->record.data)
     {
         /* SnortAlloc will FatalError if memory can't be assigned */
-        spooler->record.data=SnortAlloc(record_size);
+        spooler->record.data = SnortAlloc(record_length);
     }
 
-    if (spooler->offset < record_size) 
+    if (spooler->offset < record_length)
     {
 #if DEBUG
         int position = lseek(spooler->fd, 0, SEEK_CUR);
         DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Record: Reading at byte position %u\n", position););
 #endif
         /* in case we don't have it already */
-        bytes_read = read(spooler->fd, spooler->record.data + spooler->offset, 
-                    record_size - spooler->offset);
 
-        if(bytes_read == -1)
+        bytes_read = read(spooler->fd, spooler->record.data + spooler->offset,
+                    record_length - spooler->offset);
+
+        if (bytes_read == -1)
         {
             LogMessage("ERROR: read error: %s\n", strerror(errno));
             return BARNYARD2_FILE_ERROR;
         }
 
-        if(bytes_read + spooler->offset != record_size)
+        if (bytes_read + spooler->offset != record_length)
         {
             spooler->offset += bytes_read;
             return BARNYARD2_READ_PARTIAL;
         }
 
 #ifdef DEBUG
-        Unified2PrintEvent6Record((Unified2Event6 *)spooler->record.data);
+        switch (record_type)
+        {
+            case UNIFIED2_IDS_EVENT:
+                Unified2PrintEventRecord((Unified2Event *)spooler->record.data);
+                break;
+            case UNIFIED2_IDS_EVENT_IPV6:
+                Unified2PrintEventRecord((Unified2Event *)spooler->record.data);
+                break;
+            case UNIFIED2_PACKET:
+                Unified2PrintPacketRecord((Unified2Packet *)spooler->record.data);
+                break;
+            default:
+                DEBUG_WRAP(DebugMessage(DEBUG_LOG,"No debug available for record type: %u\n", record_type););
+                break;
+        }
 #endif
 
         spooler->offset = 0;
@@ -279,54 +224,14 @@ int Unified2ReadEvent6Record(void *sph)
     return -1;
 }
 
-int Unified2ReadPacketRecord(void *sph)
+void Unified2CleanExitFunc(int signal, void *arg)
 {
-    ssize_t             bytes_read;
-    uint32_t            len;
-    Spooler             *spooler = (Spooler *)sph;
+    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Unified2CleanExitFunc\n"););
+}
 
-    /* convert once */
-    len = ntohl(u2hdr.length);
-
-    if(!spooler->record.data)
-    {
-        // SnortAlloc will FatalError if memory can't be assigned.
-        spooler->record.data=SnortAlloc(len);
-    }
-
-    if (spooler->offset < len)
-    {
-#if DEBUG
-        int position = lseek(spooler->fd, 0, SEEK_CUR);
-        DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Record: Reading at byte position %u\n", position););
-#endif
-
-        /* In case we don't have it already */
-        bytes_read = read(spooler->fd, spooler->record.data + spooler->offset, 
-                    ntohl(u2hdr.length) - spooler->offset);
-
-        if(bytes_read == -1)
-        {
-            LogMessage("ERROR: read error: %s\n", strerror(errno));
-            return BARNYARD2_FILE_ERROR;
-        }
-
-        if(bytes_read + spooler->offset != len)
-        {
-            spooler->offset += bytes_read;
-            return BARNYARD2_READ_PARTIAL;
-        }
-
-#ifdef DEBUG
-        Unified2PrintPacketRecord((Unified2Packet *)spooler->record.data);
-#endif
-
-        spooler->offset = 0;
-
-        return 0;
-    }
-
-    return -1;
+void Unified2RestartFunc(int signal, void *arg)
+{
+    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Unified2RestartFunc\n"););
 }
 
 #ifdef DEBUG
@@ -442,14 +347,4 @@ void Unified2PrintPacketRecord(Unified2Packet *pkt)
 
 }
 #endif
-
-void Unified2CleanExitFunc(int signal, void *arg)
-{
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Unified2CleanExitFunc\n"););
-}
-
-void Unified2RestartFunc(int signal, void *arg)
-{
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Unified2RestartFunc\n"););
-}
 

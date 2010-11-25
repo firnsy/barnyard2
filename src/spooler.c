@@ -311,7 +311,7 @@ int ProcessBatch(const char *dirpath, const char *filename)
         FatalError("Unable to create spooler: %s\n", strerror(errno));
     }
 
-    while (exit_signal == 0)
+    while (exit_signal == 0 && pb_ret == 0)
     {
         switch (spooler->state)
         {
@@ -321,14 +321,12 @@ int ProcessBatch(const char *dirpath, const char *filename)
             
                 if (ret == BARNYARD2_READ_EOF)
                 {
-                    exit_signal = -1;
                     pb_ret = -1;
                 }
                 else if (ret != 0)
                 {
                     LogMessage("ERROR: Input file '%s' is corrupted! (%u)\n", 
                                 spooler->filepath, ret);
-                    exit_signal = -2;
                     pb_ret = -1;
                 }
                 break;
@@ -343,14 +341,12 @@ int ProcessBatch(const char *dirpath, const char *filename)
                 }
                 else if (ret == BARNYARD2_READ_EOF)
                 {
-                    exit_signal = -1;
                     pb_ret = -1;
                 }
                 else
                 {
                     LogMessage("ERROR: Input file '%s' is corrupted! (%u)\n", 
                                 spooler->filepath, ret);
-                    exit_signal = -2;
                     pb_ret = -1;
                 }
 
@@ -623,7 +619,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
         pc.total_packets++;
     else if(type == UNIFIED2_IDS_EVENT || type == UNIFIED2_IDS_EVENT_IPV6 ||
             type == UNIFIED2_IDS_EVENT_MPLS || type == UNIFIED2_IDS_EVENT_IPV6_MPLS ||
-            type == UNIFIED2_IDS_EVENT_V2 || type == UNIFIED2_IDS_EVENT_IPV6_V2)
+            type == UNIFIED2_IDS_EVENT_VLAN || type == UNIFIED2_IDS_EVENT_IPV6_VLAN)
         pc.total_events++;
 
     /* check if it's packet */
@@ -660,8 +656,8 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
             /* call output plugins with a "SPECIAL" alert format (both Event and Packet information) */
             DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Firing SPECIAL style (Packet+Event)\n"););
 
-            if ( (fire_output && ernCache->used == 0) ||
-                 (fire_output && BcAlertOnEachPacketInStream()) )
+            if ( fire_output && 
+                 ((ernCache->used == 0) || BcAlertOnEachPacketInStream()) )
                 CallOutputPlugins(OUTPUT_TYPE__SPECIAL, 
                               spooler->record.pkt, 
                               ernCache->data, 
@@ -686,7 +682,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
                                       ernCache->data, 
                                       ernCache->type);
                 
-                /* flush the event cache flag */
+                /* set the event cache used flag */
                 ernCache->used = 1;
             }
 
@@ -711,7 +707,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
     /* check if it's an event of known sorts */
     else if(type == UNIFIED2_IDS_EVENT || type == UNIFIED2_IDS_EVENT_IPV6 ||
             type == UNIFIED2_IDS_EVENT_MPLS || type == UNIFIED2_IDS_EVENT_IPV6_MPLS ||
-            type == UNIFIED2_IDS_EVENT_V2 || type == UNIFIED2_IDS_EVENT_IPV6_V2)
+            type == UNIFIED2_IDS_EVENT_VLAN || type == UNIFIED2_IDS_EVENT_IPV6_VLAN)
     {
         /* fire the cached event only if not already used (ie dirty) */ 
         if ( spoolerEventCacheHeadUsed(spooler) == 0 )
@@ -725,7 +721,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
                 CallOutputPlugins(OUTPUT_TYPE__ALERT, 
                               NULL,
                               ernCache->data, 
-                               ernCache->type);
+                              ernCache->type);
             
             /* flush the event cache flag */
             ernCache->used = 1;
@@ -735,6 +731,12 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
         spoolerEventCachePush(spooler, type, spooler->record.data);
         spooler->record.data = NULL;
 
+        /* waldo operations occur after the output plugins are called */
+        if (fire_output)
+            spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);
+    }
+    else if (type == UNIFIED2_EXTRA_DATA)
+    {
         /* waldo operations occur after the output plugins are called */
         if (fire_output)
             spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);
@@ -809,12 +811,10 @@ EventRecordNode *spoolerEventCacheGetByEventID(Spooler *spooler, uint32_t event_
 
 EventRecordNode *spoolerEventCacheGetHead(Spooler *spooler)
 {
-    EventRecordNode     *ret = spooler->event_cache;
-
-    if ( spooler == NULL || spooler->event_cache == NULL )
+    if ( spooler == NULL )
         return NULL;
 
-    return ret;
+    return spooler->event_cache;
 }
 
 uint8_t spoolerEventCacheHeadUsed(Spooler *spooler)

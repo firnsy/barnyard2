@@ -64,14 +64,19 @@ int Unified2ReadEventRecord(void *);
 int Unified2ReadEvent6Record(void *);
 int Unified2ReadPacketRecord(void *);
 
-void Unified2PrintCommonRecord(Unified2EventCommon *evt);
-void Unified2PrintEventRecord(Unified2Event *);
-void Unified2PrintEvent6Record(Unified2Event6 *evt);
+void Unified2PrintCommonRecord(Unified2EventCommon *);
+void Unified2PrintEventRecord(Unified2IDSEvent_legacy *);
+void Unified2PrintEvent6Record(Unified2IDSEventIPv6_legacy *);
 void Unified2PrintPacketRecord(Unified2Packet *);
 
 /* restart/shutdown functions */
 void Unified2CleanExitFunc(int, void *);
 void Unified2RestartFunc(int, void *);
+
+
+void Unified2PrintEventRecord(Unified2IDSEvent_legacy *);
+void Unified2PrintEvent6Record(Unified2IDSEventIPv6_legacy *);
+
 
 /*
  * Function: UnifiedLogSetup()
@@ -202,14 +207,18 @@ int Unified2ReadRecord(void *sph)
         switch (record_type)
         {
             case UNIFIED2_IDS_EVENT:
-                Unified2PrintEventRecord((Unified2Event *)spooler->record.data);
+                Unified2PrintEventRecord((Unified2IDSEvent_legacy *)spooler->record.data);
                 break;
             case UNIFIED2_IDS_EVENT_IPV6:
-                Unified2PrintEventRecord((Unified2Event *)spooler->record.data);
+                Unified2PrintEvent6Record((Unified2IDSEventIPv6_legacy *)spooler->record.data);
                 break;
             case UNIFIED2_PACKET:
                 Unified2PrintPacketRecord((Unified2Packet *)spooler->record.data);
                 break;
+            case UNIFIED2_IDS_EVENT_MPLS:
+            case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+            case UNIFIED2_IDS_EVENT_VLAN:
+            case UNIFIED2_IDS_EVENT_IPV6_VLAN:
             default:
                 DEBUG_WRAP(DebugMessage(DEBUG_LOG,"No debug available for record type: %u\n", record_type););
                 break;
@@ -262,7 +271,7 @@ void Unified2PrintEventCommonRecord(Unified2EventCommon *evt)
         "  priority_id        = %d\n", ntohl(evt->priority_id)););
 }
     
-void Unified2PrintEventRecord(Unified2Event *evt)
+void Unified2PrintEventRecord(Unified2IDSEvent_legacy *evt)
 {
     char                sip4[INET_ADDRSTRLEN];
     char                dip4[INET_ADDRSTRLEN];
@@ -287,10 +296,10 @@ void Unified2PrintEventRecord(Unified2Event *evt)
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
         "  ip_protocol        = %d\n", evt->protocol););
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  packet_action      = %d\n", evt->packet_action););
+        "  impact             = %d\n", evt->impact_flag););
 }
 
-void Unified2PrintEvent6Record(Unified2Event6 *evt)
+void Unified2PrintEvent6Record(Unified2IDSEventIPv6_legacy *evt)
 {
     char                sip6[INET6_ADDRSTRLEN];
     char                dip6[INET6_ADDRSTRLEN];
@@ -315,7 +324,7 @@ void Unified2PrintEvent6Record(Unified2Event6 *evt)
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
         "  ip_protocol        = %d\n", evt->protocol););
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  packet_action      = %d\n", evt->packet_action););
+        "  impact             = %d\n", evt->impact_flag););
 }
 
 void Unified2PrintPacketRecord(Unified2Packet *pkt)

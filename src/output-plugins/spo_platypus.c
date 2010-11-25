@@ -286,27 +286,27 @@ void Platypus(Packet *p, void *event, u_int32_t event_type, void *arg)
     switch(event_type)
     {
         case UNIFIED2_IDS_EVENT:
-            inet_ntop(AF_INET, &((Unified2Event *)event)->ip_source, sip4, INET_ADDRSTRLEN);
-            inet_ntop(AF_INET, &((Unified2Event *)event)->ip_destination, dip4, INET_ADDRSTRLEN);
+            inet_ntop(AF_INET, &((Unified2IDSEvent_legacy *)event)->ip_source, sip4, INET_ADDRSTRLEN);
+            inet_ntop(AF_INET, &((Unified2IDSEvent_legacy *)event)->ip_destination, dip4, INET_ADDRSTRLEN);
 
             SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "4|%s|%u|%s|%u|%u|",
                 sip4, 
-                ntohs(((Unified2Event *)event)->sport_itype), 
+                ntohs(((Unified2IDSEvent_legacy *)event)->sport_itype), 
                 dip4,
-                ntohs(((Unified2Event *)event)->dport_icode), 
-                ((Unified2Event *)event)->protocol);
+                ntohs(((Unified2IDSEvent_legacy *)event)->dport_icode), 
+                ((Unified2IDSEvent_legacy *)event)->protocol);
             break;
 #ifdef SUP_IP6
         case UNIFIED2_IDS_EVENT_IPV6:
-            inet_ntop(AF_INET6, &((Unified2Event6 *)event)->ip_source, sip6, INET6_ADDRSTRLEN);
-            inet_ntop(AF_INET6, &((Unified2Event6 *)event)->ip_destination, dip6, INET6_ADDRSTRLEN);
+            inet_ntop(AF_INET6, &((Unified2IDSEvent6_legacy *)event)->ip_source, sip6, INET6_ADDRSTRLEN);
+            inet_ntop(AF_INET6, &((Unified2IDSEvent6_legacy *)event)->ip_destination, dip6, INET6_ADDRSTRLEN);
 
             SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "6|%s|%u|%s|%u|%u|",
                 sip6,
-                ntohs(((Unified2Event6 *)event)->sport_itype),
+                ntohs(((Unified2IDSEvent6_legacy *)event)->sport_itype),
                 dip6,
-                ntohs(((Unified2Event6 *)event)->dport_icode),
-                ((Unified2Event6 *)event)->protocol);
+                ntohs(((Unified2IDSEvent6_legacy *)event)->dport_icode),
+                ((Unified2IDSEvent6_legacy *)event)->protocol);
             break;
 #endif
         default:

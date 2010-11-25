@@ -359,6 +359,7 @@ int Barnyard2Main(int argc, char *argv[])
         }
         else
         {
+            LogMessage("Processing %d files...\n", barnyard2_conf->batch_total_files);
             for(idx = 0; idx < barnyard2_conf->batch_total_files; idx++)
             {
     			ProcessBatch("", barnyard2_conf->batch_filelist[idx]);

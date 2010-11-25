@@ -30,18 +30,30 @@
 #include "config.h"
 #endif
 
-/* Each unified 2 record will start out with one of these */
+//SNORT DEFINES
+//Long time ago...
+#define UNIFIED2_EVENT               1
+
+//CURRENT
+#define UNIFIED2_PACKET              2
+#define UNIFIED2_IDS_EVENT           7
+#define UNIFIED2_IDS_EVENT_IPV6      72
+#define UNIFIED2_IDS_EVENT_MPLS      99
+#define UNIFIED2_IDS_EVENT_IPV6_MPLS 100
+#define UNIFIED2_IDS_EVENT_VLAN      104
+#define UNIFIED2_IDS_EVENT_IPV6_VLAN 105
+#define UNIFIED2_EXTRA_DATA          110
+
+/* Each unified2 record will start out with one of these */
 typedef struct _Unified2RecordHeader
 {
-    uint32_t type;          /* Type of header.  A set most-significant
-                               bit indicates presence of extended header */
+    uint32_t type;
     uint32_t length;
-
 } Unified2RecordHeader;
 
-/* The Unified2Event and Unified2Packet structures below are copied from the 
- * original unified 2 library, sfunified2 */
-typedef struct _Unified2Event
+//UNIFIED2_IDS_EVENT_VLAN = type 104
+//comes from SFDC to EStreamer archive in serialized form with the extended header
+typedef struct _Unified2IDSEvent
 {
     uint32_t sensor_id;
     uint32_t event_id;
@@ -57,11 +69,93 @@ typedef struct _Unified2Event
     uint16_t sport_itype;
     uint16_t dport_icode;
     uint8_t  protocol;
-    uint8_t  packet_action;
-    uint16_t pad;  /* restore 4 byte alignment */
-} Unified2Event;
+    uint8_t  impact_flag;//overloads packet_action
+    uint8_t  impact;
+    uint8_t  blocked;
+    uint32_t mpls_label;
+    uint16_t vlanId;
+    uint16_t pad2;//Policy ID
+} Unified2IDSEvent;
 
-typedef struct _Unified2Event_v2
+//UNIFIED2_IDS_EVENT_IPV6_VLAN = type 105
+typedef struct _Unified2IDSEventIPv6
+{
+    uint32_t sensor_id;
+    uint32_t event_id;
+    uint32_t event_second;
+    uint32_t event_microsecond;
+    uint32_t signature_id;
+    uint32_t generator_id;
+    uint32_t signature_revision;
+    uint32_t classification_id;
+    uint32_t priority_id;
+    struct in6_addr ip_source;
+    struct in6_addr ip_destination;
+    uint16_t sport_itype;
+    uint16_t dport_icode;
+    uint8_t  protocol;
+    uint8_t  impact_flag;
+    uint8_t  impact;
+    uint8_t  blocked;
+    uint32_t mpls_label;
+    uint16_t vlanId;
+    uint16_t pad2;/*could be IPS Policy local id to support local sensor alerts*/
+} Unified2IDSEventIPv6;
+
+//UNIFIED2_PACKET = type 2
+typedef struct _Unified2Packet
+{
+    uint32_t sensor_id;
+    uint32_t event_id;
+    uint32_t event_second;
+    uint32_t packet_second;
+    uint32_t packet_microsecond;
+    uint32_t linktype;
+    uint32_t packet_length;
+    uint8_t packet_data[4];   /* For debugging */
+} Unified2Packet;
+
+
+typedef struct _Unified2ExtraDataHdr{
+    uint32_t event_type;
+    uint32_t event_length;
+}Unified2ExtraDataHdr;
+
+
+//UNIFIED2_EXTRA_DATA - type 110
+typedef struct _Unified2ExtraData{
+    uint32_t sensor_id;
+    uint32_t event_id;
+    uint32_t event_second;
+    uint32_t type;              /* EventInfo */
+    uint32_t data_type;         /*EventDataType */
+    uint32_t blob_length;       /* Length of the data + sizeof(blob_length) + sizeof(data_type)*/
+} Unified2ExtraData;
+
+typedef enum _EventInfoEnum
+{
+    EVENT_INFO_XFF_IPV4 = 1,
+    EVENT_INFO_XFF_IPV6 ,
+    EVENT_INFO_REVIEWED_BY,
+    EVENT_INFO_GZIP_DATA
+}EventInfoEnum;
+
+typedef enum _EventDataType
+{
+    EVENT_DATA_TYPE_BLOB = 1,
+    EVENT_DATA_TYPE_MAX
+}EventDataType;
+
+#define EVENT_TYPE_EXTRA_DATA   4
+
+#define MAX_XFF_WRITE_BUF_LENGTH (sizeof(Unified2RecordHeader) + \
+        sizeof(Unified2ExtraDataHdr) + sizeof(Unified2ExtraData) \
+        + sizeof(struct in6_addr))
+
+
+//---------------LEGACY, type '7'
+//These structures are not used anymore in the product
+typedef struct Unified2IDSEvent_legacy
 {
     uint32_t sensor_id;
     uint32_t event_id;
@@ -77,15 +171,13 @@ typedef struct _Unified2Event_v2
     uint16_t sport_itype;
     uint16_t dport_icode;
     uint8_t  protocol;
-    uint8_t  packet_action;
-    uint16_t pad;  /* restore 4 byte alignment */
-    uint32_t mpls_label;
-    uint16_t vlanId;
-    uint16_t configPolicyId;
+    uint8_t  impact_flag;//sets packet_action
+    uint8_t  impact;
+    uint8_t  blocked;
+} Unified2IDSEvent_legacy;
 
-} Unified2Event_v2;
-
-typedef struct _Unified2Event6
+//----------LEGACY, type '72'
+typedef struct Unified2IDSEventIPv6_legacy
 {
     uint32_t sensor_id;
     uint32_t event_id;
@@ -101,38 +193,13 @@ typedef struct _Unified2Event6
     uint16_t sport_itype;
     uint16_t dport_icode;
     uint8_t  protocol;
-    uint8_t  packet_action;
-    uint16_t pad;  /* restore 4 byte alignment */
+    uint8_t  impact_flag;
+    uint8_t  impact;
+    uint8_t  blocked;
+} Unified2IDSEventIPv6_legacy;
 
-} Unified2Event6;
+////////////////////-->LEGACY
 
-/**UnifiedEvent version 2 includes mpls tag, vlan tag and policy id in additional
- * to data contained in version 1. Version 2 will be used only when either vlan or
- * mpls tag is enabled using unified2 configuration.
- */
-typedef struct _Unified2Event6_v2
-{
-    uint32_t sensor_id;
-    uint32_t event_id;
-    uint32_t event_second;
-    uint32_t event_microsecond;
-    uint32_t signature_id;
-    uint32_t generator_id;
-    uint32_t signature_revision;
-    uint32_t classification_id;
-    uint32_t priority_id;
-    struct in6_addr ip_source;
-    struct in6_addr ip_destination;
-    uint16_t sport_itype;
-    uint16_t dport_icode;
-    uint8_t  protocol;
-    uint8_t  packet_action;
-    uint16_t pad;  /* restore 4 byte alignment */
-    uint32_t mpls_label;
-    uint16_t vlanId;
-    uint16_t configPolicyId;
-
-} Unified2Event6_v2;
 
 /* 
 ** The Unified2EventCommon structure is the common structure that occurs
@@ -153,32 +220,5 @@ typedef struct _Unified2EventCommon
     uint32_t classification_id;
     uint32_t priority_id;
 } Unified2EventCommon;
-
-typedef struct _Unified2Packet
-{
-    uint32_t sensor_id;
-    uint32_t event_id;
-    uint32_t event_second;
-    uint32_t packet_second;
-    uint32_t packet_microsecond;
-    uint32_t linktype;
-    uint32_t packet_length;
-    uint8_t packet_data[4];   /* For debugging */
-} Unified2Packet;
-
-/* XXX Remove these when the real Unified 2 header becomes available */
-#define UNIFIED2_EVENT 1
-#define UNIFIED2_PACKET 2
-#define UNIFIED2_IDS_EVENT 7
-#define UNIFIED2_EVENT_EXTENDED 66
-#define UNIFIED2_PERFORMANCE 67
-#define UNIFIED2_PORTSCAN 68
-#define UNIFIED2_IDS_EVENT_IPV6 72
-#define UNIFIED2_IDS_EVENT_MPLS 99
-#define UNIFIED2_IDS_EVENT_IPV6_MPLS 100
-
-//version 2 
-#define UNIFIED2_IDS_EVENT_V2 104
-#define UNIFIED2_IDS_EVENT_IPV6_V2 105
 
 #endif /* __UNIFIED2_H__ */

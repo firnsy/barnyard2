@@ -22,11 +22,11 @@
 /* $Id$ */
 
 /* spo_csv
- * 
+ *
  * Purpose:  output plugin for csv alerting
  *
  * Arguments:  alert file (eventually)
- *   
+ *
  * Effect:
  *
  * Alerts are written to a file in the snort csv alert format
@@ -102,7 +102,7 @@ static void RealAlertCSV(
 /*
  * Function: SetupCSV()
  *
- * Purpose: Registers the output plugin keyword and initialization 
+ * Purpose: Registers the output plugin keyword and initialization
  *          function into the output plugin list.  This is the function that
  *          gets called from InitOutputPlugins() in plugbase.c.
  *
@@ -113,11 +113,11 @@ static void RealAlertCSV(
  */
 void AlertCSVSetup(void)
 {
-    /* link the preprocessor keyword to the init function in 
+    /* link the preprocessor keyword to the init function in
        the preproc list */
-    RegisterOutputPlugin("alert_CSV", OUTPUT_TYPE_FLAG__ALERT, AlertCSVInit);
+    RegisterOutputPlugin("alert_csv", OUTPUT_TYPE_FLAG__ALERT, AlertCSVInit);
 
-    DEBUG_WRAP(DebugMessage(DEBUG_INIT, "Output plugin: alert_CSV is setup...\n"););
+    DEBUG_WRAP(DebugMessage(DEBUG_INIT, "Output plugin: alert_csv is setup...\n"););
 }
 
 
@@ -198,12 +198,12 @@ static AlertCSVData *AlertCSVParseArgs(char *args)
             case 1:
                 if ( !strcasecmp("default", tok) )
                 {
-	            data->csvargs = strdup(DEFAULT_CSV);
+                data->csvargs = strdup(DEFAULT_CSV);
                 }
                 else
                 {
-	            data->csvargs = strdup(toks[1]); 
-                } 
+                data->csvargs = strdup(toks[1]);
+                }
                 break;
 
             case 2:
@@ -252,8 +252,8 @@ static void AlertCSVCleanup(int signal, void *arg, const char* msg)
     AlertCSVData *data = (AlertCSVData *)arg;
     /* close alert file */
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"%s\n", msg););
-    
-    if(data) 
+
+    if(data)
     {
         mSplitFree(&data->args, data->numargs);
         if (data->log) TextLog_Term(data->log);
@@ -277,7 +277,7 @@ static void AlertCSVRestart(int signal, void *arg)
 static void AlertCSV(Packet *p, void *event, uint32_t event_type, void *arg)
 {
     AlertCSVData *data = (AlertCSVData *)arg;
-    RealAlertCSV(p, event, event_type, data->args, data->numargs, data->log); 
+    RealAlertCSV(p, event, event_type, data->args, data->numargs, data->log);
 }
 
 /*
@@ -288,249 +288,254 @@ static void AlertCSV(Packet *p, void *event, uint32_t event_type, void *arg)
  *
  * Arguments:     p => packet. (could be NULL)
  *              msg => the message to send
- *             args => CSV output arguements 
+ *             args => CSV output arguements
  *          numargs => number of arguements
  *             log => Log
  * Returns: void function
  *
  */
-static void RealAlertCSV(Packet * p, void *event, uint32_t event_type, 
-		char **args, int numargs, TextLog* log)
+static void RealAlertCSV(Packet * p, void *event, uint32_t event_type,
+        char **args, int numargs, TextLog* log)
 {
-    int num; 
-	SigNode				*sn;
+    int num;
+    SigNode             *sn;
     char *type;
     char tcpFlags[9];
 
     if(p == NULL)
-		return;
+        return;
 
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Logging CSV Alert data\n");); 
+    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Logging CSV Alert data\n"););
 
     for (num = 0; num < numargs; num++)
     {
-		type = args[num];
+        type = args[num];
 
-		DEBUG_WRAP(DebugMessage(DEBUG_LOG, "CSV Got type %s %d\n", type, num);); 
+        DEBUG_WRAP(DebugMessage(DEBUG_LOG, "CSV Got type %s %d\n", type, num););
 
-		if(!strncasecmp("timestamp", type, 9))
-		{
-		    LogTimeStamp(log, p);
-		}
-		else if(!strncasecmp("sig_generator",type,13))
-		{
-			if(event != NULL)
-			{
-				TextLog_Print(log, "%lu",
-					(unsigned long) ntohl(((Unified2EventCommon *)event)->generator_id));
-			}
-		}
-		else if(!strncasecmp("sig_id",type,6))
-		{
-			if(event != NULL)
-			{
-				TextLog_Print(log, "%lu",
-					(unsigned long) ntohl(((Unified2EventCommon *)event)->signature_id));
-			}
-		}
-		else if(!strncasecmp("sig_rev",type,7))
-		{
-			if(event != NULL)
-			{
-				TextLog_Print(log, "%lu",
-					(unsigned long) ntohl(((Unified2EventCommon *)event)->signature_revision));
-			}
-		}
-		else if(!strncasecmp("msg", type, 3))
-		{
-			sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-								ntohl(((Unified2EventCommon *)event)->signature_id));
+        if(!strncasecmp("timestamp", type, 9))
+        {
+            LogTimeStamp(log, p);
+        }
+        else if(!strncasecmp("sig_generator",type,13))
+        {
+            if(event != NULL)
+            {
+                TextLog_Print(log, "%lu",
+                    (unsigned long) ntohl(((Unified2EventCommon *)event)->generator_id));
+            }
+        }
+        else if(!strncasecmp("sig_id",type,6))
+        {
+            if(event != NULL)
+            {
+                TextLog_Print(log, "%lu",
+                    (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_id));
+            }
+        }
+        else if(!strncasecmp("sig_rev",type,7))
+        {
+            if(event != NULL)
+            {
+                TextLog_Print(log, "%lu",
+                    (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_revision));
+            }
+        }
+        else if(!strncasecmp("msg", type, 3))
+        {
+            if ( event != NULL )
+            {
+                sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
+                                ntohl(((Unified2EventCommon *)event)->signature_id));
 
-			if (sn != NULL)
-			{
-				if ( !TextLog_Quote(log, sn->msg) )
-				{
-					FatalError("Not enough buffer space to escape msg string\n");
-				}
-			}
-		}
-		else if(!strncasecmp("proto", type, 5))
-		{
-			if(IPH_IS_VALID(p))
-			{
-				switch (GET_IPH_PROTO(p))
-				{
-					case IPPROTO_UDP:
-						TextLog_Puts(log, "UDP");
-	                    break;
-		            case IPPROTO_TCP:
-			            TextLog_Puts(log, "TCP");
-				        break;
-	                case IPPROTO_ICMP:
-		                TextLog_Puts(log, "ICMP");
-			            break;
-			    }
-	        }
-		}
-		else if(!strncasecmp("ethsrc", type, 6))
-		{
-		    if(p->eh)
-			{
-				TextLog_Print(log,  "%X:%X:%X:%X:%X:%X", p->eh->ether_src[0],
-		            p->eh->ether_src[1], p->eh->ether_src[2], p->eh->ether_src[3],
-		            p->eh->ether_src[4], p->eh->ether_src[5]);
-			}
-		} 
-		else if(!strncasecmp("ethdst", type, 6))
-		{
-			if(p->eh)
-		    {	
-	            TextLog_Print(log,  "%X:%X:%X:%X:%X:%X", p->eh->ether_dst[0],
-	            p->eh->ether_dst[1], p->eh->ether_dst[2], p->eh->ether_dst[3],
-	            p->eh->ether_dst[4], p->eh->ether_dst[5]);
-		    }
-		}
-		else if(!strncasecmp("ethtype", type, 7))
-		{
-		    if(p->eh)
-		    {
-	            TextLog_Print(log, "0x%X",ntohs(p->eh->ether_type));
-		    }
-		}
-		else if(!strncasecmp("udplength", type, 9))
-		{
-		    if(p->udph)
-				TextLog_Print(log, "%d",ntohs(p->udph->uh_len));
-		}
-		else if(!strncasecmp("ethlen", type, 6))
-		{
-		    if(p->eh)
-	            TextLog_Print(log, "0x%X",p->pkth->len);
-		}
+                if (sn != NULL)
+                {
+                    if ( !TextLog_Quote(log, sn->msg) )
+                    {
+                        FatalError("Not enough buffer space to escape msg string\n");
+                    }
+                }
+            }
+        }
+        else if(!strncasecmp("proto", type, 5))
+        {
+            if(IPH_IS_VALID(p))
+            {
+                switch (GET_IPH_PROTO(p))
+                {
+                    case IPPROTO_UDP:
+                        TextLog_Puts(log, "UDP");
+                        break;
+                    case IPPROTO_TCP:
+                        TextLog_Puts(log, "TCP");
+                        break;
+                    case IPPROTO_ICMP:
+                        TextLog_Puts(log, "ICMP");
+                        break;
+                }
+            }
+        }
+        else if(!strncasecmp("ethsrc", type, 6))
+        {
+            if(p->eh)
+            {
+                TextLog_Print(log,  "%X:%X:%X:%X:%X:%X", p->eh->ether_src[0],
+                    p->eh->ether_src[1], p->eh->ether_src[2], p->eh->ether_src[3],
+                    p->eh->ether_src[4], p->eh->ether_src[5]);
+            }
+        }
+        else if(!strncasecmp("ethdst", type, 6))
+        {
+            if(p->eh)
+            {
+                TextLog_Print(log,  "%X:%X:%X:%X:%X:%X", p->eh->ether_dst[0],
+                p->eh->ether_dst[1], p->eh->ether_dst[2], p->eh->ether_dst[3],
+                p->eh->ether_dst[4], p->eh->ether_dst[5]);
+            }
+        }
+        else if(!strncasecmp("ethtype", type, 7))
+        {
+            if(p->eh)
+            {
+                TextLog_Print(log, "0x%X",ntohs(p->eh->ether_type));
+            }
+        }
+        else if(!strncasecmp("udplength", type, 9))
+        {
+            if(p->udph)
+                TextLog_Print(log, "%d",ntohs(p->udph->uh_len));
+        }
+        else if(!strncasecmp("ethlen", type, 6))
+        {
+            if(p->eh)
+                TextLog_Print(log, "0x%X",p->pkth->len);
+        }
 #ifndef NO_NON_ETHER_DECODER
-		else if(!strncasecmp("trheader", type, 8))
-		{
-		    if(p->trh)
-	            LogTrHeader(log, p);
-		}
+        else if(!strncasecmp("trheader", type, 8))
+        {
+            if(p->trh)
+                LogTrHeader(log, p);
+        }
 #endif
-		else if(!strncasecmp("srcport", type, 7))
-		{
-	        if(IPH_IS_VALID(p))
-	        {
-		        switch(GET_IPH_PROTO(p))
-		        {
-		            case IPPROTO_UDP:
-		            case IPPROTO_TCP:
-			            TextLog_Print(log,  "%d", p->sp);
-			            break;
-		        }    
-	        }
-		}
-		else if(!strncasecmp("dstport", type, 7))
-		{
-	        if(IPH_IS_VALID(p))
-	        {
-		        switch(GET_IPH_PROTO(p))
-		        {
-		            case IPPROTO_UDP:
-		            case IPPROTO_TCP:
-			            TextLog_Print(log,  "%d", p->dp);
-			            break;
-		        }    
-	        }
-		}
-		else if(!strncasecmp("src", type, 3))
-		{
-	        if(IPH_IS_VALID(p))
-	            TextLog_Puts(log, inet_ntoa(GET_SRC_ADDR(p)));
-		}
-		else if(!strncasecmp("dst", type, 3))
-		{
-	        if(IPH_IS_VALID(p))
-	            TextLog_Puts(log, inet_ntoa(GET_DST_ADDR(p))); 
-		}
-		else if(!strncasecmp("icmptype",type,8))
-		{
-		    if(p->icmph)
-		    {
-			TextLog_Print(log, "%d",p->icmph->type);
-		    }
-		}
-		else if(!strncasecmp("icmpcode",type,8))
-		{
-		    if(p->icmph)
-		    {
-				TextLog_Print(log, "%d",p->icmph->code);
-		    }
-		}
-		else if(!strncasecmp("icmpid",type,6))
-		{
-		    if(p->icmph)
-	            TextLog_Print(log, "%d",ntohs(p->icmph->s_icmp_id));	   
-		}
-		else if(!strncasecmp("icmpseq",type,7))
-		{
-		    if(p->icmph)
-			    TextLog_Print(log, "%d",ntohs(p->icmph->s_icmp_seq));
-		}
-		else if(!strncasecmp("ttl",type,3))
-		{
-		    if(IPH_IS_VALID(p))
-			TextLog_Print(log, "%d",GET_IPH_TTL(p));
-		}
-		else if(!strncasecmp("tos",type,3))
-		{
-		    if(IPH_IS_VALID(p))
-			TextLog_Print(log, "%d",GET_IPH_TOS(p));
-		}
-		else if(!strncasecmp("id",type,2))
-		{
-		    if(IPH_IS_VALID(p))
-	            TextLog_Print(log, "%u", IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)));
-		}
-		else if(!strncasecmp("iplen",type,5))
-		{
-		    if(IPH_IS_VALID(p))
-			TextLog_Print(log, "%d",GET_IPH_LEN(p) << 2);
-		}
-		else if(!strncasecmp("dgmlen",type,6))
-		{
-		    if(IPH_IS_VALID(p))
-				// XXX might cause a bug when IPv6 is printed?
-				TextLog_Print(log, "%d",ntohs(GET_IPH_LEN(p)));
-		}
-		else if(!strncasecmp("tcpseq",type,6))
-		{
-		    if(p->tcph)
-			TextLog_Print(log, "0x%lX",(u_long) ntohl(p->tcph->th_seq));
-		}
-		else if(!strncasecmp("tcpack",type,6))
-			{
-		    if(p->tcph)
-				TextLog_Print(log, "0x%lX",(u_long) ntohl(p->tcph->th_ack));
-		}
-		else if(!strncasecmp("tcplen",type,6))
-		{
-		    if(p->tcph)
-				TextLog_Print(log, "%d",TCP_OFFSET(p->tcph) << 2);
-		}
-		else if(!strncasecmp("tcpwindow",type,9))
-		{
-		    if(p->tcph)
-				TextLog_Print(log, "0x%X",ntohs(p->tcph->th_win));
-		}
-		else if(!strncasecmp("tcpflags",type,8))
-		{
-		    if(p->tcph)
-		    {   
-				CreateTCPFlagString(p, tcpFlags);
-				TextLog_Print(log, "%s", tcpFlags);
-			}
-		}
+        else if(!strncasecmp("srcport", type, 7))
+        {
+            if(IPH_IS_VALID(p))
+            {
+                switch(GET_IPH_PROTO(p))
+                {
+                    case IPPROTO_UDP:
+                    case IPPROTO_TCP:
+                        TextLog_Print(log,  "%d", p->sp);
+                        break;
+                }
+            }
+        }
+        else if(!strncasecmp("dstport", type, 7))
+        {
+            if(IPH_IS_VALID(p))
+            {
+                switch(GET_IPH_PROTO(p))
+                {
+                    case IPPROTO_UDP:
+                    case IPPROTO_TCP:
+                        TextLog_Print(log,  "%d", p->dp);
+                        break;
+                }
+            }
+        }
+        else if(!strncasecmp("src", type, 3))
+        {
+            if(IPH_IS_VALID(p))
+                TextLog_Puts(log, inet_ntoa(GET_SRC_ADDR(p)));
+        }
+        else if(!strncasecmp("dst", type, 3))
+        {
+            if(IPH_IS_VALID(p))
+                TextLog_Puts(log, inet_ntoa(GET_DST_ADDR(p)));
+        }
+        else if(!strncasecmp("icmptype",type,8))
+        {
+            if(p->icmph)
+            {
+            TextLog_Print(log, "%d",p->icmph->type);
+            }
+        }
+        else if(!strncasecmp("icmpcode",type,8))
+        {
+            if(p->icmph)
+            {
+                TextLog_Print(log, "%d",p->icmph->code);
+            }
+        }
+        else if(!strncasecmp("icmpid",type,6))
+        {
+            if(p->icmph)
+                TextLog_Print(log, "%d",ntohs(p->icmph->s_icmp_id));
+        }
+        else if(!strncasecmp("icmpseq",type,7))
+        {
+            if(p->icmph)
+                TextLog_Print(log, "%d",ntohs(p->icmph->s_icmp_seq));
+        }
+        else if(!strncasecmp("ttl",type,3))
+        {
+            if(IPH_IS_VALID(p))
+            TextLog_Print(log, "%d",GET_IPH_TTL(p));
+        }
+        else if(!strncasecmp("tos",type,3))
+        {
+            if(IPH_IS_VALID(p))
+            TextLog_Print(log, "%d",GET_IPH_TOS(p));
+        }
+        else if(!strncasecmp("id",type,2))
+        {
+            if(IPH_IS_VALID(p))
+                TextLog_Print(log, "%u", IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)));
+        }
+        else if(!strncasecmp("iplen",type,5))
+        {
+            if(IPH_IS_VALID(p))
+            TextLog_Print(log, "%d",GET_IPH_LEN(p) << 2);
+        }
+        else if(!strncasecmp("dgmlen",type,6))
+        {
+            if(IPH_IS_VALID(p))
+                // XXX might cause a bug when IPv6 is printed?
+                TextLog_Print(log, "%d",ntohs(GET_IPH_LEN(p)));
+        }
+        else if(!strncasecmp("tcpseq",type,6))
+        {
+            if(p->tcph)
+            TextLog_Print(log, "0x%lX",(u_long) ntohl(p->tcph->th_seq));
+        }
+        else if(!strncasecmp("tcpack",type,6))
+            {
+            if(p->tcph)
+                TextLog_Print(log, "0x%lX",(u_long) ntohl(p->tcph->th_ack));
+        }
+        else if(!strncasecmp("tcplen",type,6))
+        {
+            if(p->tcph)
+                TextLog_Print(log, "%d",TCP_OFFSET(p->tcph) << 2);
+        }
+        else if(!strncasecmp("tcpwindow",type,9))
+        {
+            if(p->tcph)
+                TextLog_Print(log, "0x%X",ntohs(p->tcph->th_win));
+        }
+        else if(!strncasecmp("tcpflags",type,8))
+        {
+            if(p->tcph)
+            {
+                CreateTCPFlagString(p, tcpFlags);
+                TextLog_Print(log, "%s", tcpFlags);
+            }
+        }
 
-		if (num < numargs - 1) 
-		    TextLog_Putc(log, ',');
+        DEBUG_WRAP(DebugMessage(DEBUG_LOG, "WOOT!\n"););
+
+        if (num < numargs - 1)
+            TextLog_Putc(log, ',');
 
     }
     TextLog_NewLine(log);

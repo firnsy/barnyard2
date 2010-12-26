@@ -4,7 +4,7 @@
 AC_PREREQ(2.50)
 AC_INIT(src/barnyard2.c)
 AM_CONFIG_HEADER(config.h)
-AM_INIT_AUTOMAKE(barnyard2,1.9-beta1)
+AM_INIT_AUTOMAKE(barnyard2,1.9)
 
 LT_INIT
 

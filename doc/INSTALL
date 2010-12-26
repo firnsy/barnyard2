@@ -10,14 +10,15 @@ The quick install notes for getting people up and running in with minimal fuss
 are below. Detailed instructions will follow later.
 
 1.  *** Make sure you have libpcap HEADERS installed!!! ***
-2.  ./configure
-3.  make
-4.  make install
-5.  Create a sample rules file (eg. look at etc/barnyard2.conf)
-6.  barnyard2 -?
-7.  If you've used barnyard before, there may be a little variance in the
+2.  autoreconf -fvi -I ./m4
+3.  ./configure
+4.  make
+5.  make install
+6.  Create a sample rules file (eg. look at etc/barnyard2.conf)
+7.  barnyard2 -?
+8.  If you've used barnyard before, there may be a little variance in the
     commandline parameters. 
-8.  Have fun!
+9.  Have fun!
 
 
 -------------------------------------------------------------------------------

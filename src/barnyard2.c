@@ -166,11 +166,11 @@ static char **barnyard2_argv = NULL;
 /* command line options for getopt */
 #ifndef WIN32
 /* Unix does not support an argument to -s <wink marty!> OR -E, -W */
-static char *valid_options = "?a:Ac:C:d:Def:Fg:G:i:Il:m:noOqr:R:S:t:Tu:UvVw:xXy";
+static char *valid_options = "?a:Ac:C:d:Def:Fg:G:h:i:Il:m:noOqr:R:S:t:Tu:UvVw:xXy";
 #else
 /* Win32 does not support:  -D, -g, -m, -t, -u */
 /* Win32 no longer supports an argument to -s, either! */
-static char *valid_options = "?a:Ac:C:d:eEf:FG:i:Il:noOqr:R:S:TUvVw:xXy";
+static char *valid_options = "?a:Ac:C:d:eEf:FG:h:i:Il:noOqr:R:S:TUvVw:xXy";
 #endif
 
 static struct option long_options[] =

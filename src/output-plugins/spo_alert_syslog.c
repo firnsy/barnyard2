@@ -19,14 +19,14 @@
 */
 /* $Id$ */
 
-/* spo_alert_syslog 
- * 
+/* spo_alert_syslog
+ *
  * Purpose:
  *
  * This module sends alerts to the syslog service.
  *
  * Arguments:
- *   
+ *
  * Logging mechanism?
  *
  * Effect:
@@ -87,7 +87,7 @@ void AlertSyslogRestart(int, void *);
 /*
  * Function: SetupSyslog()
  *
- * Purpose: Registers the output plugin keyword and initialization 
+ * Purpose: Registers the output plugin keyword and initialization
  *          function into the output plugin list.  This is the function that
  *          gets called from InitOutputPlugins() in plugbase.c.
  *
@@ -98,7 +98,7 @@ void AlertSyslogRestart(int, void *);
  */
 void AlertSyslogSetup(void)
 {
-    /* link the preprocessor keyword to the init function in 
+    /* link the preprocessor keyword to the init function in
        the preproc list */
     RegisterOutputPlugin("alert_syslog", OUTPUT_TYPE_FLAG__ALERT, AlertSyslogInit);
     DEBUG_WRAP(DebugMessage(DEBUG_INIT,"Output plugin: Alert-Syslog is setup...\n"););
@@ -142,9 +142,9 @@ void AlertSyslogInit(char *args)
 /*
  * Function: ParseSyslogArgs(char *)
  *
- * Purpose: Process the preprocessor arguements from the rules file and 
+ * Purpose: Process the preprocessor arguements from the rules file and
  *          initialize the preprocessor's data struct.  This function doesn't
- *          have to exist if it makes sense to parse the args in the init 
+ *          have to exist if it makes sense to parse the args in the init
  *          function.
  *
  * Arguments: args => argument list
@@ -186,7 +186,7 @@ SyslogData *ParseSyslogArgs(char *args)
     /*
      * NON-WIN32:  Config should be in the format:
      *   output alert_syslog: LOG_AUTH LOG_ALERT
-     * 
+     *
      * WIN32:  Config can be in any of these formats:
      *   output alert_syslog: LOG_AUTH LOG_ALERT
      *   output alert_syslog: host=hostname, LOG_AUTH LOG_ALERT
@@ -240,9 +240,9 @@ SyslogData *ParseSyslogArgs(char *args)
                     {
                         barnyard2_conf->syslog_server_port = DEFAULT_SYSLOG_PORT; /*default*/
                         LogMessage("WARNING => alert_syslog port "
-                                "appears to be non-numeric ('%s').  Defaulting " 
+                                "appears to be non-numeric ('%s').  Defaulting "
                                 "to port %d!\n", host_toks[2], DEFAULT_SYSLOG_PORT);
-                                
+
                     }
                     break;
 
@@ -258,7 +258,7 @@ SyslogData *ParseSyslogArgs(char *args)
     }
 
     DEBUG_WRAP(DebugMessage(DEBUG_INIT, "Logging alerts to syslog "
-                "server %s on port %d\n", barnyard2_conf->syslog_server, 
+                "server %s on port %d\n", barnyard2_conf->syslog_server,
                 barnyard2_conf->syslog_server_port););
     mSplitFree(&config_toks, num_facility_toks);
 #endif /* WIN32 */
@@ -282,28 +282,28 @@ SyslogData *ParseSyslogArgs(char *args)
 
         /* possible openlog options */
 
-#ifdef LOG_CONS 
+#ifdef LOG_CONS
         if(!strcasecmp("LOG_CONS", tmp))
         {
             data->options |= LOG_CONS;
         }
         else
 #endif
-#ifdef LOG_NDELAY 
+#ifdef LOG_NDELAY
         if(!strcasecmp("LOG_NDELAY", tmp))
         {
             data->options |= LOG_NDELAY;
         }
         else
 #endif
-#ifdef LOG_PERROR 
+#ifdef LOG_PERROR
         if(!strcasecmp("LOG_PERROR", tmp))
         {
             data->options |= LOG_PERROR;
         }
         else
 #endif
-#ifdef LOG_PID 
+#ifdef LOG_PID
         if(!strcasecmp("LOG_PID", tmp))
         {
             data->options |= LOG_PID;
@@ -320,84 +320,84 @@ SyslogData *ParseSyslogArgs(char *args)
 
         /* possible openlog facilities */
 
-#ifdef LOG_AUTHPRIV 
+#ifdef LOG_AUTHPRIV
         if(!strcasecmp("LOG_AUTHPRIV", tmp))
         {
             data->facility = LOG_AUTHPRIV;
         }
         else
 #endif
-#ifdef LOG_AUTH 
+#ifdef LOG_AUTH
         if(!strcasecmp("LOG_AUTH", tmp))
         {
             data->facility = LOG_AUTH;
         }
         else
 #endif
-#ifdef LOG_DAEMON 
+#ifdef LOG_DAEMON
         if(!strcasecmp("LOG_DAEMON", tmp))
         {
             data->facility = LOG_DAEMON;
         }
         else
 #endif
-#ifdef LOG_LOCAL0 
+#ifdef LOG_LOCAL0
         if(!strcasecmp("LOG_LOCAL0", tmp))
         {
             data->facility = LOG_LOCAL0;
         }
         else
 #endif
-#ifdef LOG_LOCAL1 
+#ifdef LOG_LOCAL1
         if(!strcasecmp("LOG_LOCAL1", tmp))
         {
             data->facility = LOG_LOCAL1;
         }
         else
 #endif
-#ifdef LOG_LOCAL2 
+#ifdef LOG_LOCAL2
         if(!strcasecmp("LOG_LOCAL2", tmp))
         {
             data->facility = LOG_LOCAL2;
         }
         else
 #endif
-#ifdef LOG_LOCAL3 
+#ifdef LOG_LOCAL3
         if(!strcasecmp("LOG_LOCAL3", tmp))
         {
             data->facility = LOG_LOCAL3;
         }
         else
 #endif
-#ifdef LOG_LOCAL4 
+#ifdef LOG_LOCAL4
         if(!strcasecmp("LOG_LOCAL4", tmp))
         {
             data->facility = LOG_LOCAL4;
         }
         else
 #endif
-#ifdef LOG_LOCAL5 
+#ifdef LOG_LOCAL5
         if(!strcasecmp("LOG_LOCAL5", tmp))
         {
             data->facility = LOG_LOCAL5;
         }
         else
 #endif
-#ifdef LOG_LOCAL6 
+#ifdef LOG_LOCAL6
         if(!strcasecmp("LOG_LOCAL6", tmp))
         {
             data->facility = LOG_LOCAL6;
         }
         else
 #endif
-#ifdef LOG_LOCAL7 
+#ifdef LOG_LOCAL7
         if(!strcasecmp("LOG_LOCAL7", tmp))
         {
             data->facility = LOG_LOCAL7;
         }
         else
 #endif
-#ifdef LOG_USER 
+#ifdef LOG_USER
         if(!strcasecmp("LOG_USER", tmp))
         {
             data->facility = LOG_USER;
@@ -407,56 +407,56 @@ SyslogData *ParseSyslogArgs(char *args)
 
         /* possible syslog priorities */
 
-#ifdef LOG_EMERG 
+#ifdef LOG_EMERG
         if(!strcasecmp("LOG_EMERG", tmp))
         {
             data->priority = LOG_EMERG;
         }
         else
 #endif
-#ifdef LOG_ALERT 
+#ifdef LOG_ALERT
         if(!strcasecmp("LOG_ALERT", tmp))
         {
             data->priority = LOG_ALERT;
         }
         else
 #endif
-#ifdef LOG_CRIT 
+#ifdef LOG_CRIT
         if(!strcasecmp("LOG_CRIT", tmp))
         {
             data->priority = LOG_CRIT;
         }
         else
 #endif
-#ifdef LOG_ERR 
+#ifdef LOG_ERR
         if(!strcasecmp("LOG_ERR", tmp))
         {
             data->priority = LOG_ERR;
         }
         else
 #endif
-#ifdef LOG_WARNING 
+#ifdef LOG_WARNING
         if(!strcasecmp("LOG_WARNING", tmp))
         {
             data->priority = LOG_WARNING;
         }
         else
 #endif
-#ifdef LOG_NOTICE 
+#ifdef LOG_NOTICE
         if(!strcasecmp("LOG_NOTICE", tmp))
         {
             data->priority = LOG_NOTICE;
         }
         else
 #endif
-#ifdef LOG_INFO 
+#ifdef LOG_INFO
         if(!strcasecmp("LOG_INFO", tmp))
         {
             data->priority = LOG_INFO;
         }
         else
 #endif
-#ifdef LOG_DEBUG 
+#ifdef LOG_DEBUG
         if(!strcasecmp("LOG_DEBUG", tmp))
         {
             data->priority = LOG_DEBUG;
@@ -490,7 +490,7 @@ SyslogData *ParseSyslogArgs(char *args)
  *          as you like.  Try not to destroy the performance of the whole
  *          system by trying to do too much....
  *
- * Arguments: p => pointer to the current packet data struct 
+ * Arguments: p => pointer to the current packet data struct
  *
  * Returns: void function
  *
@@ -507,7 +507,7 @@ void AlertSyslog(Packet *p, void *event, uint32_t event_type, void *arg)
     SyslogData		 	*data;
 	SigNode				*sn;
 	ClassType			*cn;
-   
+
 	if ( p == NULL || event == NULL || arg == NULL )
 	{
 		return;
@@ -536,9 +536,9 @@ void AlertSyslog(Packet *p, void *event, uint32_t event_type, void *arg)
 
 //        if(event != NULL)
 //        {
-            if( SnortSnprintf(event_data, STD_BUF, "[%lu:%lu:%lu] ", 
+            if( SnortSnprintf(event_data, STD_BUF, "[%lu:%lu:%lu] ",
                               (unsigned long) ntohl(((Unified2EventCommon *)event)->generator_id),
-                              (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_id), 
+                              (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_id),
                               (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_revision)) != SNORT_SNPRINTF_SUCCESS )
                 return ;
 
@@ -557,41 +557,38 @@ void AlertSyslog(Packet *p, void *event, uint32_t event_type, void *arg)
                 return ;
         }
 
-//        if(otn_tmp != NULL)
-//        {
-            if(cn != NULL)
+        if(cn != NULL)
+        {
+            if( cn->name )
             {
-                if( cn->name )
-                {
-                    if( SnortSnprintf(pri_data, STD_BUF-1, " [Classification: %s] "
-                                      "[Priority: %d]:", 
-                                      cn->name,
-                                      ntohl(((Unified2EventCommon *)event)->priority_id)) != SNORT_SNPRINTF_SUCCESS )
-                        return ;
-                }
-                if( strlcat(event_string, pri_data, SYSLOG_BUF) >= SYSLOG_BUF)
+                if( SnortSnprintf(pri_data, STD_BUF-1, " [Classification: %s] "
+                                  "[Priority: %d]:",
+                                  cn->name,
+                                  ntohl(((Unified2EventCommon *)event)->priority_id)) != SNORT_SNPRINTF_SUCCESS )
                     return ;
             }
-            else if( ntohl(((Unified2EventCommon *)event)->priority_id) != 0 )
-            {
-                if( SnortSnprintf(pri_data, STD_BUF, "[Priority: %d]:", 
-                                  ntohl(((Unified2EventCommon *)event)->priority_id)) != SNORT_SNPRINTF_SUCCESS )
-                   return ;
+            if( strlcat(event_string, pri_data, SYSLOG_BUF) >= SYSLOG_BUF)
+                return ;
+        }
+        else if( ntohl(((Unified2EventCommon *)event)->priority_id) != 0 )
+        {
+            if( SnortSnprintf(pri_data, STD_BUF, "[Priority: %d]:",
+                              ntohl(((Unified2EventCommon *)event)->priority_id)) != SNORT_SNPRINTF_SUCCESS )
+                return ;
 
-                if( strlcat(event_string, pri_data, SYSLOG_BUF) >= SYSLOG_BUF)
-                    return;
-            }
-//        }
+            if( strlcat(event_string, pri_data, SYSLOG_BUF) >= SYSLOG_BUF)
+                return;
+        }
 
         if((GET_IPH_PROTO(p) != IPPROTO_TCP &&
-                    GET_IPH_PROTO(p) != IPPROTO_UDP) || 
+                    GET_IPH_PROTO(p) != IPPROTO_UDP) ||
                 p->frag_flag)
         {
             if(!BcAlertInterface())
             {
                 if( protocol_names[GET_IPH_PROTO(p)] )
                 {
-                    if( SnortSnprintf(ip_data, STD_BUF, " {%s} %s -> %s",  
+                    if( SnortSnprintf(ip_data, STD_BUF, " {%s} %s -> %s",
                                       protocol_names[GET_IPH_PROTO(p)],
                                       sip, dip) != SNORT_SNPRINTF_SUCCESS )
                         return;
@@ -601,8 +598,8 @@ void AlertSyslog(Packet *p, void *event, uint32_t event_type, void *arg)
             {
                 if( protocol_names[GET_IPH_PROTO(p)] )
                 {
-                    if( SnortSnprintf(ip_data, STD_BUF, " <%s> {%s} %s -> %s",  
-                                      barnyard2_conf->interface, 
+                    if( SnortSnprintf(ip_data, STD_BUF, " <%s> {%s} %s -> %s",
+                                      barnyard2_conf->interface,
                                       protocol_names[GET_IPH_PROTO(p)],
                                       sip, dip) != SNORT_SNPRINTF_SUCCESS )
                         return ;
@@ -616,7 +613,7 @@ void AlertSyslog(Packet *p, void *event, uint32_t event_type, void *arg)
                if( protocol_names[GET_IPH_PROTO(p)] )
                {
                    if( SnortSnprintf(ip_data, STD_BUF, " <%s> {%s} %s:%i -> %s:%i",
-                                     barnyard2_conf->interface, 
+                                     barnyard2_conf->interface,
                                      protocol_names[GET_IPH_PROTO(p)], sip,
                                      p->sp, dip, p->dp) != SNORT_SNPRINTF_SUCCESS )
                        return ;
@@ -627,7 +624,7 @@ void AlertSyslog(Packet *p, void *event, uint32_t event_type, void *arg)
                if( protocol_names[GET_IPH_PROTO(p)] )
                {
                    if( SnortSnprintf(ip_data, STD_BUF, " {%s} %s:%i -> %s:%i",
-                                     protocol_names[GET_IPH_PROTO(p)], sip, p->sp, 
+                                     protocol_names[GET_IPH_PROTO(p)], sip, p->sp,
                                      dip, p->dp) != SNORT_SNPRINTF_SUCCESS )
                        return ;
                }

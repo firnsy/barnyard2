@@ -320,6 +320,7 @@ void RegisterOutputPlugins(void)
 {
     LogMessage("Initializing Output Plugins!\n");
 
+    AlertCEFSetup();
     AlertSyslogSetup();
     LogTcpdumpSetup();
     DatabaseSetup();

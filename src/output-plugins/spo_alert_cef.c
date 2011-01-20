@@ -19,14 +19,14 @@
 */
 /* $Id$ */
 
-/* spo_alert_syslog 
- * 
+/* spo_alert_syslog
+ *
  * Purpose:
  *
  * This module sends alerts to the syslog service.
  *
  * Arguments:
- *   
+ *
  * Logging mechanism?
  *
  * Effect:
@@ -87,7 +87,7 @@ void AlertCEFRestart(int, void *);
 /*
  * Function: SetupCEF()
  *
- * Purpose: Registers the output plugin keyword and initialization 
+ * Purpose: Registers the output plugin keyword and initialization
  *          function into the output plugin list.  This is the function that
  *          gets called from InitOutputPlugins() in plugbase.c.
  *
@@ -98,7 +98,7 @@ void AlertCEFRestart(int, void *);
  */
 void AlertCEFSetup(void)
 {
-    /* link the preprocessor keyword to the init function in 
+    /* link the preprocessor keyword to the init function in
        the preproc list */
     RegisterOutputPlugin("alert_cef", OUTPUT_TYPE_FLAG__ALERT, AlertCEFInit);
     DEBUG_WRAP(DebugMessage(DEBUG_INIT,"Output plugin: Alert-CEF is setup...\n"););
@@ -142,9 +142,9 @@ void AlertCEFInit(char *args)
 /*
  * Function: ParseCEFArgs(char *)
  *
- * Purpose: Process the preprocessor arguements from the rules file and 
+ * Purpose: Process the preprocessor arguements from the rules file and
  *          initialize the preprocessor's data struct.  This function doesn't
- *          have to exist if it makes sense to parse the args in the init 
+ *          have to exist if it makes sense to parse the args in the init
  *          function.
  *
  * Arguments: args => argument list
@@ -186,7 +186,7 @@ CEFData *ParseCEFArgs(char *args)
     /*
      * NON-WIN32:  Config should be in the format:
      *   output alert_cef: LOG_AUTH LOG_ALERT
-     * 
+     *
      * WIN32:  Config can be in any of these formats:
      *   output alert_cef: LOG_AUTH LOG_ALERT
      *   output alert_cef: host=hostname, LOG_AUTH LOG_ALERT
@@ -239,9 +239,9 @@ CEFData *ParseCEFArgs(char *args)
                     {
                         pv.syslog_server_port = DEFAULT_SYSLOG_PORT; /*default*/
                         LogMessage("WARNING => alert_cef port "
-                                "appears to be non-numeric ('%s').  Defaulting " 
+                                "appears to be non-numeric ('%s').  Defaulting "
                                 "to port %d!\n", host_toks[2], DEFAULT_SYSLOG_PORT);
-                                
+
                     }
                     break;
 
@@ -257,7 +257,7 @@ CEFData *ParseCEFArgs(char *args)
     }
 
     DEBUG_WRAP(DebugMessage(DEBUG_INIT, "Logging alerts to syslog "
-                "server %s on port %d\n", pv.syslog_server, 
+                "server %s on port %d\n", pv.syslog_server,
                 pv.syslog_server_port););
     mSplitFree(&config_toks, num_facility_toks);
 #endif /* WIN32 */
@@ -283,28 +283,28 @@ CEFData *ParseCEFArgs(char *args)
 
         /* possible openlog options */
 
-#ifdef LOG_CONS 
+#ifdef LOG_CONS
         if(!strcasecmp("LOG_CONS", tmp))
         {
             data->options |= LOG_CONS;
         }
         else
 #endif
-#ifdef LOG_NDELAY 
+#ifdef LOG_NDELAY
         if(!strcasecmp("LOG_NDELAY", tmp))
         {
             data->options |= LOG_NDELAY;
         }
         else
 #endif
-#ifdef LOG_PERROR 
+#ifdef LOG_PERROR
         if(!strcasecmp("LOG_PERROR", tmp))
         {
             data->options |= LOG_PERROR;
         }
         else
 #endif
-#ifdef LOG_PID 
+#ifdef LOG_PID
         if(!strcasecmp("LOG_PID", tmp))
         {
             data->options |= LOG_PID;
@@ -320,84 +320,84 @@ CEFData *ParseCEFArgs(char *args)
 #endif
         /* possible openlog facilities */
 
-#ifdef LOG_AUTHPRIV 
+#ifdef LOG_AUTHPRIV
         if(!strcasecmp("LOG_AUTHPRIV", tmp))
         {
             data->facility = LOG_AUTHPRIV;
         }
         else
 #endif
-#ifdef LOG_AUTH 
+#ifdef LOG_AUTH
         if(!strcasecmp("LOG_AUTH", tmp))
         {
             data->facility = LOG_AUTH;
         }
         else
 #endif
-#ifdef LOG_DAEMON 
+#ifdef LOG_DAEMON
         if(!strcasecmp("LOG_DAEMON", tmp))
         {
             data->facility = LOG_DAEMON;
         }
         else
 #endif
-#ifdef LOG_LOCAL0 
+#ifdef LOG_LOCAL0
         if(!strcasecmp("LOG_LOCAL0", tmp))
         {
             data->facility = LOG_LOCAL0;
         }
         else
 #endif
-#ifdef LOG_LOCAL1 
+#ifdef LOG_LOCAL1
         if(!strcasecmp("LOG_LOCAL1", tmp))
         {
             data->facility = LOG_LOCAL1;
         }
         else
 #endif
-#ifdef LOG_LOCAL2 
+#ifdef LOG_LOCAL2
         if(!strcasecmp("LOG_LOCAL2", tmp))
         {
             data->facility = LOG_LOCAL2;
         }
         else
 #endif
-#ifdef LOG_LOCAL3 
+#ifdef LOG_LOCAL3
         if(!strcasecmp("LOG_LOCAL3", tmp))
         {
             data->facility = LOG_LOCAL3;
         }
         else
 #endif
-#ifdef LOG_LOCAL4 
+#ifdef LOG_LOCAL4
         if(!strcasecmp("LOG_LOCAL4", tmp))
         {
             data->facility = LOG_LOCAL4;
         }
         else
 #endif
-#ifdef LOG_LOCAL5 
+#ifdef LOG_LOCAL5
         if(!strcasecmp("LOG_LOCAL5", tmp))
         {
             data->facility = LOG_LOCAL5;
         }
         else
 #endif
-#ifdef LOG_LOCAL6 
+#ifdef LOG_LOCAL6
         if(!strcasecmp("LOG_LOCAL6", tmp))
         {
             data->facility = LOG_LOCAL6;
         }
         else
 #endif
-#ifdef LOG_LOCAL7 
+#ifdef LOG_LOCAL7
         if(!strcasecmp("LOG_LOCAL7", tmp))
         {
             data->facility = LOG_LOCAL7;
         }
         else
 #endif
-#ifdef LOG_USER 
+#ifdef LOG_USER
         if(!strcasecmp("LOG_USER", tmp))
         {
             data->facility = LOG_USER;
@@ -407,56 +407,56 @@ CEFData *ParseCEFArgs(char *args)
 
         /* possible syslog priorities */
 
-#ifdef LOG_EMERG 
+#ifdef LOG_EMERG
         if(!strcasecmp("LOG_EMERG", tmp))
         {
             data->priority = LOG_EMERG;
         }
         else
 #endif
-#ifdef LOG_ALERT 
+#ifdef LOG_ALERT
         if(!strcasecmp("LOG_ALERT", tmp))
         {
             data->priority = LOG_ALERT;
         }
         else
 #endif
-#ifdef LOG_CRIT 
+#ifdef LOG_CRIT
         if(!strcasecmp("LOG_CRIT", tmp))
         {
             data->priority = LOG_CRIT;
         }
         else
 #endif
-#ifdef LOG_ERR 
+#ifdef LOG_ERR
         if(!strcasecmp("LOG_ERR", tmp))
         {
             data->priority = LOG_ERR;
         }
         else
 #endif
-#ifdef LOG_WARNING 
+#ifdef LOG_WARNING
         if(!strcasecmp("LOG_WARNING", tmp))
         {
             data->priority = LOG_WARNING;
         }
         else
 #endif
-#ifdef LOG_NOTICE 
+#ifdef LOG_NOTICE
         if(!strcasecmp("LOG_NOTICE", tmp))
         {
             data->priority = LOG_NOTICE;
         }
         else
 #endif
-#ifdef LOG_INFO 
+#ifdef LOG_INFO
         if(!strcasecmp("LOG_INFO", tmp))
         {
             data->priority = LOG_INFO;
         }
         else
 #endif
-#ifdef LOG_DEBUG 
+#ifdef LOG_DEBUG
         if(!strcasecmp("LOG_DEBUG", tmp))
         {
             data->priority = LOG_DEBUG;
@@ -482,20 +482,22 @@ CEFData *ParseCEFArgs(char *args)
  *          as you like.  Try not to destroy the performance of the whole
  *          system by trying to do too much....
  *
- * Arguments: p => pointer to the current packet data struct 
+ * Arguments: p => pointer to the current packet data struct
  *
  * Returns: void function
  *
  */
 void AlertCEF(Packet *p, void *event, u_int32_t event_type, void *arg)
 {
+    char sip[16];
+    char dip[16];
 #define SYSLOG_BUF  1024
+    int                 cef_severity;
     char                cef_message[SYSLOG_BUF];
     CEFData			 	*data;
 	SigNode				*sn;
 	ClassType			*cn;
-    int                 cef_severity;
-   
+
 	if ( p == NULL || event == NULL || arg == NULL )
 	{
 		return;
@@ -517,6 +519,12 @@ void AlertCEF(Packet *p, void *event, u_int32_t event_type, void *arg)
 
     if(p && IPH_IS_VALID(p))
     {
+        if (strlcpy(sip, inet_ntoa(GET_SRC_ADDR(p)), sizeof(sip)) >= sizeof(sip))
+            return;
+
+        if (strlcpy(dip, inet_ntoa(GET_DST_ADDR(p)), sizeof(dip)) >= sizeof(dip))
+            return;
+
         /* calculate CEF severity */
         cef_severity = (11 - ntohl(((Unified2EventCommon *)event)->priority_id));
         if ( cef_severity < 0 )
@@ -525,9 +533,9 @@ void AlertCEF(Packet *p, void *event, u_int32_t event_type, void *arg)
             cef_severity = 10;
 
 
-        if( SnortSnprintfAppend(cef_message, SYSLOG_BUF, "%lu:%lu:%lu|%s|%d|", 
+        if( SnortSnprintfAppend(cef_message, SYSLOG_BUF, "%lu:%lu:%lu|%s|%d|",
                           (unsigned long) ntohl(((Unified2EventCommon *)event)->generator_id),
-                          (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_id), 
+                          (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_id),
                           (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_revision),
                           sn == NULL ? "ALERT" : sn->msg, cef_severity) != SNORT_SNPRINTF_SUCCESS )
                 return ;
@@ -535,14 +543,14 @@ void AlertCEF(Packet *p, void *event, u_int32_t event_type, void *arg)
         if( (GET_IPH_PROTO(p) != IPPROTO_TCP && GET_IPH_PROTO(p) != IPPROTO_UDP) || p->frag_flag )
         {
             if( SnortSnprintfAppend(cef_message, SYSLOG_BUF, "src=%s dst=%s proto=%s",
-                                    inet_ntoa(GET_SRC_ADDR(p)), inet_ntoa(GET_DST_ADDR(p)),
+                                    sip, dip,
                                     protocol_names[GET_IPH_PROTO(p)]) != SNORT_SNPRINTF_SUCCESS )
                 return;
         }
         else
         {
             if( SnortSnprintfAppend(cef_message, SYSLOG_BUF, "src=%s dst=%s spt=%i dpt=%i proto=%s",
-                                 inet_ntoa(GET_SRC_ADDR(p)), inet_ntoa(GET_DST_ADDR(p)), p->sp, p->dp,
+                                 sip, dip, p->sp, p->dp,
                                  protocol_names[GET_IPH_PROTO(p)]) != SNORT_SNPRINTF_SUCCESS )
                 return ;
         }

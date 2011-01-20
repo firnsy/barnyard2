@@ -37,11 +37,11 @@
 
 Summary: Snort Log Backend 
 Name: barnyard2
-Version: 1.8beta2
+Version: 1.9
 Release: 1%{?dist}
 License: GPL
 Group: Applications/Internet
-Source0: http://www.securixlive.com/download/barnyard2/%{name}-1.8-beta2.tar.gz
+Source0: http://www.securixlive.com/download/barnyard2/%{name}-%{version}.tar.gz
 Source2: %{name}.config
 Source3: %{name}
 Url: http://www.securixlive.com/barnyard2/
@@ -93,7 +93,7 @@ EXPERIMENTAL!!  I don't have a way to test this, so let me know if it works!
 ORACLE_HOME=%{OracleHome}
 
 %prep
-%setup -q -n barnyard2-1.8-beta2
+%setup -q -n barnyard2-%{version}
 
 
 %build
@@ -122,6 +122,9 @@ make
 %{__install} -m 755 $RPM_SOURCE_DIR/barnyard2 $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/barnyard2
 %{__install} -m 644 doc/* $RPM_BUILD_ROOT%{_docdir}/%{name}-%{version}/doc/
 
+#clean up file that isn't where it should be
+rm -f $RPM_BUILD_ROOT%{_sysconfdir}/barnyard2.conf
+
 %clean
 if [ -d $RPM_BUILD_ROOT ] && [ "$RPM_BUILD_ROOT" != "/"  ] ; then
 	rm -rf $RPM_BUILD_ROOT
@@ -136,7 +139,10 @@ fi
 %attr(644,root,root) %config %{_sysconfdir}/sysconfig/barnyard2
 
 %changelog
-* Sat Jan 16 2009 Ian Firns <firnsy@securixlive.com>
+* Mon Jan 10 2011 Jason Haar <jhaar@sf.net>
+- updated spec file
+
+* Sat Jan 16 2010 Ian Firns <firnsy@securixlive.com>
 - barnyard2-1.8-beta2
 
 * Mon Sep 13 2009 Tom McLaughlin <tmclaugh@sdf.lonestar.org>

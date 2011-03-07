@@ -125,6 +125,10 @@ int ProcessWaldoFile(const char *);
 
 int spoolerReadWaldo(Waldo *);
 
+int InitializeLogPacket(void);
+int FreeLogPacket(void);
+
+
 #endif /* __SPOOLER_H__ */
 
 

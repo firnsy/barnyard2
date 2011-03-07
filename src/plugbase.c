@@ -539,42 +539,47 @@ void AppendOutputFuncList(OutputFunc func, void *arg, OutputFuncNode **list)
 
 void CallOutputPlugins(OutputType out_type, Packet *packet, void *event, uint32_t event_type)
 {
-	OutputFuncNode *idx = NULL;
-
-    if (out_type == OUTPUT_TYPE__SPECIAL)
+  OutputFuncNode *idx = NULL;
+  
+  if(event == NULL)
     {
-        idx = AlertList;
-    	while (idx != NULL)
+      FatalError("CallOutputPlugins() called with a null event, if you think you should be able to do that, have a look at [%s] Line [%u] \n",__FILE__,__LINE__);
+    }
+  
+  if (out_type == OUTPUT_TYPE__SPECIAL)
+    {
+      idx = AlertList;
+      while (idx != NULL)
     	{
-    		idx->func(packet, event, event_type, idx->arg);
-    		idx = idx->next;
+	  idx->func(packet, event, event_type, idx->arg);
+	  idx = idx->next;
     	}
-
-        idx = LogList;
-    	while (idx != NULL)
+      
+      idx = LogList;
+      while (idx != NULL)
     	{
-    		idx->func(packet, event, event_type, idx->arg);
-    		idx = idx->next;
+	  idx->func(packet, event, event_type, idx->arg);
+	  idx = idx->next;
     	}
     }
-    else
+  else
     {
-    	switch(out_type)
+      switch(out_type)
     	{
-    		case OUTPUT_TYPE__ALERT:
-    			idx = AlertList;
-    			break;
-    		case OUTPUT_TYPE__LOG:
-    			idx = LogList;
-    			break;
-            default:
-                break;
+	case OUTPUT_TYPE__ALERT:
+	  idx = AlertList;
+	  break;
+	case OUTPUT_TYPE__LOG:
+	  idx = LogList;
+	  break;
+	default:
+	  break;
     	}
-
-    	while (idx != NULL)
+      
+      while (idx != NULL)
     	{
-    		idx->func(packet, event, event_type, idx->arg);
-    		idx = idx->next;
+	  idx->func(packet, event, event_type, idx->arg);
+	  idx = idx->next;
     	}
     }
 }

@@ -41,8 +41,6 @@
 #include "unified2.h"
 #include "util.h"
 
-#define CACHED_EVENTS_MAX 64
-
 /*
 ** PRIVATE FUNCTIONS
 */
@@ -57,15 +55,6 @@ int spoolerWriteWaldo(Waldo *, Spooler *);
 int spoolerOpenWaldo(Waldo *, uint8_t);
 int spoolerCloseWaldo(Waldo *);
 
-
-int spoolerPacketCacheAdd(Spooler *, Packet *);
-int spoolerPacketCacheClear(Spooler *);
-
-int spoolerEventCachePush(Spooler *, uint32_t, void *);
-EventRecordNode * spoolerEventCacheGetByEventID(Spooler *, uint32_t);
-EventRecordNode * spoolerEventCacheGetHead(Spooler *);
-uint8_t spoolerEventCacheHeadUsed(Spooler *);
-int spoolerEventCacheClean(Spooler *);
 
 /* Find the next spool file timestamp extension with a value equal to or 
  * greater than timet.  If extension != NULL, the extension will be 
@@ -348,7 +337,7 @@ int ProcessBatch(const char *dirpath, const char *filename)
                 else
                 {
                     LogMessage("ERROR: Input file '%s' is corrupted! (%u)\n", 
-                                spooler->filepath, ret);
+                               spooler->filepath, ret);
                     pb_ret = -1;
                 }
 
@@ -602,273 +591,402 @@ int ProcessContinuousWithWaldo(Waldo *waldo)
 }
 
 
+
 /*
 ** RECORD PROCESSING EVENTS
 */
+/* Less allocation */
+Packet *LogPacket = NULL;
+
+
+
+/* EVENT  */
+/* PACKET */
+
+//EVENT WITHOUT PACKET? NOT.
+
+//EVENT_STATE
+//PACKET_STATE
+static Unified2IDSEvent_legacy *U2IdsEventLegacyPtr = NULL;
+static Unified2IDSEventIPv6_legacy *U2IdeEventV6LegacyPtr = NULL;
+static Unified2ExtraData *u2ExtraDataPtr = NULL; 
+static Unified2ExtraDataHdr *u2ExtraDataHdrPtr = NULL;
+static Unified2Packet *u2PacketPtr = NULL;
+static Unified2IDSEventIPv6 *U2IdsEventV6Ptr = NULL;
+static Unified2IDSEvent *U2IdsEventPtr = NULL;
+
+static int SpoolerState = 0;
+static void  *SpoolerEventPtr = NULL;
+
+#define SPOOLER_NULL         0x00000000
+#define SPOOLER_EVENT        0x00000001
+#define SPOOLER_READY        0x00000002
+#define SPOOLER_FAST_FORWARD 0x10000000
+
+int InitializeSpoolerStatic(void)
+{
+  
+  if( (U2IdsEventLegacyPtr = (Unified2IDSEvent_legacy *)malloc(sizeof(Unified2IDSEvent_legacy)))  == NULL)
+    {
+      /* XXX */ 
+      return 1;
+    }
+
+  memset(U2IdsEventLegacyPtr,'\0',sizeof(Unified2IDSEvent_legacy));
+  
+  if( (U2IdeEventV6LegacyPtr = (Unified2IDSEventIPv6_legacy *)malloc(sizeof(Unified2IDSEventIPv6_legacy))) == NULL)
+    {
+      /* XXX */
+      return 1;
+    }
+  
+  memset(U2IdeEventV6LegacyPtr,'\0',sizeof(Unified2IDSEventIPv6_legacy));
+
+  if( (u2ExtraDataPtr = (Unified2ExtraData *)malloc(sizeof(Unified2ExtraData))) == NULL)
+    {
+      /* XXX */
+      return 1;
+    }
+  memset(u2ExtraDataPtr,'\0',sizeof(Unified2ExtraData));
+  
+  if( (u2ExtraDataHdrPtr = (Unified2ExtraDataHdr *)malloc(sizeof(Unified2ExtraDataHdr))) == NULL)
+    {
+      /* XXX */
+      return 1;
+    }
+  memset(u2ExtraDataHdrPtr,'\0',sizeof(Unified2ExtraDataHdr));  
+
+  if( (u2PacketPtr = (Unified2Packet *)malloc(sizeof(Unified2Packet))) == NULL)
+    {
+      /* XXX */
+      return 1;
+    }
+  memset(u2PacketPtr,'\0',sizeof(Unified2Packet));
+  
+  if( (U2IdsEventV6Ptr = (Unified2IDSEventIPv6 *)malloc(sizeof(Unified2IDSEventIPv6))) == NULL)
+    {
+      /* XXX */
+      return 1;
+    }
+  memset(U2IdsEventV6Ptr,'\0',sizeof(Unified2IDSEventIPv6));
+  
+  if( (U2IdsEventPtr = (Unified2IDSEvent *)malloc(sizeof(Unified2IDSEvent))) == NULL)
+    {
+      /* XXX */
+      return 1;
+    }
+  memset(U2IdsEventPtr,'\0',sizeof(Unified2IDSEvent));
+  
+  return 0;
+}
+
+int FreeSpoolerStatic(void)
+{
+  if( U2IdsEventLegacyPtr != NULL)
+    {
+      free(U2IdsEventLegacyPtr);
+    }
+
+  if( U2IdeEventV6LegacyPtr != NULL)
+    {
+      free(U2IdeEventV6LegacyPtr);
+    }
+
+  if( u2ExtraDataPtr != NULL)
+    {
+      free(u2ExtraDataHdrPtr);
+    }
+
+  if( u2PacketPtr != NULL)
+    {
+      free(u2PacketPtr);
+    }
+
+  if( U2IdsEventPtr != NULL)
+    {
+      free(U2IdsEventPtr);
+    }
+
+  if( U2IdsEventV6Ptr != NULL)
+    {
+      free(U2IdsEventV6Ptr);
+    }
+
+  return 0;
+}
+
+int InitializeLogPacket(void)
+{
+
+  if(LogPacket == NULL)
+    {
+      if( (LogPacket=(Packet *)malloc(sizeof(Packet))) == NULL)
+	{
+	  /* XXX */
+	  return 1;
+	  
+	}
+      memset(LogPacket,'\0',sizeof(Packet));
+    }
+  else
+    {
+      /* XXX */
+      return 1;
+    }
+
+  return InitializeSpoolerStatic();
+}
+
+int FreeLogPacket(void)
+{
+  if(LogPacket != NULL)
+    {
+      memset(LogPacket,'\0',sizeof(Packet));
+      free(LogPacket);
+      LogPacket = NULL;
+      return 0;
+    }
+  
+  return FreeSpoolerStatic();
+}
+
+
+int SpoolerSetStaticEvent(u_int32_t type,void *RecordData)
+{
+  if(RecordData == NULL)
+    {
+      /* XXX */
+      return 1;
+    }
+  
+  switch(type)
+    {
+      
+    case UNIFIED2_IDS_EVENT:
+    case UNIFIED2_IDS_EVENT_MPLS:
+    case UNIFIED2_IDS_EVENT_VLAN:
+      memset(U2IdsEventPtr,'\0',sizeof(Unified2IDSEvent));
+      memcpy(U2IdsEventPtr,RecordData,sizeof(Unified2IDSEvent)); 
+      SpoolerEventPtr =(void *)U2IdsEventPtr;
+      break;
+      
+    case UNIFIED2_IDS_EVENT_IPV6:
+    case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+    case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+      memset(U2IdsEventV6Ptr,'\0',sizeof(Unified2IDSEventIPv6));
+      memcpy(U2IdsEventV6Ptr,RecordData,sizeof(Unified2IDSEventIPv6));
+      SpoolerEventPtr =(void *)U2IdsEventV6Ptr;
+      break;
+      
+    default:
+      /* XXX */
+      return 1;
+      break;
+      
+    }
+  
+  return 0;
+}
+
+
+int SpoolerCheckEventPtr(void)
+{
+  if(SpoolerEventPtr == NULL)
+    {
+      /* XXX */
+      return 1;
+    }
+
+  return 0;
+}
+
+void * SpoolerGetEventPtr(void)
+{
+  return SpoolerEventPtr;
+}
 
 void spoolerProcessRecord(Spooler *spooler, int fire_output)
 {
-    struct pcap_pkthdr      pkth;
-    uint32_t                type;
-    EventRecordNode         *ernCache;
-
-    /* convert type once */
-    type = ntohl(((Unified2RecordHeader *)spooler->record.header)->type);
-
-    /* increment the stats */
-    pc.total_records++;
-    if (type == UNIFIED2_PACKET)
-        pc.total_packets++;
-    else if(type == UNIFIED2_IDS_EVENT || type == UNIFIED2_IDS_EVENT_IPV6 ||
-            type == UNIFIED2_IDS_EVENT_MPLS || type == UNIFIED2_IDS_EVENT_IPV6_MPLS ||
-            type == UNIFIED2_IDS_EVENT_VLAN || type == UNIFIED2_IDS_EVENT_IPV6_VLAN)
-        pc.total_events++;
-
-    /* check if it's packet */
-    if (type == UNIFIED2_PACKET)
-    {   
-        /* convert event id once */
-        uint32_t event_id = ntohl(((Unified2Packet *)spooler->record.data)->event_id);
-
-        /* check if there is a previously cached event that matches this event id */
-        ernCache = spoolerEventCacheGetByEventID(spooler, event_id);
-
-        /* allocate space for the packet and construct the packet header */
-        spooler->record.pkt = SnortAlloc(sizeof(Packet));
-    
-        pkth.caplen = ntohl(((Unified2Packet *)spooler->record.data)->packet_length);
-        pkth.len = pkth.caplen;
-        pkth.ts.tv_sec = ntohl(((Unified2Packet *)spooler->record.data)->packet_second);
-        pkth.ts.tv_usec = ntohl(((Unified2Packet *)spooler->record.data)->packet_microsecond);
-        
-        /* decode the packet from the Unified2Packet information */
-        datalink = ntohl(((Unified2Packet *)spooler->record.data)->linktype);
-        DecodePacket(datalink, spooler->record.pkt, &pkth, 
-                     ((Unified2Packet *)spooler->record.data)->packet_data);
-        
-        /* check if it's been re-assembled */
-        if (spooler->record.pkt->packet_flags & PKT_REBUILT_STREAM)
-        {
-            DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Packet has been rebuilt from a stream\n"););
-        }
-
-        /* if the packet and cached event share the same id */
-        if ( ernCache != NULL )
-        {
-            /* call output plugins with a "SPECIAL" alert format (both Event and Packet information) */
-            DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Firing SPECIAL style (Packet+Event)\n"););
-
-            if ( fire_output && 
-                 ((ernCache->used == 0) || BcAlertOnEachPacketInStream()) )
-                CallOutputPlugins(OUTPUT_TYPE__SPECIAL, 
-                              spooler->record.pkt, 
-                              ernCache->data, 
-                              ernCache->type);
-                
-            /* indicate that the cached event has been used */
-            ernCache->used = 1;
-        }
-        else
-        {
-            /* fire the event cache head only if not already used (ie dirty) */ 
-            if ( spoolerEventCacheHeadUsed(spooler) == 0 )
-            {
-                ernCache = spoolerEventCacheGetHead(spooler);
-
-                /* call output plugins with an "ALERT" format (cached Event information only) */
-                DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Firing ALERT style (Event only)\n"););
-
-                if (fire_output)
-                    CallOutputPlugins(OUTPUT_TYPE__ALERT, 
-                                      NULL,
-                                      ernCache->data, 
-                                      ernCache->type);
-                
-                /* set the event cache used flag */
-                ernCache->used = 1;
-            }
-
-            /* call output plugins with a "LOG" format (Packet information only) */
-            DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Firing LOG style (Packet)\n"););
-
-            if (fire_output)
-                CallOutputPlugins(OUTPUT_TYPE__SPECIAL,
-                                  spooler->record.pkt, 
-                                  NULL, 
-                                  0);
-        }
-
-        /* free the memory allocated in this function */
-        free(spooler->record.pkt);
-        spooler->record.pkt = NULL;
-
-        /* waldo operations occur after the output plugins are called */
-        if (fire_output)
-            spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);
-    }
-    /* check if it's an event of known sorts */
-    else if(type == UNIFIED2_IDS_EVENT || type == UNIFIED2_IDS_EVENT_IPV6 ||
-            type == UNIFIED2_IDS_EVENT_MPLS || type == UNIFIED2_IDS_EVENT_IPV6_MPLS ||
-            type == UNIFIED2_IDS_EVENT_VLAN || type == UNIFIED2_IDS_EVENT_IPV6_VLAN)
+  struct pcap_pkthdr      pkth;
+  uint32_t                type = 0;
+  
+  if(LogPacket == NULL)
     {
-        /* fire the cached event only if not already used (ie dirty) */ 
-        if ( spoolerEventCacheHeadUsed(spooler) == 0 )
-        {
-            /* call output plugins with an "ALERT" format (cached Event information only) */
-            DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Firing ALERT style (Event only)\n"););
-
-            ernCache = spoolerEventCacheGetHead(spooler);
-
-            if (fire_output)
-                CallOutputPlugins(OUTPUT_TYPE__ALERT, 
-                              NULL,
-                              ernCache->data, 
-                              ernCache->type);
-            
-            /* flush the event cache flag */
-            ernCache->used = 1;
-        }
-
-        /* cache new data */
-        spoolerEventCachePush(spooler, type, spooler->record.data);
-        spooler->record.data = NULL;
-
-        /* waldo operations occur after the output plugins are called */
-        if (fire_output)
-            spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);
+      FatalError("spoolerProcessRecord(): LogPacket is null ....i blame finch! \n");
     }
-    else if (type == UNIFIED2_EXTRA_DATA)
+  
+  /* convert type once */
+  type = ntohl(((Unified2RecordHeader *)spooler->record.header)->type);
+  
+  /* increment the stats */
+  pc.total_records++;
+  
+  switch(SpoolerState)
     {
-        /* waldo operations occur after the output plugins are called */
-        if (fire_output)
-            spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);
-    }
-    else
-    {
-        /* fire the cached event only if not already used (ie dirty) */ 
-        if ( spoolerEventCacheHeadUsed(spooler) == 0 )
+    case SPOOLER_NULL:
+
+      /* Callback in case dual event would be logged...(shoudln't happen)*/
+    EVENT_PROCESS:
+      if(type ==  UNIFIED2_EVENT)
+	{
+	  LogMessage("spoolerProcessRecord(): A long long time ago...\n"
+		     "caught UNIFIED2_EVENT event type[%lu] ..running a old snort?\n "
+		     "Now snort should log UNIFIED2_IDS_EVENT event type [%lu].\n",
+		     UNIFIED2_EVENT,
+		     UNIFIED2_IDS_EVENT);
+	  
+	  SpoolerState = SPOOLER_FAST_FORWARD;
+	}
+      
+      /* In case that we have a lonely packet. */
+      if( (type ==  UNIFIED2_PACKET))
+	{
+	  /* increment the stats */
+          pc.total_packets++;
+	  
+	  LogMessage("spoolerProcessRecord(): Received a UNIFIED2 Lonely packet with event_id [%lu] \n\n",
+                     ntohl(((Unified2Packet *)spooler->record.data)->event_id));
+	  
+          /* Cleanup ze mess */
+          memset(LogPacket,'\0',sizeof(Packet));
+          spooler->record.pkt = LogPacket;
+	  
+          pkth.caplen = ntohl(((Unified2Packet *)spooler->record.data)->packet_length);
+          pkth.len = pkth.caplen;
+          pkth.ts.tv_sec = ntohl(((Unified2Packet *)spooler->record.data)->packet_second);
+          pkth.ts.tv_usec = ntohl(((Unified2Packet *)spooler->record.data)->packet_microsecond);
+	  
+          /* decode the packet from the Unified2Packet information */
+          datalink = ntohl(((Unified2Packet *)spooler->record.data)->linktype);
+	  DecodePacket(datalink, spooler->record.pkt, &pkth,
+                       ((Unified2Packet *)spooler->record.data)->packet_data);
+	  
+	  CallOutputPlugins(OUTPUT_TYPE__SPECIAL,
+			    spooler->record.pkt,
+			    NULL,
+                            type);
+	  
+	  /* Should not be changed, but lets set it anyways */
+	  /* Reset Spooler state */
+          SpoolerState = SPOOLER_NULL;
+	}
+      else
+	{
+	  if(((type != UNIFIED2_IDS_EVENT ) &&
+	      (type != UNIFIED2_IDS_EVENT_IPV6 ) &&
+	      (type != UNIFIED2_IDS_EVENT_MPLS) &&
+	      (type != UNIFIED2_IDS_EVENT_IPV6_MPLS) &&
+	      (type != UNIFIED2_IDS_EVENT_VLAN) &&
+	      (type != UNIFIED2_IDS_EVENT_IPV6_VLAN)))
+	    {
+	      FatalError("Are you using a custom unified2 output plugin? Caught record type [%lu] in SPOOLER_NULL State\n");
+	      return;
+	    }
+	  
+	  if( (SpoolerSetStaticEvent(type,spooler->record.data)))
+	    {
+	      /* XXX */
+	      FatalError("SpoolerSetStaticEvent(), failed \n");
+	    }
+	  
+	  /* increment the stats */
+	  pc.total_events++;
+	  
+	  /* We are now in Event State */
+	  SpoolerState = SPOOLER_EVENT;
+	}
+      
+      break;
+      
+    case SPOOLER_EVENT:
+      
+      if( SpoolerCheckEventPtr())
+	{
+	  /* XXX */
+	  FatalError("SpoolerCheckEventPtr(), error in spoolerProcessRecord(), something went wrong ...\n");
+	}
+      
+      if( ((type == UNIFIED2_IDS_EVENT) ||
+           (type == UNIFIED2_IDS_EVENT_IPV6 ) ||
+           (type == UNIFIED2_IDS_EVENT_MPLS) ||
+           (type == UNIFIED2_IDS_EVENT_IPV6_MPLS) ||
+           (type == UNIFIED2_IDS_EVENT_VLAN) ||
+           (type == UNIFIED2_IDS_EVENT_IPV6_VLAN)))
         {
-            /* call output plugins with an "ALERT" format (cached Event information only) */
-            DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Firing ALERT style (Event only)\n"););
-
-            ernCache = spoolerEventCacheGetHead(spooler);
-
-            if (fire_output)
-                CallOutputPlugins(OUTPUT_TYPE__ALERT, 
-                              NULL,
-                              ernCache->data, 
-                              ernCache->type);
-            
-            /* waldo operations occur after the output plugins are called */
-            if (fire_output)
-                spoolerWriteWaldo(&barnyard2_conf->waldo, spooler); 
+	  
+	  CallOutputPlugins(OUTPUT_TYPE__SPECIAL,
+                            NULL,
+                            SpoolerGetEventPtr(),
+                            type);
+	  
+	  /* setting the spooler state back to null shouldn't happend but we do it anyways */
+          SpoolerState = SPOOLER_NULL;
+	  goto EVENT_PROCESS;
         }
+      else if( type == UNIFIED2_PACKET )
+	{
+	  /* increment the stats */  
+	  pc.total_packets++;
+	  
+	  /* Cleanup ze mess */
+	  memset(LogPacket,'\0',sizeof(Packet));
+	  spooler->record.pkt = LogPacket;
+	  
+	  pkth.caplen = ntohl(((Unified2Packet *)spooler->record.data)->packet_length);
+	  pkth.len = pkth.caplen;
+	  pkth.ts.tv_sec = ntohl(((Unified2Packet *)spooler->record.data)->packet_second);
+	  pkth.ts.tv_usec = ntohl(((Unified2Packet *)spooler->record.data)->packet_microsecond);
+	  
+	  /* decode the packet from the Unified2Packet information */
+	  datalink = ntohl(((Unified2Packet *)spooler->record.data)->linktype);
+	  DecodePacket(datalink, spooler->record.pkt, &pkth,
+		       ((Unified2Packet *)spooler->record.data)->packet_data);
+	  
+	  CallOutputPlugins(OUTPUT_TYPE__SPECIAL,
+                            spooler->record.pkt,
+                            SpoolerGetEventPtr(),
+                            type);
+	  
+	  /* Reset Spooler state */
+	  SpoolerState = SPOOLER_NULL;
+	}
+      /* Will integrate EXTRA_DATA processing in here soon ..*/
+      else if(type == UNIFIED2_EXTRA_DATA)
+	{
+	  LogMessage("Caught a UNIFIED2_EXTRA_DATA, spooler and output pluggin do not yet fully support  UNIFIED2_EXTRA_DATA, processing next event.\n");
+	  /* Reset Spooler state */
+	  SpoolerState = SPOOLER_NULL;
+	}
+      else 
+	{
+	  FatalError("Whats going on ...\n");
+	}
+      
+      break;
+      
+    case SPOOLER_FAST_FORWARD:
+      LogMessage("Caught a legacy event companion event type [%lu], fast forward \n",type);
+      /* Reset Spooler state */
+      SpoolerState = SPOOLER_NULL;
+      break;
+      
+    default:
+      FatalError("Unknown spooler state [%lu] \n\n",SpoolerState);
+      break;
     }
-
-    /* clean the cache out */
-    spoolerEventCacheClean(spooler);
-}
-
-int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)
-{
-    EventRecordNode     *ernNode;
-
-    DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Caching event...\n"););
-
-    /* allocate memory */
-    ernNode = (EventRecordNode *)SnortAlloc(sizeof(EventRecordNode));
-
-    /* create the new node */
-    ernNode->used = 0;
-    ernNode->type = type;
-    ernNode->data = data;
-
-    /* add new events to the front of the cache */
-    ernNode->next = spooler->event_cache;
-
-    spooler->event_cache = ernNode;
-    spooler->events_cached++;
-
-    DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Cached event: %d\n", spooler->events_cached););
-
-    return 0;
-}
-
-EventRecordNode *spoolerEventCacheGetByEventID(Spooler *spooler, uint32_t event_id)
-{
-    EventRecordNode     *ernCurrent = spooler->event_cache;
-
-    while (ernCurrent != NULL)
-    {
-        if ( ntohl(((Unified2EventCommon *)ernCurrent->data)->event_id) == event_id )
-        {
-            return ernCurrent;
-        }
-
-        ernCurrent = ernCurrent->next;
-    }
-
-    return NULL;
-}
-
-EventRecordNode *spoolerEventCacheGetHead(Spooler *spooler)
-{
-    if ( spooler == NULL )
-        return NULL;
-
-    return spooler->event_cache;
-}
-
-uint8_t spoolerEventCacheHeadUsed(Spooler *spooler)
-{
-    if ( spooler == NULL || spooler->event_cache == NULL )
-        return 255;
-
-    return spooler->event_cache->used;
-}
-
-int spoolerEventCacheClean(Spooler *spooler)
-{
-    EventRecordNode     *ernCurrent;
-    EventRecordNode     *ernPrevious = NULL;
-
-    if (spooler == NULL || spooler->event_cache == NULL )
-        return 1;
-
-    ernCurrent = spooler->event_cache;
-
-    while (ernCurrent != NULL && spooler->events_cached > CACHED_EVENTS_MAX )
-    {
-        if ( ernCurrent->used == 1 )
-        {
-            /* clear the node from the list */
-            if (ernPrevious == NULL)
-                spooler->event_cache = ernCurrent->next;
-            else
-                ernPrevious->next = ernCurrent->next;
-
-            spooler->events_cached--;
-
-            free(ernCurrent->data);
-            free(ernCurrent);
-        }
-
-        ernPrevious = ernCurrent;
-        ernCurrent = ernCurrent->next;
-    }
-
-    return 0;
+  
+  spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);  
 }
 
 
 void spoolerFreeRecord(Record *record)
 {
-    if (record->data)
+  if (record->data)
     {
-        free(record->data);
+      free(record->data);
     }
-
-    record->data = NULL;
+  
+  record->data = NULL;
 }
 
 /*
@@ -883,21 +1001,21 @@ void spoolerFreeRecord(Record *record)
 */
 int spoolerOpenWaldo(Waldo *waldo, uint8_t mode)
 {
-    struct stat         waldo_info;
-    int                 waldo_file_flags = 0;
-    mode_t              waldo_file_mode = 0;
-    int                 ret = 0;
-
-    /* check if waldo file is already open and in the correct mode */
-    if ( (waldo->state & WALDO_STATE_OPEN) && (waldo->fd != -1) && (waldo->mode == mode) )
+  struct stat         waldo_info;
+  int                 waldo_file_flags = 0;
+  mode_t              waldo_file_mode = 0;
+  int                 ret = 0;
+  
+  /* check if waldo file is already open and in the correct mode */
+  if ( (waldo->state & WALDO_STATE_OPEN) && (waldo->fd != -1) && (waldo->mode == mode) )
     {
-        return WALDO_FILE_SUCCESS;
+      return WALDO_FILE_SUCCESS;
     }
-
-    /* check that a waldo file has been specified */
-    if ( waldo->filepath == NULL )
+  
+  /* check that a waldo file has been specified */
+  if ( waldo->filepath == NULL )
     {
-        return WALDO_FILE_EEXIST;
+      return WALDO_FILE_EEXIST;
     }
 
     /* stat the file to see it exists */

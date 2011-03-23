@@ -343,7 +343,6 @@ static LogTcpdumpData *ParseTcpdumpArgs(char *args)
  */
 static void LogTcpdump(Packet *p, void *event, uint32_t event_type, void *arg)
 {
-
     if(p)
     {
         if(p->packet_flags & PKT_REBUILT_STREAM)

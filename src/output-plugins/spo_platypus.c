@@ -1,4 +1,4 @@
-/* 
+/*
 ** Copyright (C) 2009-2010 SecurixLive   <dev@securixlive.com>
 **
 ** This program is free software; you can redistribute it and/or modify
@@ -102,7 +102,7 @@ int PlatypusEventUDPDataAppend(char *, Packet *);
 /* init routine makes this processor available for dataprocessor directives */
 void PlatypusSetup()
 {
-    /* link the preprocessor keyword to the init function in 
+    /* link the preprocessor keyword to the init function in
        the preproc list */
     RegisterOutputPlugin("platypus", OUTPUT_TYPE_FLAG__ALERT, PlatypusInit);
 
@@ -153,19 +153,19 @@ void PlatypusInitFinalize(int unused, void *arg)
     {
 		spd_data->agent_name = SnortStrdup(GetUniqueName(PRINT_INTERFACE(barnyard2_conf->interface)));
     }
-   
+
 	if (!BcLogQuiet())
     {
         LogMessage("platypus: agent port = %u\n", spd_data->agent_port);
     }
-    
+
 	/* connect to the sensor agent (SnortAgent) */
     if (PlatypusAgentConnect(spd_data) == 0)
     {
         /* initialise the sensor agent - get sid/eid */
         if(BcLogVerbose())
             LogMessage("platypus: waiting for sid/eid from SnortAgent.\n");
-    
+
         PlatypusAgentInit(spd_data);
     }
     else
@@ -186,10 +186,8 @@ void Platypus(Packet *p, void *event, u_int32_t event_type, void *arg)
 
     char                sip4[INET_ADDRSTRLEN];
     char                dip4[INET_ADDRSTRLEN];
-#ifdef SUP_IP6
     char                sip6[INET6_ADDRSTRLEN];
     char                dip6[INET6_ADDRSTRLEN];
-#endif
 
 	SpoPlatypusData		*data;
 	SigNode				*sn = NULL;
@@ -215,11 +213,11 @@ void Platypus(Packet *p, void *event, u_int32_t event_type, void *arg)
 	sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
 						ntohl(((Unified2EventCommon *)event)->signature_id));
 	cn = ClassTypeLookupById(barnyard2_conf, ntohl(((Unified2EventCommon *)event)->classification_id));
-    
-    /* 
+
+    /*
     ** 0       1   2   3         4         5       6      7       8        (9)
     ** BY2_EVT|SID|EID|SNORT EID|TIMESTAMP|SIG_GEN|SIG_ID|SIG_REV|SIG_MSG|
-    ** 
+    **
     ** 9        10         11     12  13          14  15          16        (8)
     ** PRIORITY|CLASS TYPE|IP_VER|SIP|SPORT_ICODE|DIP|DPORT_ICODE|IP_PROTO|
     **
@@ -253,13 +251,13 @@ void Platypus(Packet *p, void *event, u_int32_t event_type, void *arg)
             ntohl(((Unified2EventCommon *)event)->event_id));
 
     /* snort event reference time */
-    SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "%s|", 
+    SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "%s|",
         PlatypusTimestamp(
             ntohl(((Unified2EventCommon *)event)->event_second),
             ntohl(((Unified2EventCommon *)event)->event_microsecond)
         )
     );
-    
+
     /* generator ID */
     SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "%d|",
 			ntohl(((Unified2EventCommon *)event)->generator_id));
@@ -286,40 +284,43 @@ void Platypus(Packet *p, void *event, u_int32_t event_type, void *arg)
     switch(event_type)
     {
         case UNIFIED2_IDS_EVENT:
-            inet_ntop(AF_INET, &((Unified2IDSEvent_legacy *)event)->ip_source, sip4, INET_ADDRSTRLEN);
-            inet_ntop(AF_INET, &((Unified2IDSEvent_legacy *)event)->ip_destination, dip4, INET_ADDRSTRLEN);
+        case UNIFIED2_IDS_EVENT_MPLS:
+        case UNIFIED2_IDS_EVENT_VLAN:
+            inet_ntop(AF_INET, &((Unified2IDSEvent*)event)->ip_source, sip4, INET_ADDRSTRLEN);
+            inet_ntop(AF_INET, &((Unified2IDSEvent*)event)->ip_destination, dip4, INET_ADDRSTRLEN);
 
             SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "4|%s|%u|%s|%u|%u|",
-                sip4, 
-                ntohs(((Unified2IDSEvent_legacy *)event)->sport_itype), 
+                sip4,
+                ntohs(((Unified2IDSEvent *)event)->sport_itype),
                 dip4,
-                ntohs(((Unified2IDSEvent_legacy *)event)->dport_icode), 
-                ((Unified2IDSEvent_legacy *)event)->protocol);
+                ntohs(((Unified2IDSEvent *)event)->dport_icode),
+                ((Unified2IDSEvent *)event)->protocol);
             break;
-#ifdef SUP_IP6
         case UNIFIED2_IDS_EVENT_IPV6:
-            inet_ntop(AF_INET6, &((Unified2IDSEventIPv6_legacy *)event)->ip_source, sip6, INET6_ADDRSTRLEN);
-            inet_ntop(AF_INET6, &((Unified2IDSEventIPv6_legacy *)event)->ip_destination, dip6, INET6_ADDRSTRLEN);
+        case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+        case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+            inet_ntop(AF_INET6, &((Unified2IDSEventIPv6 *)event)->ip_source, sip6, INET6_ADDRSTRLEN);
+            inet_ntop(AF_INET6, &((Unified2IDSEventIPv6 *)event)->ip_destination, dip6, INET6_ADDRSTRLEN);
 
             SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "6|%s|%u|%s|%u|%u|",
                 sip6,
-                ntohs(((Unified2IDSEventIPv6_legacy *)event)->sport_itype),
+                ntohs(((Unified2IDSEventIPv6 *)event)->sport_itype),
                 dip6,
-                ntohs(((Unified2IDSEventIPv6_legacy *)event)->dport_icode),
-                ((Unified2IDSEventIPv6_legacy *)event)->protocol);
+                ntohs(((Unified2IDSEventIPv6 *)event)->dport_icode),
+                ((Unified2IDSEventIPv6 *)event)->protocol);
             break;
-#endif
         default:
+            printf("Type: %d\n", event_type);
             SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "0||||||");
             break;
     }
-    
+
     /* pull decoded info from the packet */
     if (p != NULL)
     {
         if (p->iph)
         {
-            /* IP version and protocol */   
+            /* IP version and protocol */
             SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "%u|", IP_VER(p->iph));
 
             /* add IP header */
@@ -434,15 +435,15 @@ int PlatypusEventIPHeaderDataAppend(char *evt_msg, Packet *p)
     SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "%u|", p->iph->ip_tos);
     SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "%u|", ntohs(p->iph->ip_len));
     SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "%u|", ntohs(p->iph->ip_id));
-                                                                                                                     
+
 #if defined(WORDS_BIGENDIAN)
     SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "%u|", ((p->iph->ip_off & 0xe000) >> 13));
     SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "%u|", htons(p->iph->ip_off & 0x1fff));
-#else                                                                
+#else
     SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "%u|", ((p->iph->ip_off & 0x00e0) >> 5));
     SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "%u|", htons(p->iph->ip_off & 0xff1f));
 #endif
- 
+
     SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "%u|", p->iph->ip_ttl);
     SnortSnprintfAppend(evt_msg, MAX_MSG_LEN, "%u|", htons(p->iph->ip_csum));
 
@@ -556,7 +557,7 @@ int PlatypusAgentConnect(SpoPlatypusData *spd_data)
         srv_saddr.sin_port = htons(spd_data->agent_port);
         srv_saddr.sin_addr.s_addr = inet_addr("127.0.0.1");
         memset(&(srv_saddr.sin_zero), '\0', 8);
-    
+
         if (connect(srv_sock, (struct sockaddr *)&srv_saddr, sizeof(struct sockaddr)) < 0)
         {
             LogMessage("platypus: can't connect to localhost:%u.\n",
@@ -609,7 +610,7 @@ int PlatypusAgentInit(SpoPlatypusData *spd_data)
 
         DEBUG_WRAP(DebugMessage(DEBUG_LOG,"platypus: received \"%s\" (%d)\n", rcv_msg, strlen(rcv_msg)););
 
-        /* check we actually received something */ 
+        /* check we actually received something */
         if ( strlen(rcv_msg) == 0 )
         {
             FatalError("platypus: expected BY2_SEID_RSP but got \"%s\"\n", rcv_msg);
@@ -652,7 +653,7 @@ int PlatypusAgentSend(SpoPlatypusData *data, char *out)
     snd_len = strlen(out)+2;
     snd_msg = SnortAlloc(snd_len);
     SnortSnprintf(snd_msg, snd_len, "%s\n", out);
-   
+
     if ( send(data->agent_sock, snd_msg, sizeof(char)*snd_len, 0) == -1 )
     {
         if(BcLogVerbose())
@@ -674,7 +675,7 @@ int PlatypusAgentSend(SpoPlatypusData *data, char *out)
 }
 
 /* I love google. http://pont.net/socket/prog/tcpServer.c */
-int PlatypusAgentReceive(SpoPlatypusData *spd_data, char *in) 
+int PlatypusAgentReceive(SpoPlatypusData *spd_data, char *in)
 {
 	static int			rcv_idx = 0;	
 	static char			rcv_msg[MAX_MSG_LEN];
@@ -708,19 +709,19 @@ int PlatypusAgentReceive(SpoPlatypusData *spd_data, char *in)
 		}
 		else
 		{
-			if (rcv_idx == 0) 
+			if (rcv_idx == 0)
 			{
 				memset(rcv_msg, 0x0, MAX_MSG_LEN);
 			    rcv_len = recv(spd_data->agent_sock, rcv_msg, MAX_MSG_LEN, 0);
 
-				if (rcv_len < 0) 
+				if (rcv_len < 0)
 				{
 					LogMessage("platypus: unable to read data!\n");
-          
+
 					/* reconnect to sensor_agent */
 					PlatypusAgentConnect(spd_data);
-				} 
-				else if (rcv_len == 0) 
+				}
+				else if (rcv_len == 0)
 				{
 					LogMessage("platypus: connecton closed by client!\n");
 					close(spd_data->agent_sock);
@@ -740,7 +741,7 @@ int PlatypusAgentReceive(SpoPlatypusData *spd_data, char *in)
 
 			/* we have reached the end of the line and the end of buffer, */
             /* return the line and reset the buffer index pointer */
-			if (rcv_idx == rcv_len-1) 
+			if (rcv_idx == rcv_len-1)
 			{
 				/* set last byte to END_LINE */
 				*(in+in_off) = 0x0a;
@@ -751,7 +752,7 @@ int PlatypusAgentReceive(SpoPlatypusData *spd_data, char *in)
 
 			/* we have reached the end of line but still have some data in */
             /* buffer, return the line and increment the buffer index pointer */
-			if (rcv_idx < rcv_len-1) 
+			if (rcv_idx < rcv_len-1)
 			{
 				/* set last byte to END_LINE */
 		        *(in+in_off) = 0x0a;
@@ -759,10 +760,10 @@ int PlatypusAgentReceive(SpoPlatypusData *spd_data, char *in)
 	
 				return ++in_off;
 			}
-	  
+	
 			/* we have reached the end of buffer but the line has not ended, */
 			/* wait for more data to arrive on socket */
-			if (rcv_idx == rcv_len) 
+			if (rcv_idx == rcv_len)
 			{
 				rcv_idx = 0;
 			}
@@ -775,9 +776,9 @@ int PlatypusAgentReceive(SpoPlatypusData *spd_data, char *in)
 /*
  * Function: ParsePlatypusArgs(char *)
  *
- * Purpose: Process the preprocessor arguements from the rules file and 
+ * Purpose: Process the preprocessor arguements from the rules file and
  *          initialize the preprocessor's data struct.  This function doesn't
- *          have to exist if it makes sense to parse the args in the init 
+ *          have to exist if it makes sense to parse the args in the init
  *          function.
  *
  * Arguments: args => argument list
@@ -793,7 +794,7 @@ void ParsePlatypusArgs(SpoPlatypusData *spd_data)
 
 	/* initialise appropariate values to defaults */
 	spd_data->agent_port = DEFAULT_AGENTPORT;
-                                                                                                                          
+
     if(spd_data->args == NULL)
     {
 		//FatalError("platypus: you must supply arguments for platypus plugin.\n");
@@ -845,9 +846,9 @@ char *PlatypusTimestamp(u_int32_t sec, u_int32_t usec)
     struct tm           *lt;  /* localtime */
     char                *buf;
     time_t              Time = sec;
- 
+
     buf = (char *)SnortAlloc(TMP_BUFFER * sizeof(char));
- 
+
 	if (BcOutputUseUtc())
 		lt = gmtime(&Time);
 	else
@@ -856,14 +857,14 @@ char *PlatypusTimestamp(u_int32_t sec, u_int32_t usec)
     SnortSnprintf(buf, TMP_BUFFER, "%04i-%02i-%02i %02i:%02i:%02i.%06i",
 					1900 + lt->tm_year, lt->tm_mon + 1, lt->tm_mday,
 					lt->tm_hour, lt->tm_min, lt->tm_sec, usec);
- 
+
     return buf;
 }
 
 void PlatypusClose(void *arg)
 {
     SpoPlatypusData *spd_data = (SpoPlatypusData *)arg;
-    
+
     /* free allocated memory from SpoPlatypusData */
 	if (spd_data)
 	{

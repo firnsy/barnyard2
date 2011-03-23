@@ -41,6 +41,8 @@
 #include "unified2.h"
 #include "util.h"
 
+#define CACHED_EVENTS_MAX 64
+
 /*
 ** PRIVATE FUNCTIONS
 */
@@ -835,7 +837,7 @@ int spoolerEventCacheClean(Spooler *spooler)
 
     ernCurrent = spooler->event_cache;
 
-    while (ernCurrent != NULL)
+    while (ernCurrent != NULL && spooler->events_cached > CACHED_EVENTS_MAX )
     {
         if ( ernCurrent->used == 1 )
         {

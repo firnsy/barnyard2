@@ -689,6 +689,8 @@ void DatabaseInitFinalize(int unused, void *arg)
                sensor_cid,
                event_cid);
         }
+        else
+          LogMessage("Last event seen for sid %u was %u\n", data->shared->sid, sensor_cid);
 
         /* ensure we use the largest cid possible and not just the MAX(cid) */
         data->shared->cid = event_cid > sensor_cid ? event_cid : sensor_cid;

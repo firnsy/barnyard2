@@ -7,17 +7,17 @@ dnl $id$
 # Shamelessly stolen from the one of XDELTA by Owen Taylor
 # Werner Koch   99-12-09
 
-dnl AM_PATH_LIBPRELUDE([MINIMUM-VERSION, [ACTION-IF-FOUND [, ACTION-IF-NOT-FOUND ]]])
-dnl Test for libprelude, and define LIBPRELUDE_PREFIX, LIBPRELUDE_CFLAGS, LIBPRELUDE_PTHREAD_CFLAGS, 
+dnl AM_PATH_LIBPRELUDE([MINIMUM-VERSION, [ACTION-IF-FOUND [, ACTION-IF-NOT-FOUND ]]], THREAD_SUPPORT)
+dnl Test for libprelude, and define LIBPRELUDE_PREFIX, LIBPRELUDE_CFLAGS, LIBPRELUDE_PTHREAD_CFLAGS,
 dnl LIBPRELUDE_LDFLAGS, and LIBPRELUDE_LIBS
 dnl
 AC_DEFUN([AM_PATH_LIBPRELUDE],
 [dnl
 dnl Get the cflags and libraries from the libprelude-config script
 dnl
-AC_ARG_WITH(libprelude-prefix,
-          [  --with-libprelude-prefix=PFX   Prefix where libprelude is installed (optional)],
-          libprelude_config_prefix="$withval", libprelude_config_prefix="")
+AC_ARG_WITH(libprelude-prefix, AC_HELP_STRING(--with-libprelude-prefix=PFX,
+            Prefix where libprelude is installed (optional)),
+            libprelude_config_prefix="$withval", libprelude_config_prefix="")
 
   if test x$libprelude_config_prefix != x ; then
      if test x${LIBPRELUDE_CONFIG+set} != xset ; then
@@ -26,6 +26,20 @@ AC_ARG_WITH(libprelude-prefix,
   fi
 
   AC_PATH_PROG(LIBPRELUDE_CONFIG, libprelude-config, no)
+  if test "$LIBPRELUDE_CONFIG" != "no"; then
+	if $($LIBPRELUDE_CONFIG --thread > /dev/null 2>&1); then
+		LIBPRELUDE_PTHREAD_CFLAGS=`$LIBPRELUDE_CONFIG --thread --cflags`
+
+		if test x$4 = xtrue || test x$4 = xyes; then
+			libprelude_config_args="--thread"
+		else
+			libprelude_config_args="--no-thread"
+		fi
+	else
+		LIBPRELUDE_PTHREAD_CFLAGS=`$LIBPRELUDE_CONFIG --pthread-cflags`
+	fi
+  fi
+
   min_libprelude_version=ifelse([$1], ,0.1.0,$1)
   AC_MSG_CHECKING(for libprelude - version >= $min_libprelude_version)
   no_libprelude=""
@@ -33,7 +47,6 @@ AC_ARG_WITH(libprelude-prefix,
     no_libprelude=yes
   else
     LIBPRELUDE_CFLAGS=`$LIBPRELUDE_CONFIG $libprelude_config_args --cflags`
-    LIBPRELUDE_PTHREAD_CFLAGS=`$LIBPRELUDE_CONFIG $libprelude_config_args --pthread-cflags`
     LIBPRELUDE_LDFLAGS=`$LIBPRELUDE_CONFIG $libprelude_config_args --ldflags`
     LIBPRELUDE_LIBS=`$LIBPRELUDE_CONFIG $libprelude_config_args --libs`
     LIBPRELUDE_PREFIX=`$LIBPRELUDE_CONFIG $libprelude_config_args --prefix`
@@ -76,24 +89,19 @@ main ()
       printf("*** to point to the correct copy of libprelude-config, and remove the file config.cache\n");
       printf("*** before re-running configure\n");
     }
-    else if ( strcmp(prelude_check_version(NULL), LIBPRELUDE_VERSION ) )
-    {
-      printf("\n*** LIBPRELUDE header file (version %s) does not match\n", LIBPRELUDE_VERSION);
-      printf("*** library (version %s)\n", prelude_check_version(NULL) );
+    else if ( strcmp(prelude_check_version(NULL), LIBPRELUDE_VERSION ) ) {
+        printf("\n*** LIBPRELUDE header file (version %s) does not match\n", LIBPRELUDE_VERSION);
+        printf("*** library (version %s)\n", prelude_check_version(NULL) );
     }
-    else
-    {
+    else {
       if ( prelude_check_version( "$min_libprelude_version" ) )
-      {
         return 0;
-      }
-     else
-      {
+      else {
         printf("no\n*** An old version of LIBPRELUDE (%s) was found.\n",
                 prelude_check_version(NULL) );
         printf("*** You need a version of LIBPRELUDE newer than %s. The latest version of\n",
                "$min_libprelude_version" );
-        printf("*** LIBPRELUDE is always available from http://www.prelude-ids.org/download/releases.\n");
+        printf("*** LIBPRELUDE is always available from http://www.prelude-ids.com/development/download/\n");
         printf("*** \n");
         printf("*** If you have already installed a sufficiently new version, this error\n");
         printf("*** probably means that the wrong copy of the libprelude-config shell script is\n");
@@ -104,7 +112,7 @@ main ()
         printf("*** so that the correct libraries are found at run-time))\n");
       }
     }
-  return 1;
+    return 1;
 }
 ],, no_libprelude=yes,[echo $ac_n "cross compiling; assumed OK... $ac_c"])
        CFLAGS="$ac_save_CFLAGS"
@@ -132,7 +140,7 @@ main ()
        else
           echo "*** Could not run libprelude test program, checking why..."
           CFLAGS="$CFLAGS $LIBPRELUDE_CFLAGS"
-	  LDFLAGS="$LDFLAGS $LIBPRELUDE_LDFLAGS"
+          LDFLAGS="$LDFLAGS $LIBPRELUDE_LDFLAGS"
           LIBS="$LIBS $LIBPRELUDE_LIBS"
           AC_TRY_LINK([
 #include <stdio.h>
@@ -155,7 +163,7 @@ main ()
           echo "*** or that you have moved LIBPRELUDE since it was installed. In the latter case, you"
           echo "*** may want to edit the libprelude-config script: $LIBPRELUDE_CONFIG" ])
           CFLAGS="$ac_save_CFLAGS"
-	  LDFLAGS="$ac_save_LDFLAGS"
+          LDFLAGS="$ac_save_LDFLAGS"
           LIBS="$ac_save_LIBS"
        fi
      fi
@@ -171,6 +179,11 @@ main ()
   AC_SUBST(LIBPRELUDE_LIBS)
   AC_SUBST(LIBPRELUDE_PREFIX)
   AC_SUBST(LIBPRELUDE_CONFIG_PREFIX)
+
+  m4_ifdef([LT_INIT],
+           [AC_DEFINE([PRELUDE_APPLICATION_USE_LIBTOOL2], [], [Define whether application use libtool >= 2.0])],
+           [])
+
 ])
 
 dnl *-*wedit:notab*-*  Please keep this as the last line.

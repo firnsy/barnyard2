@@ -159,6 +159,11 @@ int DisplayBanner(void)
 #else
 		""
 #endif
+#ifdef ENABLE_TCL
+		" TCL"
+#else
+		""
+#endif
 ); 
     return 0;
 }

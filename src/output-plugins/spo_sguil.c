@@ -232,6 +232,11 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
 		return;
 	}
 
+    if ( p->ip6h != NULL )
+    {
+        return;
+    }
+
     data = (SpoSguilData *)arg;
 
 	/* grab the appropriate signature and classification information */

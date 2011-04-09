@@ -2413,7 +2413,16 @@ void DecodeRawPkt(Packet * p, const struct pcap_pkthdr * pkthdr, const uint8_t *
 
     DEBUG_WRAP(DebugMessage(DEBUG_DECODE, "Packet!\n"););
 
-    DecodeIP(pkt, p->pkth->caplen, p);
+    if (p->pkth->caplen > 0) {
+        IP4Hdr *ip4h = (IP4Hdr *)pkt;
+        IP6RawHdr *ip6h = (IP6RawHdr *)pkt;
+
+        if (IP_VER(ip4h) == 4) {
+            DecodeIP(pkt, p->pkth->caplen, p);
+        } else if (((ip6h->ip6vfc & 0xf0) >> 4) == 6) {
+            DecodeIPV6(pkt, p->pkth->caplen, p);
+        }
+    }
 
     return;
 }

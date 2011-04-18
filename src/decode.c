@@ -219,6 +219,12 @@ int DecodePacket(int linktype, Packet *p, const struct pcap_pkthdr *pkthdr, cons
 #ifdef DLT_RAW /* Not supported in some arch or older pcap
                 * versions */
         case DLT_RAW:
+#ifdef DLT_IPV4
+        case DLT_IPV4:
+#endif
+#ifdef DLT_IPV6
+        case DLT_IPV6:
+#endif
             if (BcOutputDataLink())
             {
                 LogMessage("There's no second layer header available for "

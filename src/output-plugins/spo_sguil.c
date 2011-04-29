@@ -417,6 +417,8 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
 #endif
 }
 
+static unsigned int sguil_agent_setup_timeouts = 0;
+
 int SguilRTEventMsg(SpoSguilData *data, char *msg)
 {
 
@@ -445,19 +447,28 @@ int SguilRTEventMsg(SpoSguilData *data, char *msg)
         /* Parse the response */
         toks = mSplit(tmpRecvMsg, " ", 2, &num_toks, 0);
 
-        int event_id = atoi(toks[1]);
-        if (event_id < 0) {
-            FatalError("sguil: Malformed response, expected \"Confirm %u\", got: %s\n",
-                    data->event_id, tmpRecvMsg);
-        }
-
-        if(strcasecmp("Confirm", toks[0]) != 0 || (uint)event_id != data->event_id )
+        /* if the agent registration timed out once or several times we can
+         * receive unexpected SidCidResponse messages. */
+        if (sguil_agent_setup_timeouts > 0 && strcasecmp("SidCidResponse", toks[0]) == 0)
         {
-            FatalError("sguil: Expected Confirm %u and got: %s\n", data->event_id, tmpRecvMsg);
+            sguil_agent_setup_timeouts--;
+        }
+        else
+        {
+            int event_id = atoi(toks[1]);
+            if (event_id < 0)
+            {
+                FatalError("sguil: Malformed response, expected \"Confirm %u\", got: %s\n",
+                        data->event_id, tmpRecvMsg);
+            }
+
+            if(strcasecmp("Confirm", toks[0]) != 0 || (uint)event_id != data->event_id )
+            {
+                FatalError("sguil: Expected Confirm %u and got: %s\n", data->event_id, tmpRecvMsg);
+            }
         }
 
         mSplitFree(&toks, num_toks);
-
     }
 
     return 0;
@@ -901,6 +912,8 @@ int SguilSensorAgentInit(SpoSguilData *ssd_data)
 
     if ( SguilRecvAgentMsg(ssd_data, tmpRecvMsg) == 1 )
     {
+        sguil_agent_setup_timeouts++;
+
         /* timeout, resend */
         SguilSensorAgentInit(ssd_data);
     }

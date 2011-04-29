@@ -1,4 +1,4 @@
-/* 
+/*
 ** Copyright (C) 2008-2010 SecurixLive   <dev@securixlive.com>
 ** Copyright (C) 2002-2005 Robert (Bamm) Visscher <bamm@sguil.net>
 **
@@ -81,13 +81,13 @@ typedef struct _SpoSguilData
 } SpoSguilData;
 
 /* constants */
-#define KEYWORD_AGENTPORT 		"agent_port"
-#define KEYWORD_SENSORNAME		"sensor_name"
-#define KEYWORD_TAGPATH			"tag_path"
-#define KEYWORD_PASSWORD		"passwd"
+#define KEYWORD_AGENTPORT       "agent_port"
+#define KEYWORD_SENSORNAME      "sensor_name"
+#define KEYWORD_TAGPATH         "tag_path"
+#define KEYWORD_PASSWORD        "passwd"
 
-#define MAX_MSG_LEN				2048
-#define TMP_BUFFER				128
+#define MAX_MSG_LEN             2048
+#define TMP_BUFFER              128
 
 /* output plug-in API functions */
 void SguilInit(char *args);
@@ -166,7 +166,7 @@ SpoSguilData *InitSguilData(char *args)
 	}
 
 	data->args = SnortStrdup(args);
-	
+
 	return data;
 }
 
@@ -193,13 +193,13 @@ void SguilInitFinalize(int unused, void *arg)
             }
 		 }
     }
-   
+
 	if (!BcLogQuiet())
     {
         LogMessage("sguil:  sensor name = %s\n", ssd_data->sensor_name);
         LogMessage("sguil:  agent port =  %u\n", ssd_data->agent_port);
     }
-    
+
 	/* connect to sensor_agent */
     SguilSensorAgentConnect(ssd_data);
 
@@ -243,7 +243,7 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
 	sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
 						ntohl(((Unified2EventCommon *)event)->signature_id));
 	cn = ClassTypeLookupById(barnyard2_conf, ntohl(((Unified2EventCommon *)event)->classification_id));
-    
+
     /* Here we build our RT event to send to sguild. The event is built with a
     ** proper tcl list format. 
     ** RT FORMAT:
@@ -307,12 +307,12 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
 
     /* Snort Event Ref Time */
 	timestamp_string = SguilTimestamp(ntohl(((Unified2EventCommon *)event)->event_second));
-    
+
 	if(ntohl(((Unified2EventCommon *)event)->event_second) == 0)
         Tcl_DStringAppendElement(&list, "");
     else
         Tcl_DStringAppendElement(&list, timestamp_string);
-  
+
     /* Generator ID */
     SnortSnprintf(buffer, TMP_BUFFER, "%d",
 			ntohl(((Unified2EventCommon *)event)->generator_id));
@@ -427,10 +427,10 @@ int SguilRTEventMsg(SpoSguilData *data, char *msg)
 
     /* Get confirmation */
     memset(tmpRecvMsg, 0x0, MAX_MSG_LEN);
-    if(SguilRecvAgentMsg(data, tmpRecvMsg) == 1)
+    if (SguilRecvAgentMsg(data, tmpRecvMsg) == 1)
     {
-        if(BcLogVerbose())
-         LogMessage("sguil: Retrying\n");
+        if (BcLogVerbose())
+            LogMessage("sguil: Retrying\n");
 
         SguilRTEventMsg(data, msg);
     }
@@ -439,12 +439,19 @@ int SguilRTEventMsg(SpoSguilData *data, char *msg)
         char **toks;
         int num_toks;
 
-        if(BcLogVerbose())
+        if (BcLogVerbose())
             LogMessage("sguil: Received: %s", tmpRecvMsg);
 
         /* Parse the response */
         toks = mSplit(tmpRecvMsg, " ", 2, &num_toks, 0);
-        if(strcasecmp("Confirm", toks[0]) != 0 || atoi(toks[1]) != data->event_id )
+
+        int event_id = atoi(toks[1]);
+        if (event_id < 0) {
+            FatalError("sguil: Malformed response, expected \"Confirm %u\", got: %s\n",
+                    data->event_id, tmpRecvMsg);
+        }
+
+        if(strcasecmp("Confirm", toks[0]) != 0 || (uint)event_id != data->event_id )
         {
             FatalError("sguil: Expected Confirm %u and got: %s\n", data->event_id, tmpRecvMsg);
         }
@@ -484,7 +491,7 @@ void ParseSguilArgs(SpoSguilData *ssd_data)
 
 	/* initialise appropariate values to 0 */
 	ssd_data->agent_port = 0;
-                                                                                                                          
+
     /* parse out your args */
     toks = mSplit(ssd_data->args, ", ", 31, &num_toks, '\\');
 
@@ -537,7 +544,7 @@ void ParseSguilArgs(SpoSguilData *ssd_data)
 
     /* free your mSplit tokens */
     mSplitFree(&toks, num_toks);
-    
+
 	/* identify the agent_port */
 	if (ssd_data->agent_port == 0)
 		ssd_data->agent_port = 7735;
@@ -552,13 +559,14 @@ int SguilAppendIPHdrData(Tcl_DString *list, Packet *p)
 
     SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohl(p->iph->ip_src.s_addr));
     Tcl_DStringAppendElement(list, buffer);
-    SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
 #if defined(WORDS_BIGENDIAN)
+    SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
            (p->iph->ip_src.s_addr & 0xff000000) >> 24,
            (p->iph->ip_src.s_addr & 0x00ff0000) >> 16,
            (p->iph->ip_src.s_addr & 0x0000ff00) >> 8,
            (p->iph->ip_src.s_addr & 0x000000ff));
 #else
+    SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
            (p->iph->ip_src.s_addr & 0x000000ff),
            (p->iph->ip_src.s_addr & 0x0000ff00) >> 8,
            (p->iph->ip_src.s_addr & 0x00ff0000) >> 16,
@@ -567,13 +575,14 @@ int SguilAppendIPHdrData(Tcl_DString *list, Packet *p)
     Tcl_DStringAppendElement(list, buffer);
     SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohl(p->iph->ip_dst.s_addr));
     Tcl_DStringAppendElement(list, buffer);
-    SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
 #if defined(WORDS_BIGENDIAN)
+    SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
            (p->iph->ip_dst.s_addr & 0xff000000) >> 24,
            (p->iph->ip_dst.s_addr & 0x00ff0000) >> 16,
            (p->iph->ip_dst.s_addr & 0x0000ff00) >> 8,
            (p->iph->ip_dst.s_addr & 0x000000ff));
 #else
+    SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
            (p->iph->ip_dst.s_addr & 0x000000ff),
            (p->iph->ip_dst.s_addr & 0x0000ff00) >> 8,
            (p->iph->ip_dst.s_addr & 0x00ff0000) >> 16,
@@ -592,19 +601,19 @@ int SguilAppendIPHdrData(Tcl_DString *list, Packet *p)
     Tcl_DStringAppendElement(list, buffer);
     SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohs(p->iph->ip_id));
     Tcl_DStringAppendElement(list, buffer);
-                                                                                                                     
+
 #if defined(WORDS_BIGENDIAN)
     SnortSnprintf(buffer, TMP_BUFFER, "%u", ((p->iph->ip_off & 0xE000) >> 13));
     Tcl_DStringAppendElement(list, buffer);
     SnortSnprintf(buffer, TMP_BUFFER, "%u", htons(p->iph->ip_off & 0x1FFF));
     Tcl_DStringAppendElement(list, buffer);
-#else                                                                
+#else
     SnortSnprintf(buffer, TMP_BUFFER, "%u", ((p->iph->ip_off & 0x00E0) >> 5));
     Tcl_DStringAppendElement(list, buffer);
     SnortSnprintf(buffer, TMP_BUFFER, "%u", htons(p->iph->ip_off & 0xFF1F));
     Tcl_DStringAppendElement(list, buffer);
 #endif
- 
+
     SnortSnprintf(buffer, TMP_BUFFER, "%u", p->iph->ip_ttl);
     Tcl_DStringAppendElement(list, buffer);
     SnortSnprintf(buffer, TMP_BUFFER, "%u", htons(p->iph->ip_csum));
@@ -641,18 +650,18 @@ int SguilAppendICMPData(Tcl_DString *list, Packet *p)
         /* ICMP code */
         SnortSnprintf(buffer, TMP_BUFFER, "%u", p->icmph->code);
         Tcl_DStringAppendElement(list, buffer);
-    
+
         /* ICMP CSUM */
         SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohs(p->icmph->csum));
         Tcl_DStringAppendElement(list, buffer);
 
         /* Append other ICMP data if we have it */
-        if (p->icmph->type == ICMP_ECHOREPLY || 
-           p->icmph->type == ICMP_ECHO ||
-           p->icmph->type == ICMP_TIMESTAMP ||
-           p->icmph->type == ICMP_TIMESTAMPREPLY ||
-           p->icmph->type == ICMP_INFO_REQUEST || 
-           p->icmph->type == ICMP_INFO_REPLY)
+        if (p->icmph->type == ICMP_ECHOREPLY ||
+                p->icmph->type == ICMP_ECHO ||
+                p->icmph->type == ICMP_TIMESTAMP ||
+                p->icmph->type == ICMP_TIMESTAMPREPLY ||
+                p->icmph->type == ICMP_INFO_REQUEST ||
+                p->icmph->type == ICMP_INFO_REPLY)
         {
 
             /* ICMP ID */
@@ -670,7 +679,7 @@ int SguilAppendICMPData(Tcl_DString *list, Packet *p)
             /* Add two empty elements */
             for(i=0; i < 2; i++)
                 Tcl_DStringAppendElement(list, "");
-    
+
         }
 
     }
@@ -759,7 +768,7 @@ int SguilAppendUDPData(Tcl_DString *list, Packet *p)
     char buffer[TMP_BUFFER];
 
     bzero(buffer, TMP_BUFFER);
- 
+
     /* empty elements for ICMP data */
     for(i=0; i < 5; i++)
         Tcl_DStringAppendElement(list, "");
@@ -787,21 +796,17 @@ int SguilAppendUDPData(Tcl_DString *list, Packet *p)
 
     if (!p->udph)
     {
-        
         /* null out UDP info */
         for(i=0; i < 2; i++)
             Tcl_DStringAppendElement(list, "");
-
     }
     else
     {
-
         SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohs(p->udph->uh_len));
         Tcl_DStringAppendElement(list, buffer);
 
         SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohs(p->udph->uh_chk));
         Tcl_DStringAppendElement(list, buffer);
-
     }
 
     return 0;
@@ -847,7 +852,7 @@ int SguilSensorAgentConnect(SpoSguilData *ssd_data)
         my_addr.sin_port = htons(ssd_data->agent_port);
         my_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
         memset(&(my_addr.sin_zero), '\0', 8);
-    
+
         if (connect(sockfd, (struct sockaddr *)&my_addr, sizeof(struct sockaddr)) < 0)
         {
             LogMessage("sguil:  Can't connect to localhost on TCP port %u.\n",
@@ -893,18 +898,18 @@ int SguilSensorAgentInit(SpoSguilData *ssd_data)
 
     /* Get the Results */
     memset(tmpRecvMsg,0x0,MAX_MSG_LEN);
+
     if ( SguilRecvAgentMsg(ssd_data, tmpRecvMsg) == 1 )
     {
+        /* timeout, resend */
         SguilSensorAgentInit(ssd_data);
     }
     else
     {
-        char			**toks;
-        int				num_toks;
+        char **toks;
+        int num_toks;
 
-		/* TODO: this should be a DEBUG directive */
-        if (BcLogVerbose())
-            LogMessage("sguil: received \"%s\"", tmpRecvMsg);
+        DEBUG_WRAP(DebugMessage("sguil: received \"%s\"", tmpRecvMsg););
 
         /* parse the response */
         toks = mSplit(tmpRecvMsg, " ", 3, &num_toks, 0);
@@ -951,26 +956,28 @@ int SguilSendAgentMsg(SpoSguilData *data, char *msg)
         SguilSendAgentMsg(data, msg);
     }
 
-	/* TODO: this should be a DEBUG directive */
-    if (BcLogVerbose())
-	    LogMessage("sguil: sending \"%s\"", tmpMsg);
+    DEBUG_WRAP(DebugMessage("sguil: sending \"%s\"", tmpMsg););
 
     free(tmpMsg);
 
     return 0;
 }
 
+/**
+ *  \brief Receive a message from the Sguil server
+ *  \retval 1 on timeout
+ */
+
 /* I love google. http://pont.net/socket/prog/tcpServer.c */
-int SguilRecvAgentMsg(SpoSguilData *ssd_data, char *line_to_return) 
+int SguilRecvAgentMsg(SpoSguilData *ssd_data, char *line_to_return)
 {
-                                                                                                                                    
-	static int			rcv_ptr=0;	
+	static int			rcv_ptr = 0;
 	static char			rcv_msg[MAX_MSG_LEN];
 	static int			n;
 	struct timeval		tv;
 	fd_set				read_fds;
 	int					offset;
-                                                                                                                                    
+
 	offset=0;
 
 	/* wait up to 15 secs for our response */
@@ -986,74 +993,73 @@ int SguilRecvAgentMsg(SpoSguilData *ssd_data, char *line_to_return)
 
 		/* wait for response from sguild */
 		select(ssd_data->agent_sock+1, &read_fds, NULL, NULL, &tv);
-                                                                                                                                    
+
 		if ( !(FD_ISSET(ssd_data->agent_sock, &read_fds)) )
 		{
 			/* timed out */
-			if(BcLogVerbose())
+			if (BcLogVerbose())
 				LogMessage("sguil: Timed out waiting for response.\n");
 
 			return 1;
 		}
 		else
 		{
-			if (rcv_ptr==0) 
+			if (rcv_ptr == 0)
 			{
-                                                                                                                                    
 				memset(rcv_msg,0x0,MAX_MSG_LEN);
 				n = recv(ssd_data->agent_sock, rcv_msg, MAX_MSG_LEN, 0);
-				if (n<0) 
+				if (n < 0)
 				{
 					LogMessage("ERROR: Unable to read data.\n");
-          
+
 					/* reconnect to sensor_agent */
 					SguilSensorAgentConnect(ssd_data);
-				} 
-				else if (n==0) 
+				}
+				else if (n == 0)
 				{
 					LogMessage("ERROR: Connecton closed by client\n");
 					close(ssd_data->agent_sock);
-			
+
 					/* reconnect to sensor_agent */
 					SguilSensorAgentConnect(ssd_data);
 				}
 			}
-                                                                                                                                    
+
 			/* if new data read on socket */
 			/* OR */
 			/* if another line is still in buffer */
-                                                                                                                                    
+
 			/* copy line into 'line_to_return' */
-			while( *(rcv_msg+rcv_ptr)!=0x0A && rcv_ptr<n ) 
+			while (*(rcv_msg+rcv_ptr) != 0x0A && rcv_ptr < n )
 			{
 				memcpy(line_to_return+offset,rcv_msg+rcv_ptr,1);
 				offset++;
 				rcv_ptr++;
 			}
-				                                                                                                                          
+
 			/* end of line + end of buffer => return line */
-			if (rcv_ptr==n-1) 
+			if (rcv_ptr == (n - 1))
 			{
 				/* set last byte to END_LINE */
-				*(line_to_return+offset)=0x0A;
-				rcv_ptr=0;
-			
+				*(line_to_return + offset) = 0x0A;
+				rcv_ptr = 0;
+
 				return ++offset;
 			}
 
 			/* end of line but still some data in buffer => return line */
-			if (rcv_ptr <n-1) 
+			if (rcv_ptr < (n - 1))
 			{
 				/* set last byte to END_LINE */
-		        *(line_to_return+offset)=0x0A;
+		        *(line_to_return+offset) = 0x0A;
 			    rcv_ptr++;
-	
+
 				return ++offset;
 			}
-	  
+
 			/* end of buffer but line is not ended => */
 			/*  wait for more data to arrive on socket */
-			if (rcv_ptr == n) 
+			if (rcv_ptr == n)
 			{
 				rcv_ptr = 0;
 			}
@@ -1068,9 +1074,9 @@ char *SguilTimestamp(u_int32_t sec)
     struct tm           *lt;  /* localtime */
     char                *buf;
     time_t              Time = sec;
- 
+
     buf = (char *)SnortAlloc(TMP_BUFFER * sizeof(char));
- 
+
 	if (BcOutputUseUtc())
 		lt = gmtime(&Time);
 	else
@@ -1079,7 +1085,6 @@ char *SguilTimestamp(u_int32_t sec)
     SnortSnprintf(buf, TMP_BUFFER, "%04i-%02i-%02i %02i:%02i:%02i",
 					1900 + lt->tm_year, lt->tm_mon + 1, lt->tm_mday,
 					lt->tm_hour, lt->tm_min, lt->tm_sec);
- 
   return buf;
 }
 
@@ -1117,7 +1122,6 @@ void SguilRestartFunc(int signal, void *arg)
     /* free allocated memory from SpoSguilData */
 	if (ssd_data)
 	{
-		
 		if (ssd_data->sensor_name)
 			free(ssd_data->sensor_name);
 

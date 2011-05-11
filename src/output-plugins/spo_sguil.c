@@ -73,7 +73,12 @@ typedef struct _SpoSguilData
     char				*tag_path;
     char				*passwd;
     u_int16_t			sensor_id;
-    u_int32_t			event_id;
+    /** lowest event_id we submitted, but that wasn't confirmed yet,
+     *  should only be lower than event_id_max on server timeouts. */
+    u_int32_t			event_id_min;
+    /** higest event_id sent to the server, normally we expect a confirm for
+     *  this id. */
+    u_int32_t			event_id_max;
     u_int16_t			agent_port;
     int					agent_sock;
 
@@ -289,7 +294,7 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
     Tcl_DStringAppendElement(&list, buffer);
 
     /* Event ID (cid) */
-    SnortSnprintf(buffer, TMP_BUFFER, "%u", data->event_id);
+    SnortSnprintf(buffer, TMP_BUFFER, "%u", data->event_id_max);
     Tcl_DStringAppendElement(&list, buffer);
 
     /* Sensor Name */
@@ -413,7 +418,7 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
 	free(timestamp_string);
 
     /* bump the event id */
-    data->event_id++;
+    data->event_id_max++;
 #endif
 }
 
@@ -452,6 +457,9 @@ int SguilRTEventMsg(SpoSguilData *data, char *msg)
         if (sguil_agent_setup_timeouts > 0 && strcasecmp("SidCidResponse", toks[0]) == 0)
         {
             sguil_agent_setup_timeouts--;
+
+	    if (BcLogVerbose())
+		    LogMessage("sguil: Ignored: %s", tmpRecvMsg);
         }
         else
         {
@@ -459,12 +467,25 @@ int SguilRTEventMsg(SpoSguilData *data, char *msg)
             if (event_id < 0)
             {
                 FatalError("sguil: Malformed response, expected \"Confirm %u\", got: %s\n",
-                        data->event_id, tmpRecvMsg);
+                        data->event_id_max, tmpRecvMsg);
             }
 
-            if(strcasecmp("Confirm", toks[0]) != 0 || (uint)event_id != data->event_id )
-            {
-                FatalError("sguil: Expected Confirm %u and got: %s\n", data->event_id, tmpRecvMsg);
+            if(strcasecmp("Confirm", toks[0]) != 0) {
+
+                if ((uint)event_id != data->event_id_max) {
+                    if ((uint)event_id == data->event_id_min) {
+                        if (BcLogVerbose())
+                            LogMessage("sguil: processed delayed Confirm: %s", tmpRecvMsg);
+                    }
+                    else
+                    {
+                        FatalError("sguil: Expected Confirm %u and got: %s\n", data->event_id_max, tmpRecvMsg);
+                    }
+                }
+
+                /* either we are in sync or the confirm we got confirmed
+                 * event_id_min. Either way, we can increment it */
+                data->event_id_min++;
             }
         }
 
@@ -912,6 +933,9 @@ int SguilSensorAgentInit(SpoSguilData *ssd_data)
 
     if ( SguilRecvAgentMsg(ssd_data, tmpRecvMsg) == 1 )
     {
+        if (BcLogVerbose())
+	        LogMessage("sguil: Agent registration timed out, retrying\n");
+
         sguil_agent_setup_timeouts++;
 
         /* timeout, resend */
@@ -930,7 +954,7 @@ int SguilSensorAgentInit(SpoSguilData *ssd_data)
         if ( strcasecmp("SidCidResponse", toks[0]) == 0 )
         {
             ssd_data->sensor_id = atoi(toks[1]);
-            ssd_data->event_id = atoi(toks[2]);
+            ssd_data->event_id_min = ssd_data->event_id_max = atoi(toks[2]);
         }
         else
         {
@@ -941,10 +965,11 @@ int SguilSensorAgentInit(SpoSguilData *ssd_data)
 
         if (BcLogVerbose())
 	        LogMessage("sguil: sensor ID = %u\nsguil: last cid = %u\n",
-					ssd_data->sensor_id, ssd_data->event_id);
+					ssd_data->sensor_id, ssd_data->event_id_max);
 
         /* use the next event_id */
-        ssd_data->event_id++;
+        ssd_data->event_id_min++;
+        ssd_data->event_id_max++;
     }
 
     return 0;

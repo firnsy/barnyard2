@@ -444,42 +444,6 @@ if test "x$enable_debug" = "xyes"; then
     fi
 fi
 
-# Checking for Tcl support (required by spo_sguil)
-AC_ARG_WITH(tcl, 
-    [  --with-tcl=DIR        support for Tcl],
-    [ with_tcl="$withval"],
-    [ with_tcl=no ])
-
-if test "$with_tcl" != "no"; then
-    # prioritise manual definition of the Tcl library.
-	if test -d "$with_tcl"; then
-		tclpath="$with_tcl"
-	else
-		# let tclsh tell us where it was installed (prefer new Tcl versions).
-		AC_CHECK_PROGS(TCLSH, tclsh8.4 tclsh8.3 tclsh8.2 tclsh8.1 tclsh8.0 tclsh)
-	    if test "$TCLSH" != ""; then
-			tclpath=`echo 'puts [[lindex $tcl_pkgPath 0]]' | $TCLSH`
-		fi
-	fi
-
-	# check, if tclConfig.sh can be found in tclsh's installation directory.
-    if test ! -r $tclpath/tclConfig.sh; then
-		AC_MSG_RESULT(
-		[
-	Can't find Tcl libraries.  Use --with-tcl to specify
-        the directory containing tclConfig.sh on your system.
-	Continuing build without Tcl support.])
-    else
-	# source tclsh's configuration file and tell the user about the version.
-	. $tclpath/tclConfig.sh
-	AC_MSG_CHECKING([for the tcl version number])
-	AC_MSG_RESULT([$TCL_VERSION, patchlevel $TCL_PATCH_LEVEL])
-        LIBS="$LIBS $TCL_LIBS $TCL_LIB_SPEC"
-	TCL_INCLUDE="$TCL_PREFIX/include/tcl$TCL_VERSION"
-	CPPFLAGS="$CPPFLAGS -I$TCL_INCLUDE -DENABLE_TCL";
-    fi
-fi
-
 AC_ARG_WITH(mysql, 
     [  --with-mysql=DIR               Support for MySQL],
     [ with_mysql="$withval"],
@@ -966,6 +930,44 @@ if test "x$enable_bro" = "xyes"; then
   CPPFLAGS="${CPPFLAGS} `${BROCCOLI_DIR}/bin/broccoli-config --cflags`"
   LIBS="${LIBS} -lbroccoli"
 fi
+
+# Checking for Tcl support (required by spo_sguil)
+AC_ARG_WITH(tcl, 
+    [  --with-tcl=DIR        support for Tcl],
+    [ with_tcl="$withval"],
+    [ with_tcl=no ])
+
+if test "$with_tcl" != "no"; then
+    # prioritise manual definition of the Tcl library.
+	if test -d "$with_tcl"; then
+		tclpath="$with_tcl"
+	else
+		# let tclsh tell us where it was installed (prefer new Tcl versions).
+		AC_CHECK_PROGS(TCLSH, tclsh8.4 tclsh8.3 tclsh8.2 tclsh8.1 tclsh8.0 tclsh)
+	    if test "$TCLSH" != ""; then
+			tclpath=`echo 'puts [[lindex $tcl_pkgPath 0]]' | $TCLSH`
+		fi
+	fi
+
+	# check, if tclConfig.sh can be found in tclsh's installation directory.
+    if test ! -r $tclpath/tclConfig.sh; then
+		AC_MSG_RESULT(
+		[
+	Can't find Tcl libraries.  Use --with-tcl to specify
+        the directory containing tclConfig.sh on your system.
+	Continuing build without Tcl support.])
+    else
+	# source tclsh's configuration file and tell the user about the version.
+	. $tclpath/tclConfig.sh
+	AC_MSG_CHECKING([for the tcl version number])
+	AC_MSG_RESULT([$TCL_VERSION, patchlevel $TCL_PATCH_LEVEL])
+        LIBS="$LIBS $TCL_LIBS $TCL_LIB_SPEC"
+	TCL_INCLUDE="$TCL_PREFIX/include/tcl$TCL_VERSION"
+	CPPFLAGS="$CPPFLAGS -I$TCL_INCLUDE -DENABLE_TCL";
+    fi
+fi
+
+
 
 # let's make some fixes..
 

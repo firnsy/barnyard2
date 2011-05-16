@@ -1,6 +1,6 @@
 /*
 **
-** Copyright (C) 2008-2010 SecurixLive   <dev@securixlive.com>
+** Copyright (C) 2008-2011 Ian Firns (SecurixLive) <dev@securixlive.com>
 **
 ** Copyright (C) 2002-2009 Sourcefire, Inc.
 ** Copyright (C) 1998-2002 Martin Roesch <roesch@sourcefire.com>

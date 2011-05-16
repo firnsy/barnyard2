@@ -142,11 +142,8 @@ int DisplayBanner(void)
     fprintf(stderr, "\n"
         "  ______   -*> Barnyard2 <*-\n"
         " / ,,_  \\  Version %s.%s.%s (Build %s)%s%s\n"
-        " |o\"  )~|  By the SecurixLive.com Team: http://www.securixlive.com/about.php\n"
-		" + '''' +  (C) Copyright 2008-2010 SecurixLive.\n"
-        "\n"
-        "           Snort by Martin Roesch & The Snort Team: http://www.snort.org/team.html\n"
-        "           (C) Copyright 1998-2007 Sourcefire Inc., et al.\n"   
+        " |o\"  )~|  By Ian Firns (SecurixLive): http://www.securixlive.com/\n"
+		" + '''' +  (C) Copyright 2008-2011 Ian Firns (SecurixLive).\n"
         "\n"
         , VER_MAJOR, VER_MINOR, VER_REVISION, VER_BUILD,
 #ifdef DEBUG

@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2008-2010 SecurixLive   <dev@securixlive.com>
+** Copyright (C) 2008-2011 Ian Firns (SecurixLive) <dev@securixlive.com>
 **
 ** Copyright (C) 2005-2009 Sourcefire, Inc.
 ** Copyright (C) 1998-2005 Martin Roesch <roesch@sourcefire.com>
@@ -62,8 +62,8 @@
 #define PROGRAM_NAME	"Barnyard"
 #define VER_MAJOR		"2"
 #define VER_MINOR		"1"
-#define VER_REVISION	"9"
-#define VER_BUILD		"263"
+#define VER_REVISION	"10"
+#define VER_BUILD		"266"
 
 #define STD_BUF  1024
 

@@ -836,31 +836,65 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
 		     UNIFIED2_IDS_EVENT);
 	  
 	  SpoolerState = SPOOLER_FAST_FORWARD;
+	}
+      
+      /* In case that we have a lonely packet. */
+      if( (type ==  UNIFIED2_PACKET))
+	{
+	  /* increment the stats */
+          pc.total_packets++;
 	  
+	  LogMessage("spoolerProcessRecord(): Received a UNIFIED2 Lonely packet with event_id [%lu] \n\n",
+                     ntohl(((Unified2Packet *)spooler->record.data)->event_id));
+	  
+          /* Cleanup ze mess */
+          memset(LogPacket,'\0',sizeof(Packet));
+          spooler->record.pkt = LogPacket;
+	  
+          pkth.caplen = ntohl(((Unified2Packet *)spooler->record.data)->packet_length);
+          pkth.len = pkth.caplen;
+          pkth.ts.tv_sec = ntohl(((Unified2Packet *)spooler->record.data)->packet_second);
+          pkth.ts.tv_usec = ntohl(((Unified2Packet *)spooler->record.data)->packet_microsecond);
+	  
+          /* decode the packet from the Unified2Packet information */
+          datalink = ntohl(((Unified2Packet *)spooler->record.data)->linktype);
+	  DecodePacket(datalink, spooler->record.pkt, &pkth,
+                       ((Unified2Packet *)spooler->record.data)->packet_data);
+	  
+	  CallOutputPlugins(OUTPUT_TYPE__SPECIAL,
+			    spooler->record.pkt,
+			    NULL,
+                            type);
+	  
+	  /* Should not be changed, but lets set it anyways */
+	  /* Reset Spooler state */
+          SpoolerState = SPOOLER_NULL;
 	}
-      
-      if(((type != UNIFIED2_IDS_EVENT ) &&
-	  (type != UNIFIED2_IDS_EVENT_IPV6 ) &&
-	  (type != UNIFIED2_IDS_EVENT_MPLS) &&
-	  (type != UNIFIED2_IDS_EVENT_IPV6_MPLS) &&
-	  (type != UNIFIED2_IDS_EVENT_VLAN) &&
-	  (type != UNIFIED2_IDS_EVENT_IPV6_VLAN)))
+      else
 	{
-	  FatalError("Are you using a custom unified2 output plugin? Caught record type [%lu] in SPOOLER_NULL State\n");
-	  return;
+	  if(((type != UNIFIED2_IDS_EVENT ) &&
+	      (type != UNIFIED2_IDS_EVENT_IPV6 ) &&
+	      (type != UNIFIED2_IDS_EVENT_MPLS) &&
+	      (type != UNIFIED2_IDS_EVENT_IPV6_MPLS) &&
+	      (type != UNIFIED2_IDS_EVENT_VLAN) &&
+	      (type != UNIFIED2_IDS_EVENT_IPV6_VLAN)))
+	    {
+	      FatalError("Are you using a custom unified2 output plugin? Caught record type [%lu] in SPOOLER_NULL State\n");
+	      return;
+	    }
+	  
+	  if( (SpoolerSetStaticEvent(type,spooler->record.data)))
+	    {
+	      /* XXX */
+	      FatalError("SpoolerSetStaticEvent(), failed \n");
+	    }
+	  
+	  /* increment the stats */
+	  pc.total_events++;
+	  
+	  /* We are now in Event State */
+	  SpoolerState = SPOOLER_EVENT;
 	}
-      
-      if( (SpoolerSetStaticEvent(type,spooler->record.data)))
-	{
-	  /* XXX */
-	  FatalError("SpoolerSetStaticEvent(), failed \n");
-	}
-      
-      /* increment the stats */
-      pc.total_events++;
-      
-      /* We are now in Event State */
-      SpoolerState = SPOOLER_EVENT;
       
       break;
       
@@ -912,7 +946,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
                             spooler->record.pkt,
                             SpoolerGetEventPtr(),
                             type);
-
+	  
 	  /* Reset Spooler state */
 	  SpoolerState = SPOOLER_NULL;
 	}
@@ -940,7 +974,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
       FatalError("Unknown spooler state [%lu] \n\n",SpoolerState);
       break;
     }
-
+  
   spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);  
 }
 

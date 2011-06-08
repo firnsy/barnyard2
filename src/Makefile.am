@@ -24,6 +24,7 @@ spooler.c spooler.h \
 strlcatu.c strlcatu.h \
 strlcpyu.c strlcpyu.h \
 timersub.h \
+twofish.c twofish.h \
 unified2.h \
 util.c util.h
 

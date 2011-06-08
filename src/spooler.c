@@ -86,16 +86,16 @@ static int FindNextExtension(const char *dirpath, const char *filebase,
     size_t              filebase_len;
     uint32_t            timestamp_min = 0;
     char *endptr;
-    
+
     DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Looking in %s %s\n", dirpath, filebase););
-    
+
     /* peform sanity checks */
     if (dirpath == NULL || filebase == NULL)
         return SPOOLER_EXTENSION_EPARAM;
 
     /* calculate filebase length */
     filebase_len = strlen(filebase);
-    
+
     /* open the directory */
     if ( !(dir=opendir(dirpath)) )
     {
@@ -118,7 +118,7 @@ static int FindNextExtension(const char *dirpath, const char *filebase,
         {
             LogMessage("WARNING: Can't extract timestamp extension from '%s'"
                     "using base '%s'\n", dir_entry->d_name, filebase);
-            
+
             continue;
         }
 
@@ -154,11 +154,11 @@ Spooler *spoolerOpen(const char *dirpath, const char *filename, uint32_t extensi
 {
     Spooler             *spooler = NULL;
     int                 ret;
-        
+
     /* perform sanity checks */
     if ( filename == NULL )
         return NULL;
-    
+
     /* create the spooler structure and allocate all memory */
     spooler = (Spooler *)SnortAlloc(sizeof(Spooler));
 
@@ -185,7 +185,7 @@ Spooler *spoolerOpen(const char *dirpath, const char *filename, uint32_t extensi
     }
 
     spooler->timestamp = extension;
-            
+
     LogMessage("Opened spool file '%s'\n", spooler->filepath);
 
     /* open the file non-blocking */
@@ -227,7 +227,7 @@ int spoolerClose(Spooler *spooler)
 
     /* free record */
     spoolerFreeRecord(&spooler->record);
-        
+
     free(spooler);
     spooler = NULL;
 
@@ -251,10 +251,10 @@ int spoolerReadRecordHeader(Spooler *spooler)
     if (spooler->ifn->readRecordHeader)
     { 
         ret = spooler->ifn->readRecordHeader(spooler);
-    
+
         if (ret != 0)
             return ret;
-        
+
         spooler->state = SPOOLER_STATE_HEADER_READ;
         spooler->offset = 0;
     }
@@ -284,10 +284,10 @@ int spoolerReadRecord(Spooler *spooler)
     if (spooler->ifn->readRecord)
     { 
         ret = spooler->ifn->readRecord(spooler);
-    
+
         if (ret != 0)
             return ret;
-        
+
         spooler->state = SPOOLER_STATE_RECORD_READ;
         spooler->record_idx++;
         spooler->offset = 0;
@@ -320,7 +320,7 @@ int ProcessBatch(const char *dirpath, const char *filename)
             case SPOOLER_STATE_OPENED:
             case SPOOLER_STATE_RECORD_READ:
                 ret = spoolerReadRecordHeader(spooler);
-            
+
                 if (ret == BARNYARD2_READ_EOF)
                 {
                     pb_ret = -1;
@@ -335,7 +335,7 @@ int ProcessBatch(const char *dirpath, const char *filename)
 
             default:
                 ret = spoolerReadRecord(spooler);
-    
+
                 if (ret == 0)
                 {
                     /* process record, firing output as required */
@@ -380,7 +380,7 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
     int                 waiting_logged = 0;
     uint32_t            skipped = 0;
     uint32_t            extension = 0;
- 
+
     if (BcProcessNewRecordsOnly())
     {
         LogMessage("Processing new records only.\n");
@@ -464,7 +464,7 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
             default:
                 LogMessage("ERROR: Invalid spooler state (%i). Closing '%s'\n",
                             spooler->state, spooler->filepath);
-               
+
 #ifndef WIN32
                 /* archive the spool file */
                 if (BcArchiveDir() != NULL)
@@ -474,7 +474,7 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
                 /* we've finished with the spooler so destroy and cleanup */
                 spoolerClose(spooler);
                 spooler = NULL;
-                
+
                 record_start = 0;
                 break;
         }
@@ -482,7 +482,7 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
         /* if no spooler exists, we are waiting for a newer file to arrive */
         if (spooler == NULL)
             continue;
-        
+
         if (ret == 0)
         {
             /* check for a successful record read */
@@ -573,7 +573,7 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
                     {
                         if (BcProcessNewRecordsOnly())
                             LogMessage("Skipped %u old records\n", skipped);
-                            
+
                         LogMessage("Waiting for new data\n");
                         waiting_logged = 1;
                         barnyard2_conf->process_new_records_only_flag = 0;
@@ -617,16 +617,26 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
 
     /* increment the stats */
     pc.total_records++;
-    if (type == UNIFIED2_PACKET)
-        pc.total_packets++;
-    else if(type == UNIFIED2_IDS_EVENT || type == UNIFIED2_IDS_EVENT_IPV6 ||
-            type == UNIFIED2_IDS_EVENT_MPLS || type == UNIFIED2_IDS_EVENT_IPV6_MPLS ||
-            type == UNIFIED2_IDS_EVENT_VLAN || type == UNIFIED2_IDS_EVENT_IPV6_VLAN)
-        pc.total_events++;
+    switch (type)
+    {
+        case UNIFIED2_PACKET:
+            pc.total_packets++;
+            break;
+        case UNIFIED2_IDS_EVENT:
+        case UNIFIED2_IDS_EVENT_IPV6:
+        case UNIFIED2_IDS_EVENT_MPLS:
+        case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+        case UNIFIED2_IDS_EVENT_VLAN:
+        case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+            pc.total_events++;
+            break;
+        default:
+            pc.total_unknown++;
+    }
 
     /* check if it's packet */
     if (type == UNIFIED2_PACKET)
-    {   
+    {
         /* convert event id once */
         uint32_t event_id = ntohl(((Unified2Packet *)spooler->record.data)->event_id);
 
@@ -635,17 +645,17 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
 
         /* allocate space for the packet and construct the packet header */
         spooler->record.pkt = SnortAlloc(sizeof(Packet));
-    
+
         pkth.caplen = ntohl(((Unified2Packet *)spooler->record.data)->packet_length);
         pkth.len = pkth.caplen;
         pkth.ts.tv_sec = ntohl(((Unified2Packet *)spooler->record.data)->packet_second);
         pkth.ts.tv_usec = ntohl(((Unified2Packet *)spooler->record.data)->packet_microsecond);
-        
+
         /* decode the packet from the Unified2Packet information */
         datalink = ntohl(((Unified2Packet *)spooler->record.data)->linktype);
         DecodePacket(datalink, spooler->record.pkt, &pkth, 
                      ((Unified2Packet *)spooler->record.data)->packet_data);
-        
+
         /* check if it's been re-assembled */
         if (spooler->record.pkt->packet_flags & PKT_REBUILT_STREAM)
         {
@@ -664,7 +674,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
                               spooler->record.pkt, 
                               ernCache->data, 
                               ernCache->type);
-                
+
             /* indicate that the cached event has been used */
             ernCache->used = 1;
         }
@@ -683,7 +693,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
                                       NULL,
                                       ernCache->data, 
                                       ernCache->type);
-                
+
                 /* set the event cache used flag */
                 ernCache->used = 1;
             }
@@ -724,7 +734,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
                               NULL,
                               ernCache->data, 
                               ernCache->type);
-            
+
             /* flush the event cache flag */
             ernCache->used = 1;
         }
@@ -758,7 +768,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
                               NULL,
                               ernCache->data, 
                               ernCache->type);
-            
+
             /* waldo operations occur after the output plugins are called */
             if (fire_output)
                 spoolerWriteWaldo(&barnyard2_conf->waldo, spooler); 
@@ -902,7 +912,7 @@ int spoolerOpenWaldo(Waldo *waldo, uint8_t mode)
 
     /* stat the file to see it exists */
     ret = stat(waldo->filepath, &waldo_info);
-    
+
     if ( mode == WALDO_MODE_READ )
         waldo_file_flags = ( O_RDONLY );
     else if ( mode == WALDO_MODE_WRITE )

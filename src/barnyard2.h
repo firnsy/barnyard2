@@ -409,6 +409,7 @@ typedef struct _PacketCount
     uint64_t total_events;
     uint64_t total_packets;
     uint64_t total_processed;
+    uint64_t total_unknown;
 
     uint64_t s5tcp1;
     uint64_t s5tcp2;
@@ -546,9 +547,6 @@ extern u_int snaplen;
 extern int exit_signal;
 
 extern Barnyard2Config *barnyard2_conf_for_parsing;
-
-/* Barnyard2 run-time configuration struct*/
-//extern runtime_config barnyard2_runtime;
 
 /*  P R O T O T Y P E S  ******************************************************/
 int Barnyard2Main(int argc, char *argv[]);

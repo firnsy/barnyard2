@@ -1,4 +1,6 @@
 /*
+** spo_database.c
+**
 ** Portions Copyright (C) 2000,2001,2002 Carnegie Mellon University
 ** Copyright (C) 2001 Jed Pickel <jed@pickel.net>
 ** Portions Copyright (C) 2001 Andrew R. Baker <andrewb@farm9.com>
@@ -18,8 +20,6 @@
 ** along with this program; if not, write to the Free Software
 ** Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 */
-
-/* $Id$ */
 
 /* Snort Database Output Plug-in
  *
@@ -1201,22 +1201,22 @@ void Database(Packet *p, void *event, uint32_t event_type, void *arg)
                  ref_id,
                  class_id = 0;
 
-	SigNode				*sn = NULL;
-	ClassType			*cn = NULL;
-	ReferenceNode		*rn = NULL;
+    SigNode             *sn = NULL;
+    ClassType           *cn = NULL;
+    ReferenceNode       *rn = NULL;
 
-	/* we need a packet when in "log" mode */
-	if ( (!strncasecmp(data->facility, "log", 3)) && p == NULL )
-	{
+    /* we need a packet when in "log" mode */
+    if ( (!strncasecmp(data->facility, "log", 3)) && p == NULL )
+    {
         DEBUG_WRAP(DebugMessage(DEBUG_LOG,"database(debug): log facility enabled but have no Packet information\n"););
-		return;
-	}
+        return;
+    }
 
-	if ( event == NULL )
-	{
+    if ( event == NULL )
+    {
         DEBUG_WRAP(DebugMessage(DEBUG_LOG,"database(debug): possible SEGFAULT will result if I continue, so I'm skipping this one.\n"););
-		return;
-	}
+        return;
+    }
 
     char sig_rev[16]="";
     char sig_sid[16]="";
@@ -1235,14 +1235,14 @@ void Database(Packet *p, void *event, uint32_t event_type, void *arg)
     if(event != NULL)
     {
         timestamp_string = GetTimestampByComponent(
-								ntohl(((Unified2EventCommon *)event)->event_second),
-								ntohl(((Unified2EventCommon *)event)->event_microsecond),
-								data->tz);
+                                ntohl(((Unified2EventCommon *)event)->event_second),
+                                ntohl(((Unified2EventCommon *)event)->event_microsecond),
+                                data->tz);
     }
     else if(p != NULL)
     {
         timestamp_string = GetTimestampByStruct((struct timeval *) &p->pkth->ts, data->tz);
-	}
+    }
     else
     {
         timestamp_string = GetCurrentTimestamp();
@@ -1347,9 +1347,9 @@ void Database(Packet *p, void *event, uint32_t event_type, void *arg)
     }
 #endif
 
-	sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-						ntohl(((Unified2EventCommon *)event)->signature_id));
-	cn = ClassTypeLookupById(barnyard2_conf, ntohl(((Unified2EventCommon *)event)->classification_id));
+    sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
+                        ntohl(((Unified2EventCommon *)event)->signature_id));
+    cn = ClassTypeLookupById(barnyard2_conf, ntohl(((Unified2EventCommon *)event)->classification_id));
 
     /* Write the signature information
      *  - Determine the ID # of the signature of this alert
@@ -2679,8 +2679,8 @@ int Insert(char * query, DatabaseData * data)
     int result = 0;
 
 #ifdef ENABLE_MYSQL
-	int                 mysql_last_errno = 0;
-	int                 mysql_query_abort = 0;
+    int                 mysql_last_errno = 0;
+    int                 mysql_query_abort = 0;
     struct timespec     mysql_timeout_ts;
 
     mysql_timeout_ts.tv_sec = 15;
@@ -2712,40 +2712,40 @@ int Insert(char * query, DatabaseData * data)
         result = 1;
 
 #ifdef MYSQL_HAS_OPT_RECONNECT
-		while( mysql_query(data->m_sock, query) != 0 && mysql_query_abort == 0 )
-		{
-			mysql_last_errno = mysql_errno(data->m_sock);
+        while( mysql_query(data->m_sock, query) != 0 && mysql_query_abort == 0 )
+        {
+            mysql_last_errno = mysql_errno(data->m_sock);
 
             DEBUG_WRAP(DebugMessage(DEBUG_LOG,"database(debug): conducting: \"%s\",  last errno: %u\n", query, mysql_last_errno););
 
-			if ( mysql_last_errno == CR_SERVER_LOST ||
-				 mysql_last_errno == CR_SERVER_GONE_ERROR )
-			{
-				LogMessage("database: lost connection to MySQL server. Reconnecting...\n");
+            if ( mysql_last_errno == CR_SERVER_LOST ||
+                 mysql_last_errno == CR_SERVER_GONE_ERROR )
+            {
+                LogMessage("database: lost connection to MySQL server. Reconnecting...\n");
 
-				while ( mysql_ping(data->m_sock) != 0 )
-				{
-				    if ( nanosleep(&mysql_timeout_ts, NULL) )
-					{
-					    ErrorMessage("database: giving up due to mysql-error: %s\n",
-								     mysql_error(data->m_sock));
+                while ( mysql_ping(data->m_sock) != 0 )
+                {
+                    if ( nanosleep(&mysql_timeout_ts, NULL) )
+                    {
+                        ErrorMessage("database: giving up due to mysql-error: %s\n",
+                                     mysql_error(data->m_sock));
 
-						/* abort */
-						mysql_query_abort = 1;
-						result = 0;
-					}
-				}
+                        /* abort */
+                        mysql_query_abort = 1;
+                        result = 0;
+                    }
+                }
 
-				LogMessage("database: reconnected.\n");
-			}
-			else if ( mysql_last_errno < CR_MIN_ERROR )
-			{
+                LogMessage("database: reconnected.\n");
+            }
+            else if ( mysql_last_errno < CR_MIN_ERROR )
+            {
                 ErrorMessage("database: mysql_error: %s\nSQL=%s\n",
                              mysql_error(data->m_sock), query);
 
-				mysql_query_abort = 1;
-				result = 0;
-			}
+                mysql_query_abort = 1;
+                result = 0;
+            }
         }
 #else
         if(mysql_query(data->m_sock,query) != 0)
@@ -2921,8 +2921,8 @@ int Select(char * query, DatabaseData * data)
     int result = 0;
 
 #ifdef ENABLE_MYSQL
-	int mysql_last_errno = 0;
-	int mysql_query_abort = 0;
+    int mysql_last_errno = 0;
+    int mysql_query_abort = 0;
     struct timespec     mysql_timeout_ts;
 
     mysql_timeout_ts.tv_sec = 15;
@@ -2966,37 +2966,37 @@ int Select(char * query, DatabaseData * data)
         result = 1;
 
 #ifdef MYSQL_HAS_OPT_RECONNECT
-		while( mysql_query(data->m_sock, query) != 0 && mysql_query_abort == 0 )
-		{
-			mysql_last_errno = mysql_errno(data->m_sock);
+        while( mysql_query(data->m_sock, query) != 0 && mysql_query_abort == 0 )
+        {
+            mysql_last_errno = mysql_errno(data->m_sock);
 
             DEBUG_WRAP(DebugMessage(DEBUG_LOG,"database(debug): conducting: \"%s\",  last errno: %u\n", query, mysql_last_errno););
 
-			if ( mysql_last_errno == CR_SERVER_LOST ||
-				 mysql_last_errno == CR_SERVER_GONE_ERROR )
-			{
-				LogMessage("database: lost connection to MySQL server. Reconnecting...\n");
+            if ( mysql_last_errno == CR_SERVER_LOST ||
+                 mysql_last_errno == CR_SERVER_GONE_ERROR )
+            {
+                LogMessage("database: lost connection to MySQL server. Reconnecting...\n");
 
-				while ( mysql_ping(data->m_sock) != 0 )
-				{
-				    if ( nanosleep(&mysql_timeout_ts, NULL) )
-					{
-					    ErrorMessage("database: giving up!\n");
+                while ( mysql_ping(data->m_sock) != 0 )
+                {
+                    if ( nanosleep(&mysql_timeout_ts, NULL) )
+                    {
+                        ErrorMessage("database: giving up!\n");
 
-						/* abort */
-						mysql_query_abort = 1;
-						result = 0;
-					}
-				}
+                        /* abort */
+                        mysql_query_abort = 1;
+                        result = 0;
+                    }
+                }
 
-				LogMessage("database: reconnected.\n");
-			}
-			else if ( mysql_last_errno < CR_MIN_ERROR )
-			{
-				mysql_query_abort = 1;
-				result = 0;
-			}
-		}
+                LogMessage("database: reconnected.\n");
+            }
+            else if ( mysql_last_errno < CR_MIN_ERROR )
+            {
+                mysql_query_abort = 1;
+                result = 0;
+            }
+        }
 #else
         if(mysql_query(data->m_sock,query) != 0)
         {

@@ -61,6 +61,7 @@
 #include "output-plugins/spo_alert_csv.h"
 #include "output-plugins/spo_alert_fast.h"
 #include "output-plugins/spo_alert_full.h"
+#include "output-plugins/spo_alert_fwsam.h"
 #include "output-plugins/spo_alert_syslog.h"
 #include "output-plugins/spo_alert_test.h"
 #include "output-plugins/spo_alert_prelude.h"
@@ -94,7 +95,7 @@ void RegisterInputPlugins()
 {
     LogMessage("Initializing Input Plugins!\n");
     
-	Unified2Setup();
+    Unified2Setup();
 }
 
 InputFuncNode *GetInputPlugin(char *keyword)
@@ -238,13 +239,13 @@ void DumpInputPlugins()
         LogMessage("%-13s: init() = %p\n", idx->keyword, idx->func);
         ifn = GetInputPlugin(idx->keyword);
 
-		if ((ifn != NULL) && ifn->configured_flag)
-		{
-			LogMessage("%-13s:   - readRecordHeader() = %p\n", 
-							ifn->keyword, ifn->readRecordHeader);
-			LogMessage("%-13s:   - readRecord()       = %p\n", 
-							ifn->keyword, ifn->readRecord);
-		}
+        if ((ifn != NULL) && ifn->configured_flag)
+        {
+            LogMessage("%-13s:   - readRecordHeader() = %p\n", 
+                            ifn->keyword, ifn->readRecordHeader);
+            LogMessage("%-13s:   - readRecord()       = %p\n", 
+                            ifn->keyword, ifn->readRecord);
+        }
 
         idx = idx->next;
     }
@@ -262,7 +263,7 @@ int AddArgToInputList(char *keyword, void *arg)
 
     node->arg = arg;
 
-	return 0;
+    return 0;
 }
 
 int AddReadRecordHeaderFuncToInputList(char *keyword, int (*readRecordHeader)(void *))
@@ -278,9 +279,9 @@ int AddReadRecordHeaderFuncToInputList(char *keyword, int (*readRecordHeader)(vo
     node = GetInputPlugin(keyword);
 
     node->readRecordHeader = readRecordHeader;
-	node->configured_flag = InputFuncNodeConfigured(node);
-	
-	return 0;
+    node->configured_flag = InputFuncNodeConfigured(node);
+    
+    return 0;
 }
 
 int AddReadRecordFuncToInputList(char *keyword, int (*readRecord)(void *))
@@ -296,18 +297,18 @@ int AddReadRecordFuncToInputList(char *keyword, int (*readRecord)(void *))
     node = GetInputPlugin(keyword);
 
     node->readRecord = readRecord;
-	node->configured_flag = InputFuncNodeConfigured(node);
+    node->configured_flag = InputFuncNodeConfigured(node);
 
     return 0;
 }
 
 int InputFuncNodeConfigured(InputFuncNode *ifn)
 {
-	/* if not all functions are defined then return a zero flag */
-	if (!ifn->readRecordHeader || !ifn->readRecord)
-		return 0;
+    /* if not all functions are defined then return a zero flag */
+    if (!ifn->readRecordHeader || !ifn->readRecord)
+        return 0;
 
-	return 1;
+    return 1;
 }
 
 
@@ -326,6 +327,7 @@ void RegisterOutputPlugins(void)
     DatabaseSetup();
     AlertFastSetup();
     AlertFullSetup();
+    AlertFWsamSetup();
 #ifndef WIN32
     /* Win32 doesn't support AF_UNIX sockets */
     AlertUnixSockSetup();
@@ -348,8 +350,8 @@ void RegisterOutputPlugins(void)
 
     AlertTestSetup();
 
-	PlatypusSetup();
-	SguilSetup();
+    PlatypusSetup();
+    SguilSetup();
 }
 
 /****************************************************************************
@@ -539,43 +541,43 @@ void AppendOutputFuncList(OutputFunc func, void *arg, OutputFuncNode **list)
 
 void CallOutputPlugins(OutputType out_type, Packet *packet, void *event, uint32_t event_type)
 {
-	OutputFuncNode *idx = NULL;
+    OutputFuncNode *idx = NULL;
 
     if (out_type == OUTPUT_TYPE__SPECIAL)
     {
         idx = AlertList;
-    	while (idx != NULL)
-    	{
-    		idx->func(packet, event, event_type, idx->arg);
-    		idx = idx->next;
-    	}
+        while (idx != NULL)
+        {
+            idx->func(packet, event, event_type, idx->arg);
+            idx = idx->next;
+        }
 
         idx = LogList;
-    	while (idx != NULL)
-    	{
-    		idx->func(packet, event, event_type, idx->arg);
-    		idx = idx->next;
-    	}
+        while (idx != NULL)
+        {
+            idx->func(packet, event, event_type, idx->arg);
+            idx = idx->next;
+        }
     }
     else
     {
-    	switch(out_type)
-    	{
-    		case OUTPUT_TYPE__ALERT:
-    			idx = AlertList;
-    			break;
-    		case OUTPUT_TYPE__LOG:
-    			idx = LogList;
-    			break;
+        switch(out_type)
+        {
+            case OUTPUT_TYPE__ALERT:
+                idx = AlertList;
+                break;
+            case OUTPUT_TYPE__LOG:
+                idx = LogList;
+                break;
             default:
                 break;
-    	}
+        }
 
-    	while (idx != NULL)
-    	{
-    		idx->func(packet, event, event_type, idx->arg);
-    		idx = idx->next;
-    	}
+        while (idx != NULL)
+        {
+            idx->func(packet, event, event_type, idx->arg);
+            idx = idx->next;
+        }
     }
 }
 

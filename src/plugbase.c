@@ -61,6 +61,7 @@
 #include "output-plugins/spo_alert_csv.h"
 #include "output-plugins/spo_alert_fast.h"
 #include "output-plugins/spo_alert_full.h"
+#include "output-plugins/spo_alert_fwsam.h"
 #include "output-plugins/spo_alert_syslog.h"
 #include "output-plugins/spo_alert_test.h"
 #include "output-plugins/spo_alert_prelude.h"
@@ -326,6 +327,7 @@ void RegisterOutputPlugins(void)
     DatabaseSetup();
     AlertFastSetup();
     AlertFullSetup();
+    AlertFWsamSetup();
 #ifndef WIN32
     /* Win32 doesn't support AF_UNIX sockets */
     AlertUnixSockSetup();
@@ -348,8 +350,8 @@ void RegisterOutputPlugins(void)
 
     AlertTestSetup();
 
-	PlatypusSetup();
-	SguilSetup();
+    PlatypusSetup();
+    SguilSetup();
 }
 
 /****************************************************************************

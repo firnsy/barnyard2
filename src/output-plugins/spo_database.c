@@ -1,4 +1,6 @@
 /*
+** spo_database.c
+**
 ** Portions Copyright (C) 2000,2001,2002 Carnegie Mellon University
 ** Copyright (C) 2001 Jed Pickel <jed@pickel.net>
 ** Portions Copyright (C) 2001 Andrew R. Baker <andrewb@farm9.com>
@@ -18,8 +20,6 @@
 ** along with this program; if not, write to the Free Software
 ** Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 */
-
-/* $Id$ */
 
 /* Snort Database Output Plug-in
  *

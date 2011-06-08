@@ -547,9 +547,6 @@ extern int exit_signal;
 
 extern Barnyard2Config *barnyard2_conf_for_parsing;
 
-/* Barnyard2 run-time configuration struct*/
-//extern runtime_config barnyard2_runtime;
-
 /*  P R O T O T Y P E S  ******************************************************/
 int Barnyard2Main(int argc, char *argv[]);
 int Barnyard2Sleep(unsigned int);

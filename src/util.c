@@ -822,6 +822,8 @@ void DropStats(int exiting)
                CalcPct(pc.total_events, pc.total_records));
     LogMessage("   Packets: " FMTu64("12") " (%.3f%%)\n", pc.total_packets,
                CalcPct(pc.total_packets, pc.total_records));
+    LogMessage("   Unknown: " FMTu64("12") " (%.3f%%)\n", pc.total_unknown,
+               CalcPct(pc.total_unknown, pc.total_records));
 
     total = pc.total_packets;
 

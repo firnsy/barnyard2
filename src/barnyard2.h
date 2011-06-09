@@ -409,6 +409,7 @@ typedef struct _PacketCount
     uint64_t total_events;
     uint64_t total_packets;
     uint64_t total_processed;
+    uint64_t total_unknown;
 
     uint64_t s5tcp1;
     uint64_t s5tcp2;

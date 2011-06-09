@@ -146,19 +146,19 @@ static void AlertFastInit(char *args)
 
 static void AlertFast(Packet *p, void *event, uint32_t event_type, void *arg)
 {
-    SpoAlertFastData	*data;
-	SigNode				*sn;
+    SpoAlertFastData    *data;
+    SigNode             *sn;
 
-	if( p == NULL || event == NULL || arg == NULL )
-	{
-		return;
-	}
+    if( p == NULL || event == NULL || arg == NULL )
+    {
+        return;
+    }
 
     data = (SpoAlertFastData *)arg;
-	sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-						ntohl(((Unified2EventCommon *)event)->signature_id));
+    sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
+                        ntohl(((Unified2EventCommon *)event)->signature_id));
 
-	LogTimeStamp(data->log, p);
+    LogTimeStamp(data->log, p);
 
     if( p != NULL && p->packet_flags & PKT_INLINE_DROP )
         TextLog_Puts(data->log, " [Drop]");
@@ -194,9 +194,9 @@ static void AlertFast(Packet *p, void *event, uint32_t event_type, void *arg)
     if(p && IPH_IS_VALID(p))
     {
         LogPriorityData(data->log,
-		                ntohl(((Unified2EventCommon *)event)->classification_id),
-						ntohl(((Unified2EventCommon *)event)->priority_id),
-						0);
+                        ntohl(((Unified2EventCommon *)event)->classification_id),
+                        ntohl(((Unified2EventCommon *)event)->priority_id),
+                        0);
 
         TextLog_Print(data->log, "{%s} ", protocol_names[GET_IPH_PROTO(p)]);
 

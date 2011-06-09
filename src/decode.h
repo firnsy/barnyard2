@@ -1645,6 +1645,7 @@ typedef struct _Packet
 #define IsTCP(p) (IsIP(p) && (GET_IPH_PROTO(p) == IPPROTO_TCP))
 #define IsUDP(p) (IsIP(p) && (GET_IPH_PROTO(p) == IPPROTO_UDP))
 #define IsICMP(p) (IsIP(p) && (GET_IPH_PROTO(p) == IPPROTO_ICMP))
+#define IP_HAS_PORTS(p) (IsIP(p) && ((GET_IPH_PROTO(p) == IPPROTO_TCP) || (GET_IPH_PROTO(p) == IPPROTO_UDP)))
 
 #ifdef SUP_IP6 
 /* Sets the callbacks to point at the family selected by 

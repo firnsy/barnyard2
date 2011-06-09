@@ -24,36 +24,26 @@
 #include "config.h"
 #endif
 
-#include <sys/types.h>
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <dirent.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "barnyard2.h"
 #include "debug.h"
+#include "decode.h"
 #include "plugbase.h"
 #include "spooler.h"
 #include "unified2.h"
 #include "util.h"
 
-/*
-** PRIVATE FUNCTIONS
-*/
-Spooler *spoolerOpen(const char *, const char *, uint32_t);
-int spoolerClose(Spooler *);
-int spoolerReadRecordHeader(Spooler *);
-int spoolerReadRecord(Spooler *);
-void spoolerProcessRecord(Spooler *, int);
-void spoolerFreeRecord(Record *record);
 
-int spoolerWriteWaldo(Waldo *, Spooler *);
-int spoolerOpenWaldo(Waldo *, uint8_t);
-int spoolerCloseWaldo(Waldo *);
+
 
 
 /* Find the next spool file timestamp extension with a value equal to or 
@@ -139,89 +129,114 @@ static int FindNextExtension(const char *dirpath, const char *filebase,
     return SPOOLER_EXTENSION_FOUND;
 }
 
+
 Spooler *spoolerOpen(const char *dirpath, const char *filename, uint32_t extension)
 {
-    Spooler             *spooler = NULL;
-    int                 ret;
-        
-    /* perform sanity checks */
-    if ( filename == NULL )
-        return NULL;
-    
-    /* create the spooler structure and allocate all memory */
-    spooler = (Spooler *)SnortAlloc(sizeof(Spooler));
+  Spooler             *spooler = NULL;
+  int                 ret;
+  
+  /* perform sanity checks */
+  if ( filename == NULL )
+    return NULL;
+  
+  /* create the spooler structure and allocate all memory */
+  spooler = (Spooler *)SnortAlloc(sizeof(Spooler));
+  
+  /* Use preallocated buffed to maximum possible size */
+  
+  spooler->record.data =(void *)SnortAlloc(MAX_UNIFIED2_EVENT_SIZE);
+  memset(spooler->record.data,'\0',MAX_UNIFIED2_EVENT_SIZE);
+  
+  spooler->record.header =(void *)SnortAlloc(sizeof(Unified2RecordHeader));
+  memset(spooler->record.header,'\0',sizeof(Unified2RecordHeader));
+  
 
-    /* allocate some extra structures required (ie. Packet) */
-
-    spooler->fd = -1;
-
-    /* build the full filepath */
-    if (extension == 0)
+  spooler->fd = -1;
+  
+  /* build the full filepath */
+  if (extension == 0)
     {
-        ret = SnortSnprintf(spooler->filepath, MAX_FILEPATH_BUF, "%s", filename);
+      ret = SnortSnprintf(spooler->filepath, MAX_FILEPATH_BUF, "%s", filename);
     }
-    else
+  else
     {
-        ret = SnortSnprintf(spooler->filepath, MAX_FILEPATH_BUF, "%s/%s.%u", dirpath, filename,
-                extension);
+      ret = SnortSnprintf(spooler->filepath, MAX_FILEPATH_BUF, "%s/%s.%u", dirpath, filename,
+			  extension);
     }
-
-    /* sanity check the filepath */
-    if (ret != SNORT_SNPRINTF_SUCCESS)
+  
+  /* sanity check the filepath */
+  if (ret != SNORT_SNPRINTF_SUCCESS)
     {
-        spoolerClose(spooler);
-        FatalError("spooler: filepath too long!\n");
+      spoolerClose(spooler);
+      FatalError("spooler: filepath too long!\n");
     }
-
-    spooler->timestamp = extension;
-            
-    LogMessage("Opened spool file '%s'\n", spooler->filepath);
-
-    /* open the file non-blocking */
-    if ( (spooler->fd=open(spooler->filepath, O_RDONLY | O_NONBLOCK, 0)) == -1 )
+  
+  spooler->timestamp = extension;
+  
+  LogMessage("Opened spool file '%s'\n", spooler->filepath);
+  
+  /* open the file non-blocking */
+  if ( (spooler->fd=open(spooler->filepath, O_RDONLY | O_NONBLOCK, 0)) == -1 )
     {
-        LogMessage("ERROR: Unable to open log spool file '%s' (%s)\n", 
+      LogMessage("ERROR: Unable to open log spool file '%s' (%s)\n", 
                     spooler->filepath, strerror(errno));
-        spoolerClose(spooler);
-        spooler = NULL;
-        return NULL;
+      spoolerClose(spooler);
+      spooler = NULL;
+      return NULL;
     }
-
-    /* set state to initially be open */
-    spooler->state = SPOOLER_STATE_OPENED;
-
-    spooler->ifn = GetInputPlugin("unified2");
-
-    if (spooler->ifn == NULL)
+  
+  /* set state to initially be open */
+  spooler->state = SPOOLER_STATE_OPENED;
+  
+  spooler->ifn = GetInputPlugin("unified2");
+  
+  if (spooler->ifn == NULL)
     {
-        spoolerClose(spooler);
-        spooler = NULL;
-        FatalError("ERROR: No suitable input plugin found!\n");
+      spoolerClose(spooler);
+      spooler = NULL;
+      FatalError("ERROR: No suitable input plugin found!\n");
     }
-
-    return spooler;
+  
+  return spooler;
 }
 
 int spoolerClose(Spooler *spooler)
 {
-    /* perform sanity checks */
-    if (spooler == NULL)
-        return -1;
-
-    LogMessage("Closing spool file '%s'. Read %d records\n",
-               spooler->filepath, spooler->record_idx);
-
+  /* perform sanity checks */
+  if (spooler == NULL)
+    return -1;
+  
+  LogMessage("Closing spool file '%s'. Read %d records\n",
+	     spooler->filepath, spooler->record_idx);
+  
     if (spooler->fd != -1)
-        close(spooler->fd);
+      close(spooler->fd);
+    
+    
+    if(spooler->record.data != NULL)
+      {
+	memset(spooler->record.data,'\0',MAX_UNIFIED2_EVENT_SIZE);
+	free(spooler->record.data);
+	spooler->record.data = NULL;
+      }
+    
+    if(spooler->record.header != NULL)
+      {
+	memset(spooler->record.header,'\0',sizeof(Unified2RecordHeader));
+	free(spooler->record.header);
+	spooler->record.header = NULL;
+      }
 
-    /* free record */
-    spoolerFreeRecord(&spooler->record);
-        
+    
+    /* depricated */
+    //spoolerFreeRecord(&spooler->record);
+    
     free(spooler);
     spooler = NULL;
-
+    
     return 0;
 }
+
 
 int spoolerReadRecordHeader(Spooler *spooler)
 {
@@ -296,10 +311,12 @@ int ProcessBatch(const char *dirpath, const char *filename)
     int                 ret = 0;
     int                 pb_ret = 0;
 
+
+    
     /* Open the spool file */
     if ( (spooler=spoolerOpen("", filename, 0)) == NULL)
     {
-        FatalError("Unable to create spooler: %s\n", strerror(errno));
+      FatalError("Unable to create spooler: %s\n", strerror(errno));
     }
 
     while (exit_signal == 0 && pb_ret == 0)
@@ -341,7 +358,8 @@ int ProcessBatch(const char *dirpath, const char *filename)
                     pb_ret = -1;
                 }
 
-                spoolerFreeRecord(&spooler->record);
+		/* depricated */
+                //spoolerFreeRecord(&spooler->record);
                 break;
         }
     }
@@ -420,7 +438,7 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
                 pc_ret = -1;
                 continue;
             }
-
+	    
             /* found a new extension so create a new spooler */
             if ( (spooler=spoolerOpen(dirpath, filebase, extension)) == NULL )
             {
@@ -502,8 +520,8 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
                     spoolerProcessRecord(spooler, 1);
                 }
             }
-
-            spoolerFreeRecord(&spooler->record);
+	    /* depricated */
+            //spoolerFreeRecord(&spooler->record);
         }
         else if (ret == BARNYARD2_FILE_ERROR)
         {
@@ -978,16 +996,18 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
   spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);  
 }
 
-
-void spoolerFreeRecord(Record *record)
-{
-  if (record->data)
-    {
-      free(record->data);
-    }
-  
-  record->data = NULL;
-}
+/* Depricated  unallocated by spoolerClose*/
+//void spoolerFreeRecord(Record *record)
+//{
+//
+//
+//  if (record->data)
+//    {
+//      free(record->data);
+//    }
+//  
+//  record->data = NULL;
+//}
 
 /*
 ** WALDO FILE OPERATIONS

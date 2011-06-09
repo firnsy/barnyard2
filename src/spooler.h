@@ -27,8 +27,11 @@
 #include "config.h"
 #endif
 
+
+
 #include <sys/types.h>
 
+#include "unified2.h"
 #include "plugbase.h"
 
 #define SPOOLER_EXTENSION_FOUND     0
@@ -57,6 +60,15 @@
 
 
 #define MAX_FILEPATH_BUF    1024
+
+
+/* From snort - spo_unified2.c */
+/* with BY type */
+#ifndef MAX_UNIFIED2_EVENT_SIZE
+//#define MAX_UNIFIED2_EVENT_SIZE (sizeof(Serial_Unified2_Header) + sizeof(Serial_Unified2IDSEventIPv6_legacy) + IP_MAXPACKET);
+#define MAX_UNIFIED2_EVENT_SIZE (sizeof(Unified2RecordHeader) + sizeof(Unified2IDSEventIPv6_legacy) + IP_MAXPACKET)
+#endif
+
 
 typedef struct _Record
 {
@@ -118,15 +130,24 @@ typedef struct _Waldo
     WaldoData               data;    
 } Waldo;
 
+
+Spooler *spoolerOpen(const char *, const char *, uint32_t);
+int spoolerClose(Spooler *);
+int spoolerReadRecordHeader(Spooler *);
+int spoolerReadRecord(Spooler *);
+void spoolerProcessRecord(Spooler *, int);
+void spoolerFreeRecord(Record *record);
+int spoolerWriteWaldo(Waldo *, Spooler *);
+int spoolerOpenWaldo(Waldo *, uint8_t);
+int spoolerCloseWaldo(Waldo *);
 int ProcessContinuous(const char *, const char *, uint32_t, uint32_t);
 int ProcessContinuousWithWaldo(struct _Waldo *);
 int ProcessBatch(const char *, const char *);
 int ProcessWaldoFile(const char *);
-
 int spoolerReadWaldo(Waldo *);
-
 int InitializeLogPacket(void);
 int FreeLogPacket(void);
+
 
 
 #endif /* __SPOOLER_H__ */

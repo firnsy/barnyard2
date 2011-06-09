@@ -49,33 +49,6 @@
 #include "spooler.h"
 #include "strlcpyu.h"
 #include "util.h"
-#include "unified2.h"
-
-/*
-** PROTOTYPES
-*/
-void Unified2Init(char *);
-
-/* processing functions  */
-int Unified2ReadRecordHeader(void *);
-int Unified2ReadRecord(void *);
-
-int Unified2ReadEventRecord(void *);
-int Unified2ReadEvent6Record(void *);
-int Unified2ReadPacketRecord(void *);
-
-void Unified2PrintCommonRecord(Unified2EventCommon *);
-void Unified2PrintEventRecord(Unified2IDSEvent_legacy *);
-void Unified2PrintEvent6Record(Unified2IDSEventIPv6_legacy *);
-void Unified2PrintPacketRecord(Unified2Packet *);
-
-/* restart/shutdown functions */
-void Unified2CleanExitFunc(int, void *);
-void Unified2RestartFunc(int, void *);
-
-
-void Unified2PrintEventRecord(Unified2IDSEvent_legacy *);
-void Unified2PrintEvent6Record(Unified2IDSEventIPv6_legacy *);
 
 
 /*
@@ -99,261 +72,272 @@ void Unified2Setup(void)
 
 void Unified2Init(char *args)
 {
-    /* parse the argument list from the rules file */
-    //data = ParseAlertTestArgs(args);
-
-    DEBUG_WRAP(DebugMessage(DEBUG_INIT,"Linking UnifiedLog functions to call lists...\n"););
-    
-    /* Link the input processor read/process functions to the function list */
-    AddReadRecordHeaderFuncToInputList("unified2", Unified2ReadRecordHeader);
-    AddReadRecordFuncToInputList("unified2", Unified2ReadRecord);
-
-    /* Link the input processor exit/restart functions into the function list */
-    AddFuncToCleanExitList(Unified2CleanExitFunc, NULL);
-    AddFuncToRestartList(Unified2RestartFunc, NULL);
+  /* parse the argument list from the rules file */
+  //data = ParseAlertTestArgs(args);
+  
+  DEBUG_WRAP(DebugMessage(DEBUG_INIT,"Linking UnifiedLog functions to call lists...\n"););
+  
+  /* Link the input processor read/process functions to the function list */
+  AddReadRecordHeaderFuncToInputList("unified2", Unified2ReadRecordHeader);
+  AddReadRecordFuncToInputList("unified2", Unified2ReadRecord);
+  
+  /* Link the input processor exit/restart functions into the function list */
+  AddFuncToCleanExitList(Unified2CleanExitFunc, NULL);
+  AddFuncToRestartList(Unified2RestartFunc, NULL);
 }
 
 /* Partial reads should rarely, if ever, happen.  Thus we should not actually
    call lseek very often 
- */
+*/
 int Unified2ReadRecordHeader(void *sph)
 {
-    ssize_t             bytes_read;
-    Spooler             *spooler = (Spooler *)sph;
-
-    if( NULL == spooler->record.header )
-    {
-        // SnortAlloc will FatalError if memory can't be assigned.
-        spooler->record.header = SnortAlloc(sizeof(Unified2RecordHeader));
-    }
-
-    /* read the first portion of the unified log reader */
+  ssize_t             bytes_read;
+  Spooler             *spooler = (Spooler *)sph;
+  
+  // Depricated.
+  //if( NULL == spooler->record.header )
+  // {
+  // SnortAlloc will FatalError if memory can't be assigned.
+  //  spooler->record.header = SnortAlloc(sizeof(Unified2RecordHeader));
+  // }
+  
+  memset(spooler->record.header,'\0',sizeof(Unified2RecordHeader));
+  
+  
+  /* read the first portion of the unified log reader */
 #if DEBUG
-    int position = lseek(spooler->fd, 0, SEEK_CUR);
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Header: Reading at byte position %u\n", position););
+  int position = lseek(spooler->fd, 0, SEEK_CUR);
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Header: Reading at byte position %u\n", position););
 #endif
-
-    bytes_read = read( spooler->fd, spooler->record.header + spooler->offset, sizeof(Unified2RecordHeader) - spooler->offset);
-    
-    if (bytes_read == -1)
+  
+  bytes_read = read( spooler->fd, spooler->record.header + spooler->offset, sizeof(Unified2RecordHeader) - spooler->offset);
+  
+  if (bytes_read == -1)
     {
-        LogMessage("ERROR: Read error: %s\n", strerror(errno));
-        return BARNYARD2_FILE_ERROR;
+      LogMessage("ERROR: Read error: %s\n", strerror(errno));
+      return BARNYARD2_FILE_ERROR;
     }
-
-    if (bytes_read + spooler->offset != sizeof(Unified2RecordHeader))
+  
+  if (bytes_read + spooler->offset != sizeof(Unified2RecordHeader))
     {
-        if(bytes_read + spooler->offset == 0)
-        {
-            return BARNYARD2_READ_EOF;
+      if(bytes_read + spooler->offset == 0)
+	{
+	  return BARNYARD2_READ_EOF;
         }
-
-        spooler->offset += bytes_read;
-        return BARNYARD2_READ_PARTIAL;
+      
+      spooler->offset += bytes_read;
+      return BARNYARD2_READ_PARTIAL;
     }
-
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Header: Type=%u (%u bytes)\n",
-                ntohl(((Unified2RecordHeader *)spooler->record.header)->type),
-                ntohl(((Unified2RecordHeader *)spooler->record.header)->length)););
-
-    spooler->offset = 0;
-    return 0;
+  
+  
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Header: Type=%u (%u bytes)\n",
+			  ntohl(((Unified2RecordHeader *)spooler->record.header)->type),
+			  ntohl(((Unified2RecordHeader *)spooler->record.header)->length)););
+  
+  spooler->offset = 0;
+  return 0;
 }
 
 int Unified2ReadRecord(void *sph)
 {
-    ssize_t             bytes_read;
-    uint32_t            record_type;
-    uint32_t            record_length;
-    Spooler             *spooler = (Spooler *)sph;
-
-    /* convert once */
-    record_type = ntohl(((Unified2RecordHeader *)spooler->record.header)->type);
-    record_length = ntohl(((Unified2RecordHeader *)spooler->record.header)->length);
-
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Reading record type=%u (%u bytes)\n", 
-                record_type, record_length););
-
-    if(!spooler->record.data)
-    {
-        /* SnortAlloc will FatalError if memory can't be assigned */
-        spooler->record.data = SnortAlloc(record_length);
-    }
-
-    if (spooler->offset < record_length)
+  ssize_t             bytes_read;
+  uint32_t            record_type;
+  uint32_t            record_length;
+  Spooler             *spooler = (Spooler *)sph;
+  
+  /* convert once */
+  record_type = ntohl(((Unified2RecordHeader *)spooler->record.header)->type);
+  record_length = ntohl(((Unified2RecordHeader *)spooler->record.header)->length);
+  
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Reading record type=%u (%u bytes)\n", 
+			  record_type, record_length););
+  
+  /* Depricated */
+  //if(!spooler->record.data)
+  //  {
+  //    /* SnortAlloc will FatalError if memory can't be assigned */
+  //    spooler->record.data = SnortAlloc(record_length);
+  //  }
+  
+  /* We might have to adjust size to be the maximum possible size for an event (gziped and extra data) */
+  /* But the static model should stands */
+  memset(spooler->record.data,'\0',MAX_UNIFIED2_EVENT_SIZE);
+  
+  if (spooler->offset < record_length)
     {
 #if DEBUG
-        int position = lseek(spooler->fd, 0, SEEK_CUR);
-        DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Record: Reading at byte position %u\n", position););
+      int position = lseek(spooler->fd, 0, SEEK_CUR);
+      DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Record: Reading at byte position %u\n", position););
 #endif
-        /* in case we don't have it already */
-
+      /* in case we don't have it already */
+      
         bytes_read = read(spooler->fd, spooler->record.data + spooler->offset,
-                    record_length - spooler->offset);
-
+			  record_length - spooler->offset);
+	
         if (bytes_read == -1)
-        {
-            LogMessage("ERROR: read error: %s\n", strerror(errno));
+	  {
+	    LogMessage("ERROR: read error: %s\n", strerror(errno));
             return BARNYARD2_FILE_ERROR;
-        }
-
+	  }
+	
         if (bytes_read + spooler->offset != record_length)
-        {
-            spooler->offset += bytes_read;
-            return BARNYARD2_READ_PARTIAL;
-        }
-
+	  {
+	    spooler->offset += bytes_read;
+	    return BARNYARD2_READ_PARTIAL;
+	  }
+	
 #ifdef DEBUG
         switch (record_type)
-        {
-            case UNIFIED2_IDS_EVENT:
-                Unified2PrintEventRecord((Unified2IDSEvent_legacy *)spooler->record.data);
-                break;
-            case UNIFIED2_IDS_EVENT_IPV6:
-                Unified2PrintEvent6Record((Unified2IDSEventIPv6_legacy *)spooler->record.data);
-                break;
-            case UNIFIED2_PACKET:
-                Unified2PrintPacketRecord((Unified2Packet *)spooler->record.data);
-                break;
-            case UNIFIED2_IDS_EVENT_MPLS:
-            case UNIFIED2_IDS_EVENT_IPV6_MPLS:
-            case UNIFIED2_IDS_EVENT_VLAN:
-            case UNIFIED2_IDS_EVENT_IPV6_VLAN:
-            default:
-                DEBUG_WRAP(DebugMessage(DEBUG_LOG,"No debug available for record type: %u\n", record_type););
-                break;
-        }
+	  {
+	  case UNIFIED2_IDS_EVENT:
+	    Unified2PrintEventRecord((Unified2IDSEvent_legacy *)spooler->record.data);
+	    break;
+	  case UNIFIED2_IDS_EVENT_IPV6:
+	    Unified2PrintEvent6Record((Unified2IDSEventIPv6_legacy *)spooler->record.data);
+	    break;
+	  case UNIFIED2_PACKET:
+	    Unified2PrintPacketRecord((Unified2Packet *)spooler->record.data);
+	    break;
+	  case UNIFIED2_IDS_EVENT_MPLS:
+	  case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+	  case UNIFIED2_IDS_EVENT_VLAN:
+	  case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+	  default:
+	    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"No debug available for record type: %u\n", record_type););
+	    break;
+	  }
 #endif
-
+	
         spooler->offset = 0;
-
+	
         return 0;
     }
-
-    return -1;
+  
+  return -1;
 }
 
 void Unified2CleanExitFunc(int signal, void *arg)
 {
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Unified2CleanExitFunc\n"););
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Unified2CleanExitFunc\n"););
 }
 
 void Unified2RestartFunc(int signal, void *arg)
 {
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Unified2RestartFunc\n"););
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Unified2RestartFunc\n"););
 }
+
 
 #ifdef DEBUG
 void Unified2PrintEventCommonRecord(Unified2EventCommon *evt)
 {
-    if(evt == NULL)
-        return;
-
+  if(evt == NULL)
+    return;
+  
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,
+			  "Type: Event -------------------------------------------\n"););
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,
+			  "  sensor_id          = %d\n", ntohl(evt->sensor_id)););
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,
+			  "  event_id           = %d\n", ntohl(evt->event_id)););
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,
+			  "  event_second       = %lu\n", ntohl(evt->event_second)););
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,
+			  "  event_microsecond  = %lu\n", ntohl(evt->event_microsecond)););
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,
+			  "  generator_id       = %d\n", ntohl(evt->generator_id)););
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,
+			  "  signature_id       = %d\n", ntohl(evt->signature_id)););
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "Type: Event -------------------------------------------\n"););
+			    "  signature_revision = %d\n", ntohl(evt->signature_revision)););
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  sensor_id          = %d\n", ntohl(evt->sensor_id)););
+			    "  classification_id  = %d\n", ntohl(evt->classification_id)););
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  event_id           = %d\n", ntohl(evt->event_id)););
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  event_second       = %lu\n", ntohl(evt->event_second)););
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  event_microsecond  = %lu\n", ntohl(evt->event_microsecond)););
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  generator_id       = %d\n", ntohl(evt->generator_id)););
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  signature_id       = %d\n", ntohl(evt->signature_id)););
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  signature_revision = %d\n", ntohl(evt->signature_revision)););
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  classification_id  = %d\n", ntohl(evt->classification_id)););
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  priority_id        = %d\n", ntohl(evt->priority_id)););
+			    "  priority_id        = %d\n", ntohl(evt->priority_id)););
 }
-    
+
 void Unified2PrintEventRecord(Unified2IDSEvent_legacy *evt)
 {
-    char                sip4[INET_ADDRSTRLEN];
-    char                dip4[INET_ADDRSTRLEN];
-
-    if(evt == NULL)
-        return;
-
-    Unified2PrintEventCommonRecord((Unified2EventCommon *)evt);
-
+  char                sip4[INET_ADDRSTRLEN];
+  char                dip4[INET_ADDRSTRLEN];
+  
+  if(evt == NULL)
+    return;
+  
+  Unified2PrintEventCommonRecord((Unified2EventCommon *)evt);
+  
     inet_ntop(AF_INET, &(evt->ip_source), sip4, INET_ADDRSTRLEN);
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  ip_source          = %s\n", sip4););
+			    "  ip_source          = %s\n", sip4););
     
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  sport_itype        = %d\n", ntohs(evt->sport_itype)););
+			    "  sport_itype        = %d\n", ntohs(evt->sport_itype)););
     inet_ntop(AF_INET, &(evt->ip_destination), dip4, INET_ADDRSTRLEN);
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  ip_destination     = %s\n", dip4););
+			    "  ip_destination     = %s\n", dip4););
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  dport_icode        = %d\n", ntohs(evt->dport_icode)););
+			    "  dport_icode        = %d\n", ntohs(evt->dport_icode)););
 
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  ip_protocol        = %d\n", evt->protocol););
+			    "  ip_protocol        = %d\n", evt->protocol););
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  impact             = %d\n", evt->impact_flag););
+			    "  impact             = %d\n", evt->impact_flag););
 }
 
 void Unified2PrintEvent6Record(Unified2IDSEventIPv6_legacy *evt)
 {
-    char                sip6[INET6_ADDRSTRLEN];
-    char                dip6[INET6_ADDRSTRLEN];
-
-    if(evt == NULL)
-        return;
-
-    Unified2PrintEventCommonRecord((Unified2EventCommon *)evt);
-    
-    inet_ntop(AF_INET6, &(evt->ip_source), sip6, INET6_ADDRSTRLEN);
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  ip_source          = %s\n", sip6););
-    
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  sport_itype        = %d\n", ntohs(evt->sport_itype)););
+  char                sip6[INET6_ADDRSTRLEN];
+  char                dip6[INET6_ADDRSTRLEN];
+  
+  if(evt == NULL)
+    return;
+  
+  Unified2PrintEventCommonRecord((Unified2EventCommon *)evt);
+  
+  inet_ntop(AF_INET6, &(evt->ip_source), sip6, INET6_ADDRSTRLEN);
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,
+			  "  ip_source          = %s\n", sip6););
+  
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,
+			  "  sport_itype        = %d\n", ntohs(evt->sport_itype)););
     inet_ntop(AF_INET6, &(evt->ip_destination), dip6, INET6_ADDRSTRLEN);
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  ip_destination     = %s\n", dip6););
+			    "  ip_destination     = %s\n", dip6););
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  dport_icode        = %d\n", ntohs(evt->dport_icode)););
-
+			    "  dport_icode        = %d\n", ntohs(evt->dport_icode)););
+    
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  ip_protocol        = %d\n", evt->protocol););
+			    "  ip_protocol        = %d\n", evt->protocol););
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  impact             = %d\n", evt->impact_flag););
+			    "  impact             = %d\n", evt->impact_flag););
 }
 
 void Unified2PrintPacketRecord(Unified2Packet *pkt)
 {
-    if(pkt == NULL)
-        return;
+  if(pkt == NULL)
+    return;
 
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,
+			  "Type: Packet ------------------------------------------\n"););
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,
+			  "  sensor_id          = %d\n", ntohl(pkt->sensor_id)););
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,
+			  "  event_id           = %d\n", ntohl(pkt->event_id)););
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,
+			  "  event_second       = %lu\n", ntohl(pkt->event_second)););
+  DEBUG_WRAP(DebugMessage(DEBUG_LOG,
+			  "  linktype           = %d\n", ntohl(pkt->linktype)););
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "Type: Packet ------------------------------------------\n"););
+			    "  packet_second      = %lu\n", ntohl(pkt->packet_second)););
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  sensor_id          = %d\n", ntohl(pkt->sensor_id)););
+			    "  packet_microsecond = %lu\n", ntohl(pkt->packet_microsecond)););
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  event_id           = %d\n", ntohl(pkt->event_id)););
+			    "  packet_length      = %d\n", ntohl(pkt->packet_length)););
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  event_second       = %lu\n", ntohl(pkt->event_second)););
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  linktype           = %d\n", ntohl(pkt->linktype)););
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  packet_second      = %lu\n", ntohl(pkt->packet_second)););
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  packet_microsecond = %lu\n", ntohl(pkt->packet_microsecond)););
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  packet_length      = %d\n", ntohl(pkt->packet_length)););
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  packet             = %02x %02x %02x %02x\n",pkt->packet_data[1],
-                                                       pkt->packet_data[2],
-                                                       pkt->packet_data[3],
-                                                       pkt->packet_data[4]););
-
+			    "  packet             = %02x %02x %02x %02x\n",pkt->packet_data[1],
+			    pkt->packet_data[2],
+			    pkt->packet_data[3],
+			    pkt->packet_data[4]););
+    
 }
 #endif
 

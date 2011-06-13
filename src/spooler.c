@@ -842,7 +842,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
   switch(SpoolerState)
     {
     case SPOOLER_NULL:
-
+      
       /* Callback in case dual event would be logged...(shoudln't happen)*/
     EVENT_PROCESS:
       if(type ==  UNIFIED2_EVENT)
@@ -855,10 +855,9 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
 	  
 	  SpoolerState = SPOOLER_FAST_FORWARD;
 	}
-      
-      /* In case that we have a lonely packet. */
-      if( (type ==  UNIFIED2_PACKET))
+      else if( (type ==  UNIFIED2_PACKET))
 	{
+	  /* In case that we have a lonely packet. */
 	  /* increment the stats */
           pc.total_packets++;
 	  
@@ -888,6 +887,17 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
 	  /* Reset Spooler state */
           SpoolerState = SPOOLER_NULL;
 	}
+      else if( (type == UNIFIED2_EXTRA_DATA))
+	{
+	  LogMessage("spoolerProcessRecord(): Read a UNIFIED2_EXTRA_DATA type : [%lu] record without an event, since we do not yes support\n"
+		     "\tUNIFIED2_EXTRA_DATA, we will fastforward. \n",type);
+	  
+	  SpoolerState = SPOOLER_NULL;
+
+	  /* For the moment */
+	  pc.total_unknown++;
+
+	}
       else
 	{
 	  if(((type != UNIFIED2_IDS_EVENT ) &&
@@ -897,6 +907,8 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
 	      (type != UNIFIED2_IDS_EVENT_VLAN) &&
 	      (type != UNIFIED2_IDS_EVENT_IPV6_VLAN)))
 	    {
+	      pc.total_unknown++;
+	      
 	      FatalError("Are you using a custom unified2 output plugin? Caught record type [%lu] in SPOOLER_NULL State\n");
 	      return;
 	    }
@@ -972,12 +984,21 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
       else if(type == UNIFIED2_EXTRA_DATA)
 	{
 	  LogMessage("Caught a UNIFIED2_EXTRA_DATA, spooler and output pluggin do not yet fully support  UNIFIED2_EXTRA_DATA, processing next event.\n");
+
+	  /* For the moment */
+	  pc.total_unknown++;
+	  
+	  
 	  /* Reset Spooler state */
 	  SpoolerState = SPOOLER_NULL;
 	}
       else 
 	{
-	  FatalError("Whats going on ...\n");
+	  
+	  /* For the moment */
+	  pc.total_unknown++;
+	  
+	  FatalError("spoolerProcessRecord(): in SPOOLER_EVENT state caught an unknown UNIFIED2 type [%lu]..bailling\n",type);
 	}
       
       break;

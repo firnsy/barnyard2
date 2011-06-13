@@ -66,6 +66,7 @@
 /* with BY type */
 #ifndef MAX_UNIFIED2_EVENT_SIZE
 //#define MAX_UNIFIED2_EVENT_SIZE (sizeof(Serial_Unified2_Header) + sizeof(Serial_Unified2IDSEventIPv6_legacy) + IP_MAXPACKET);
+//MAX_XFF_WRITE_BUF_LENGTH is still smaller than MAX_UNIFIED2_EVENT_SIZE so we should be ok for now.
 #define MAX_UNIFIED2_EVENT_SIZE (sizeof(Unified2RecordHeader) + sizeof(Unified2IDSEventIPv6_legacy) + IP_MAXPACKET)
 #endif
 

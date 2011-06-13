@@ -168,6 +168,7 @@ int gmt2local(time_t);
 void ts_print(register const struct timeval *, char *);
 void ts_print2(u_int32_t, u_int32_t, char *);
 char *copy_argv(char **);
+void strtrim(char *);
 void strip(char *);
 double CalcPct(uint64_t, uint64_t);
 void ReadPacketsFromFile(void);

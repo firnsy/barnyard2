@@ -237,12 +237,12 @@ void ParseReferenceSystemConfig(Barnyard2Config *bc, char *args)
 
 int ReadReferenceFile(Barnyard2Config *bc, const char *file)
 {
-    FILE				*fd;
-    char				buf[BUFFER_SIZE];
-    char				*index;
-    char				**toks;
-    int					num_toks;
-	int					count = 0;
+    FILE        *fd;
+    char        buf[BUFFER_SIZE];
+    char        *index;
+    char        **toks;
+    int         num_toks;
+  int         count = 0;
 
     DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: opening file %s\n", file););
     
@@ -272,17 +272,17 @@ int ReadReferenceFile(Barnyard2Config *bc, const char *file)
             if(num_toks > 1)
             {
                 ParseReferenceSystemConfig(bc, toks[1]);
-				count++;
+        count++;
             }
 
             mSplitFree(&toks, num_toks);
         }
     }
 
-	if(fd != NULL)
-		fclose(fd);
+  if(fd != NULL)
+    fclose(fd);
 
-	return 0;
+  return 0;
 }
 
 /****************** End of Reference System Implementation ********************/
@@ -435,17 +435,17 @@ void DeleteClassifications(Barnyard2Config *bc)
 
 int ReadClassificationFile(Barnyard2Config *bc, const char *file)
 {
-    FILE				*fd;
-    char				buf[BUFFER_SIZE];
-    char				*index;
-    char				**toks;
-    int					num_toks;
-	int					count = 0;
+    FILE        *fd;
+    char        buf[BUFFER_SIZE];
+    char        *index;
+    char        **toks;
+    int         num_toks;
+  int         count = 0;
 
 
     DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: opening file %s\n", file););
     
-	if((fd = fopen(file, "r")) == NULL)
+  if((fd = fopen(file, "r")) == NULL)
     {
         LogMessage("ERROR: Unable to open Classification file '%s' (%s)\n", 
                 file, strerror(errno));
@@ -471,33 +471,32 @@ int ReadClassificationFile(Barnyard2Config *bc, const char *file)
             if(num_toks > 1)
             {
                 ParseClassificationConfig(bc, toks[1]);
-				count++;
+        count++;
             }
 
             mSplitFree(&toks, num_toks);
         }
     }
 
-	if(fd != NULL)
-		fclose(fd);
+  if(fd != NULL)
+    fclose(fd);
 
-	return 0;
+  return 0;
 }
 
 /***************** End of Class/Priority Implementation ***********************/
 
 /************************* Sid/Gid Map Implementation *************************/
 
-SigNode					*sigTypes = NULL;
+SigNode *sigTypes = NULL;
 
 int ReadSidFile(Barnyard2Config *bc, const char *file)
 {
-    FILE				*fd;
-    char				buf[BUFFER_SIZE];
-    char				*index;
-	int					count = 0;
+    FILE *fd;
+    char buf[BUFFER_SIZE];
+    char *index;
+    int count = 0;
     
-
     DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: opening file %s\n", file););
 
     if( (fd = fopen(file, "r")) == NULL )
@@ -522,52 +521,52 @@ int ReadSidFile(Barnyard2Config *bc, const char *file)
         if((*index != '#') && (*index != 0x0a) && (index != NULL))
         {
             ParseSidMapLine(bc, index);
-			count++;
+            count++;
         }
     }
 
-	if(fd != NULL)
-		fclose(fd);
+  if(fd != NULL)
+    fclose(fd);
 
-	return count;
+  return count;
 }
 
 void DeleteSigNodes()
 {
-    SigNode				*sn = NULL, *snn = NULL;
-    ReferenceNode		*rn = NULL, *rnn = NULL;
+    SigNode *sn = NULL, *snn = NULL;
+    ReferenceNode *rn = NULL, *rnn = NULL;
 
-	sn = sigTypes;
+    sn = sigTypes;
 
     while(sn != NULL)
     {
         snn = sn->next;
     
-		/* free the message */
-		if(sn->msg)
-	        free(sn->msg);
+        /* free the message */
+        if(sn->msg)
+            free(sn->msg);
     
-		/* free the references (NOT the reference systems) */
-	    if(sn->refs)
-		{
-			rn = sn->refs;
-			while(rn != NULL)
-		    {
-		        rnn = rn->next;
-		        
-				/* free the id */
-		        if(rn->id)
-		            free(rn->id);
-		        
-				/* free the reference node */
-				free(rn);
+        /* free the references (NOT the reference systems) */
+        if(sn->refs)
+        {
+            rn = sn->refs;
+            while(rn != NULL)
+            {
+                rnn = rn->next;
+            
+                /* free the id */
+                if(rn->id)
+                    free(rn->id);
+            
+                /* free the reference node */
+                free(rn);
 
-		        rn = rnn;
-			}
-		}
+                rn = rnn;
+            }
+        }
 
-		/* free the signature node */
-		free(sigTypes);
+        /* free the signature node */
+        free(sigTypes);
 
         sigTypes = snn;
     }
@@ -577,11 +576,11 @@ void DeleteSigNodes()
 
 void ParseSidMapLine(Barnyard2Config *bc, char *data)
 {
-    char				**toks;
-    int					num_toks;
-    int					i;
-    char				*idx;
-    SigNode				*sn; 
+    char **toks;
+    char *idx;
+    int num_toks;
+    int i;
+    SigNode *sn; 
 
     toks = mSplitSpecial(data, "||", 32, &num_toks, '\0');
 
@@ -589,48 +588,49 @@ void ParseSidMapLine(Barnyard2Config *bc, char *data)
     {
         LogMessage("WARNING: Ignoring bad line in SID file: '%s'\n", data);
     }
-	else
-	{
-		DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: creating new node\n"););
+    else
+    {
+        DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: creating new node\n"););
 
-		sn = CreateSigNode(&sigTypes);
+        sn = CreateSigNode(&sigTypes);
     
-    	for(i = 0; i<num_toks; i++)
-    	{
-	        strip(toks[i]);
-        	idx = toks[i];
-        	while(*idx == ' ') idx++;
-	            
-        	switch(i)
-        	{
-	            case 0: /* sid */
-                	sn->generator = 1;
-                	sn->id = strtoul(idx, NULL, 10);
-                	break;
+        for(i = 0; i<num_toks; i++)
+        { 
+            strtrim(toks[i]);
+            strip(toks[i]);
+            idx = toks[i];
+            while(*idx == ' ') idx++;
+              
+            switch(i)
+            {
+                case 0: /* sid */
+                    sn->generator = 1;
+                    sn->id = strtoul(idx, NULL, 10);
+                    break;
 
-	            case 1: /* msg */
-                	sn->msg = SnortStrdup(idx);
-                	break;
+                case 1: /* msg */
+                    sn->msg = SnortStrdup(idx);
+                    break;
 
-            	default: /* reference data */
-					ParseReference(bc, idx, sn);
-					break;
-			}
+                default: /* reference data */
+                    ParseReference(bc, idx, sn);
+                    break;
+            }
         }
     }
 
-	mSplitFree(&toks, num_toks);
+    mSplitFree(&toks, num_toks);
 }
 
 SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid)
 {
-	/* set temp node pointer to the Sid map list head */
+  /* set temp node pointer to the Sid map list head */
     SigNode *sn = sigTypes;
   
-	/* a snort general rule (gid=1) and a snort dynamic rule (gid=3) use the  */
-	/* the same sids and thus can be considered one in the same. */
-	if (gid == 3)
-		gid = 1;
+  /* a snort general rule (gid=1) and a snort dynamic rule (gid=3) use the  */
+  /* the same sids and thus can be considered one in the same. */
+  if (gid == 3)
+    gid = 1;
 
     /* find any existing Snort ID's that match */
     while (sn != NULL)
@@ -643,8 +643,8 @@ SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid)
         sn = sn->next;
     }
 
-	/* create a default message since we didn't find any match */
-	sn = CreateSigNode(&sigTypes);
+  /* create a default message since we didn't find any match */
+  sn = CreateSigNode(&sigTypes);
     sn->generator = gid;
     sn->id = sid;
     sn->rev = 0;
@@ -656,7 +656,7 @@ SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid)
 
 SigNode *CreateSigNode(SigNode **head)
 {
-    SigNode				*sn;
+    SigNode       *sn;
 
     if (*head == NULL)
     {
@@ -668,7 +668,7 @@ SigNode *CreateSigNode(SigNode **head)
         sn = *head;
 
         while (sn->next != NULL) 
-			sn = sn->next;
+      sn = sn->next;
 
         sn->next = (SigNode *) SnortAlloc(sizeof(SigNode));
 
@@ -678,10 +678,10 @@ SigNode *CreateSigNode(SigNode **head)
 
 int ReadGenFile(Barnyard2Config *bc, const char *file)
 {
-    FILE				*fd;
-    char				buf[BUFFER_SIZE];
-    char				*index;
-	int					count = 0;
+    FILE        *fd;
+    char        buf[BUFFER_SIZE];
+    char        *index;
+  int         count = 0;
     
 
     if ( (fd = fopen(file, "r")) == NULL )
@@ -706,14 +706,14 @@ int ReadGenFile(Barnyard2Config *bc, const char *file)
         if( (*index != '#') && (*index != 0x0a) && (index != NULL) )
         {
             ParseGenMapLine(index);
-			count++;
+      count++;
         }
     }
 
-	if(fd != NULL)
-		fclose(fd);
+  if(fd != NULL)
+    fclose(fd);
 
-	return 0;
+  return 0;
 }
 
 void ParseGenMapLine(char *data)
@@ -722,17 +722,17 @@ void ParseGenMapLine(char *data)
     int num_toks;
     int i;
     char *idx;
-    SigNode				*sn; 
+    SigNode       *sn; 
 
     toks = mSplitSpecial(data, "||", 32, &num_toks, '\0');
 
     if(num_toks < 2)
     {
         LogMessage("WARNING: Ignoring bad line in SID file: \"%s\"\n", data);
-		return;
+    return;
     }
 
-	sn = CreateSigNode(&sigTypes);
+  sn = CreateSigNode(&sigTypes);
     
     for(i=0; i<num_toks; i++)
     {
@@ -743,12 +743,12 @@ void ParseGenMapLine(char *data)
         switch(i)
         {
             case 0: /* gen */
-				//TODO: error checking on conversion
+        //TODO: error checking on conversion
                 sn->generator = strtoul(idx, NULL, 10);
                 break;
 
             case 1: /* sid */
-				//TODO: error checking on conversion
+        //TODO: error checking on conversion
                 sn->id = strtoul(idx, NULL, 10);
                 break;
 

@@ -946,7 +946,7 @@ int SguilSensorAgentInit(SpoSguilData *ssd_data)
         char **toks;
         int num_toks;
 
-        DEBUG_WRAP(DebugMessage("sguil: received \"%s\"", tmpRecvMsg););
+        DEBUG_WRAP(DebugMessage(DEBUG_LOG, "sguil: received \"%s\"", tmpRecvMsg););
 
         /* parse the response */
         toks = mSplit(tmpRecvMsg, " ", 3, &num_toks, 0);
@@ -994,7 +994,7 @@ int SguilSendAgentMsg(SpoSguilData *data, char *msg)
         SguilSendAgentMsg(data, msg);
     }
 
-    DEBUG_WRAP(DebugMessage("sguil: sending \"%s\"", tmpMsg););
+    DEBUG_WRAP(DebugMessage(DEBUG_LOG, "sguil: sending \"%s\"", tmpMsg););
 
     free(tmpMsg);
 

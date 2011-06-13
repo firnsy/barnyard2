@@ -1723,6 +1723,9 @@ static void Barnyard2Init(int argc, char **argv)
         LogMessage("Parsing config file \"%s\"\n", barnyard2_conf_file);
         bc = ParseBarnyard2Conf();
 
+        bc->config_dir = strdup(barnyard2_conf_dir);
+        bc->config_file = strdup(barnyard2_conf_file);
+
         /* Merge the command line and config file confs to take care of
          * command line overriding config file.
          * Set the global barnyard2_conf that will be used during run time */

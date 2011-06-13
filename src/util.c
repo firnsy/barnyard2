@@ -379,6 +379,23 @@ char *copy_argv(char **argv)
     return buf;
 }
 
+void strtrim(char *str)
+{
+    char *end;
+
+     // trim leading space
+     while(isspace(*str)) str++;
+    
+     if(*str == 0)  // All spaces?
+         return;
+      
+     // trim trailing space
+     end = str + strlen(str) - 1;
+     while(end > str && isspace(*end)) end--;
+     
+     // write new null terminator
+     *(end+1) = 0;
+}
 
 /****************************************************************************
  *
@@ -1149,7 +1166,7 @@ void GoDaemon(void)
         if (barnyard2_conf->group_id != -1)
             group_id = barnyard2_conf->group_id;
 
-        chown("/tmp/snort.debug", user_id, group_id);
+        chown("/tmp/barnyard2.debug", user_id, group_id);
     }
 #else
     /* redirect stdin/stdout/stderr to /dev/null */

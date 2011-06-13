@@ -117,12 +117,12 @@
  *  how: Optional. In, out, src, dest, either, both, this, conn, connection
  *          Tells SnortSam to block packets INcoming from host, OUTgoing to host,
  *          EITHERway, or only THIS connection (IP/Service pair).
- *          See 'fw sam' on Firewall-1 for more information. 
+ *          See 'fw sam' on Firewall-1 for more information.
  *          This option may be ignored by other plugins.
  *
  * time: Duration of block in seconds. (Accepts 'days', 'months', 'weeks',
  *       'years', 'minutes', 'seconds', 'hours'. Alternatively, a value of
- *       0, or the keyword PERManent, INFinite, or ALWAYS, will block the 
+ *       0, or the keyword PERManent, INFinite, or ALWAYS, will block the
  *       host permanently. Be careful with this!
  *          Tells SnortSam how long to inhibit packets from the host.
  *
@@ -405,6 +405,7 @@ void AlertFWsamInit(char *args)
         {
             strncpy(buf, barnyard2_conf->config_dir, sizeof(buf)-1);
             strncpy(buf+strlen(buf), SID_ALT_MAPFILE, sizeof(buf)-strlen(buf)-1);
+            LogMessage("DEBUG => [Alert_FWsam](AlertFWsamSetup) Using alternative file: %s\n",buf);
             fp=fopen(buf,"rt");
         }
 
@@ -626,7 +627,7 @@ void AlertFWsamInit(char *args)
 #endif
 
     /* Set the preprocessor function into the function list */
-    AddFuncToOutputList(AlertFWsam, OUTPUT_TYPE_FLAG__ALERT, fwsamlist);
+    AddFuncToOutputList(AlertFWsam, OUTPUT_TYPE__LOG, fwsamlist);
     AddFuncToCleanExitList(AlertFWsamCleanExitFunc, fwsamlist);
     AddFuncToRestartList(AlertFWsamRestartFunc, fwsamlist);
 }
@@ -643,7 +644,7 @@ int FWsamReadLine(char *buf,unsigned long bufsize,FILE *fp)
     {
         buf[bufsize-1]=0;
 
-#ifdef FWSAMDEBUG_off
+#ifdef FWSAMDEBUG
         LogMessage("DEBUG => [Alert_FWsam](AlertFWsamReadLine) Line: %s\n",buf);
 #endif
 
@@ -1012,6 +1013,7 @@ void AlertFWsam(Packet *p, void *event, uint32_t event_type, void *arg)
     ClassType   *cn = NULL;
     ReferenceNode   *rn = NULL;
 
+
     if(event==NULL)
     {
 #ifdef FWSAMDEBUG
@@ -1051,9 +1053,6 @@ void AlertFWsam(Packet *p, void *event, uint32_t event_type, void *arg)
 
     if(FWsamOptionField)            /* If using the file (field present), let's use that */
         optp=FWsamGetOption(ntohl(((Unified2EventCommon *)event)->signature_id));
-
-//    if(!optp)                       /* If file not present, check if an fwsam option was defined on the triggering rule */
-//  optp=otn_tmp->ds_list[PLUGIN_FWSAM];
 
     if(optp)    /* if options specified for this rule */
     {
@@ -1107,8 +1106,8 @@ void AlertFWsam(Packet *p, void *event, uint32_t event_type, void *arg)
 
             lastbsip[lastbpointer]=GET_SRC_IP(p);     /* and note packet details */
             lastbdip[lastbpointer]=GET_DST_IP(p);
-            lastbduration[lastbpointer]=optp->duration; 
-            lastbmode[lastbpointer]=optp->how|optp->who|optp->loglevel; 
+            lastbduration[lastbpointer]=optp->duration;
+            lastbmode[lastbpointer]=optp->how|optp->who|optp->loglevel;
             lastbproto[lastbpointer]=GET_IPH_PROTO(p);
             if(IP_HAS_PORTS(p))
             {
@@ -1206,7 +1205,7 @@ void AlertFWsam(Packet *p, void *event, uint32_t event_type, void *arg)
 #endif
                         LogMessage("DEBUG => [Alert_FWsam] Src Port   :  %i\n",p->sp);
                         LogMessage("DEBUG => [Alert_FWsam] Dest Port  :  %i\n",p->dp);
-                        LogMessage("DEBUG => [Alert_FWsam] Sig_ID     :  %lu\n",event->sig_id);
+                        LogMessage("DEBUG => [Alert_FWsam] Sig_ID     :  %lu\n",ntohl(((Unified2EventCommon *)event)->signature_id));
 
 #endif
 

@@ -43,7 +43,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <sys/types.h>
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -86,6 +86,7 @@
 
 #include "decode.h"
 #include "barnyard2.h"
+#include "spooler.h"
 #include "rules.h"
 #include "plugbase.h"
 #include "debug.h"
@@ -96,6 +97,7 @@
 #include "mstring.h"
 #include "strlcpyu.h"
 #include "output-plugins/spo_log_tcpdump.h"
+
 
 #ifdef HAVE_LIBPRELUDE
 # include "output-plugins/spo_alert_prelude.h"
@@ -309,6 +311,15 @@ int Barnyard2Main(int argc, char *argv[])
 #endif
 
     Barnyard2Init(argc, argv);
+    
+    /* init logpacket */
+    if( (InitializeLogPacket()))
+      {
+	/* XXX */
+	FatalError("InitializeLogPacket(): Unable to initialize spooler...\n");
+      }
+    /* init logpacket */
+    
 
     if (BcDaemonMode())
     {
@@ -1039,6 +1050,15 @@ static void Barnyard2Cleanup(int exit_val)
 {
     PluginSignalFuncNode *idxPlugin = NULL;
 
+    
+    /* cleanup logpacket */
+    if( FreeLogPacket())
+      {
+	/* XXX */
+	LogMessage("FreeLogPacket(), failed ...cleanup continue\n");
+      }
+    /* cleanup logpacket */
+    
     /* This function can be called more than once.  For example,
      * once from the SIGINT signal handler, and once recursively
      * as a result of calling pcap_close() below.  We only need

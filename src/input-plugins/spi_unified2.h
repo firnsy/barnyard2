@@ -22,7 +22,30 @@
 
 #ifndef __SPI_UNIFIED2_H__
 #define __SPI_UNIFIED2_H__
+#include "unified2.h"
 
+void Unified2Init(char *);
 void Unified2Setup(void);
+
+/* processing functions  */
+int Unified2ReadRecordHeader(void *);
+int Unified2ReadRecord(void *);
+
+int Unified2ReadEventRecord(void *);
+int Unified2ReadEvent6Record(void *);
+int Unified2ReadPacketRecord(void *);
+
+void Unified2PrintCommonRecord(Unified2EventCommon *);
+void Unified2PrintEventRecord(Unified2IDSEvent_legacy *);
+void Unified2PrintEvent6Record(Unified2IDSEventIPv6_legacy *);
+void Unified2PrintPacketRecord(Unified2Packet *);
+
+/* restart/shutdown functions */
+void Unified2CleanExitFunc(int, void *);
+void Unified2RestartFunc(int, void *);
+
+void Unified2PrintEventRecord(Unified2IDSEvent_legacy *);
+void Unified2PrintEvent6Record(Unified2IDSEventIPv6_legacy *);
+
 
 #endif /* __SPI_UNIFIED2_H__ */

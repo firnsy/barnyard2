@@ -284,6 +284,25 @@ typedef struct _FWsampacket         /* 2 blocks (3rd block is header from TwoFis
     unsigned char       fluff;          /* 31 */
 }   FWsamPacket;                        /* 32 bytes in size */
 
+typedef struct _FWsampacket2            /* 4 blocks (3rd block is header from TwoFish) */
+{
+    unsigned short      endiancheck;    /* 0  */
+    unsigned char       srcip[16];      /* 2  */
+    unsigned char       dstip[16];      /* 18 */
+    unsigned char       ipver;          /* 34 */
+    unsigned char       duration[4];    /* 35 */
+    unsigned char       snortseqno[2];  /* 39 */
+    unsigned char       fwseqno[2];     /* 41 */
+    unsigned char       srcport[2];     /* 43 */
+    unsigned char       dstport[2];     /* 45 */
+    unsigned char       protocol[2];    /* 47 */
+    unsigned char       fwmode;         /* 49 */
+    unsigned char       version;        /* 50 */
+    unsigned char       status;         /* 51 */
+    unsigned char       sig_id[4];      /* 52 */
+    unsigned char       reserved[7];    /* 56 */
+}   FWsamPacket2;                       /* 64 bytes in size */
+
 typedef struct _FWsamoptions    /* snort rule options */
 {
     unsigned long   sid;

@@ -137,7 +137,7 @@ int spoolerClose(Spooler *);
 int spoolerReadRecordHeader(Spooler *);
 int spoolerReadRecord(Spooler *);
 void spoolerProcessRecord(Spooler *, int);
-void spoolerFreeRecord(Record *record);
+void spoolerFreeRecord(Record *);
 int spoolerWriteWaldo(Waldo *, Spooler *);
 int spoolerOpenWaldo(Waldo *, uint8_t);
 int spoolerCloseWaldo(Waldo *);
@@ -148,6 +148,7 @@ int ProcessWaldoFile(const char *);
 int spoolerReadWaldo(Waldo *);
 int InitializeLogPacket(void);
 int FreeLogPacket(void);
+int SpoolerPacketGeneric(Spooler *);
 
 
 

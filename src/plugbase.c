@@ -543,7 +543,20 @@ void CallOutputPlugins(OutputType out_type, Packet *packet, void *event, uint32_
   
   if(event == NULL)
     {
-      FatalError("CallOutputPlugins() called with a null event, if you think you should be able to do that, have a look at [%s] Line [%u] \n",__FILE__,__LINE__);
+      /* -elz 
+	 Since we might encounter some new output event that would be packet only 
+	 and that we handle them in the spooler (for now) i do not want the 
+	 process to fail completly as of the changes that where made. 
+	 We might want to build a compatibility list of which plugins would qualify to make this call return instead
+	 and also probably move the Logmessage to a DEBUGWRAP
+	 
+	 Also i think we should move to a "unified" output type rather than having 3 output mode called sequentially
+	 The way output is handled is an artefact..
+      */
+      //FatalError("CallOutputPlugins() called with a null event, if you think you should be able to do that, have a look at [%s] Line [%u] \n",__FILE__,__LINE__);
+      LogMessage("CallOutPutPlugins(): was called, with a NULL event, ensure that your output plugin can handle event-less logging before removing this check\n"
+		 "\t SOURCE: [%s] Line [%u] \n",__FILE__,__LINE__);
+      return;
     }
   
   if (out_type == OUTPUT_TYPE__SPECIAL)

@@ -806,7 +806,6 @@ int SpoolerSetStaticEvent(u_int32_t type,void *RecordData)
   return 0;
 }
 
-
 int SpoolerCheckEventPtr(void)
 {
   if(SpoolerEventPtr == NULL)
@@ -823,28 +822,71 @@ void * SpoolerGetEventPtr(void)
   return SpoolerEventPtr;
 }
 
-void spoolerProcessRecord(Spooler *spooler, int fire_output)
+int SpoolerPacketGeneric(Spooler *spooler)
 {
   struct pcap_pkthdr      pkth;
+  
+  /* Cleanup ze mess */
+  memset(LogPacket,'\0',sizeof(Packet));
+  spooler->record.pkt = LogPacket;
+
+  pkth.caplen = ntohl(((Unified2Packet *)spooler->record.data)->packet_length);
+  pkth.len = pkth.caplen;
+  pkth.ts.tv_sec = ntohl(((Unified2Packet *)spooler->record.data)->packet_second);
+  pkth.ts.tv_usec = ntohl(((Unified2Packet *)spooler->record.data)->packet_microsecond);
+
+  /* decode the packet from the Unified2Packet information */
+  datalink = ntohl(((Unified2Packet *)spooler->record.data)->linktype);
+  DecodePacket(datalink, spooler->record.pkt, &pkth,
+	       ((Unified2Packet *)spooler->record.data)->packet_data);
+
+  return 0;
+}
+
+void spoolerProcessRecord(Spooler *spooler, int fire_output)
+{
   uint32_t                type = 0;
   
   if(LogPacket == NULL)
     {
-      FatalError("spoolerProcessRecord(): LogPacket is null ....i blame finch! \n");
+      FatalError("spoolerProcessRecord(): LogPacket is null,finshake in the mix! \n");
     }
   
   /* convert type once */
   type = ntohl(((Unified2RecordHeader *)spooler->record.header)->type);
+  
+  /* Early event type check */
+  if( (type != (UNIFIED2_EVENT)) &&
+      (type != (UNIFIED2_PACKET)) &&
+      (type != (UNIFIED2_IDS_EVENT)) &&
+      (type != (UNIFIED2_IDS_EVENT_IPV6)) &&
+      (type != (UNIFIED2_IDS_EVENT_MPLS)) &&
+      (type != (UNIFIED2_IDS_EVENT_IPV6_MPLS)) &&
+      (type != (UNIFIED2_IDS_EVENT_VLAN)) &&
+      (type != (UNIFIED2_IDS_EVENT_IPV6_VLAN)) &&
+      (type != (UNIFIED2_EXTRA_DATA)))
+    {
+      pc.total_unknown++;
+      FatalError("spoolerProcessRecord(): Caught a Record type [%lu] which is unknown.Is your unified2 file corrupted? \n",type);
+    }
   
   /* increment the stats */
   pc.total_records++;
   
   switch(SpoolerState)
     {
-    case SPOOLER_NULL:
       
+    case SPOOLER_NULL:
       /* Callback in case dual event would be logged...(shoudln't happen)*/
     EVENT_PROCESS:
+
+      /* At the time of the implementation of the spooler new "look"
+	 i do not want to remove check for UNIFIED2_EVENT since 
+	 there is probably somehwere people with old snort, at least
+	 this will give them a warning, but i think that we should
+	 just bail out soon and it will remove a useless spooler state 
+	 in the future (that shouldn't be there anyways) 
+      */
       if(type ==  UNIFIED2_EVENT)
 	{
 	  LogMessage("spoolerProcessRecord(): A long long time ago...\n"
@@ -863,25 +905,21 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
 	  
 	  LogMessage("spoolerProcessRecord(): Received a UNIFIED2 Lonely packet with event_id [%lu] \n\n",
                      ntohl(((Unified2Packet *)spooler->record.data)->event_id));
+
 	  
-          /* Cleanup ze mess */
-          memset(LogPacket,'\0',sizeof(Packet));
-          spooler->record.pkt = LogPacket;
+	  if( (SpoolerPacketGeneric(spooler)))
+	    {
+	      /* XXX */
+	      FatalError("SpoolerPacketGeneric(): failed.... \n");
+	    }
 	  
-          pkth.caplen = ntohl(((Unified2Packet *)spooler->record.data)->packet_length);
-          pkth.len = pkth.caplen;
-          pkth.ts.tv_sec = ntohl(((Unified2Packet *)spooler->record.data)->packet_second);
-          pkth.ts.tv_usec = ntohl(((Unified2Packet *)spooler->record.data)->packet_microsecond);
-	  
-          /* decode the packet from the Unified2Packet information */
-          datalink = ntohl(((Unified2Packet *)spooler->record.data)->linktype);
-	  DecodePacket(datalink, spooler->record.pkt, &pkth,
-                       ((Unified2Packet *)spooler->record.data)->packet_data);
-	  
-	  CallOutputPlugins(OUTPUT_TYPE__SPECIAL,
-			    spooler->record.pkt,
-			    NULL,
-                            type);
+	  if(fire_output)
+	    {
+	      CallOutputPlugins(OUTPUT_TYPE__SPECIAL,
+				spooler->record.pkt,
+				NULL,
+				type);
+	    }
 	  
 	  /* Should not be changed, but lets set it anyways */
 	  /* Reset Spooler state */
@@ -900,19 +938,6 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
 	}
       else
 	{
-	  if(((type != UNIFIED2_IDS_EVENT ) &&
-	      (type != UNIFIED2_IDS_EVENT_IPV6 ) &&
-	      (type != UNIFIED2_IDS_EVENT_MPLS) &&
-	      (type != UNIFIED2_IDS_EVENT_IPV6_MPLS) &&
-	      (type != UNIFIED2_IDS_EVENT_VLAN) &&
-	      (type != UNIFIED2_IDS_EVENT_IPV6_VLAN)))
-	    {
-	      pc.total_unknown++;
-	      
-	      FatalError("Are you using a custom unified2 output plugin? Caught record type [%lu] in SPOOLER_NULL State\n");
-	      return;
-	    }
-	  
 	  if( (SpoolerSetStaticEvent(type,spooler->record.data)))
 	    {
 	      /* XXX */
@@ -944,10 +969,13 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
            (type == UNIFIED2_IDS_EVENT_IPV6_VLAN)))
         {
 	  
-	  CallOutputPlugins(OUTPUT_TYPE__SPECIAL,
-                            NULL,
-                            SpoolerGetEventPtr(),
-                            type);
+	  if(fire_output)
+	    {
+	      CallOutputPlugins(OUTPUT_TYPE__SPECIAL,
+				NULL,
+				SpoolerGetEventPtr(),
+				type);
+	    }
 	  
 	  /* setting the spooler state back to null shouldn't happend but we do it anyways */
           SpoolerState = SPOOLER_NULL;
@@ -958,24 +986,19 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
 	  /* increment the stats */  
 	  pc.total_packets++;
 	  
-	  /* Cleanup ze mess */
-	  memset(LogPacket,'\0',sizeof(Packet));
-	  spooler->record.pkt = LogPacket;
-	  
-	  pkth.caplen = ntohl(((Unified2Packet *)spooler->record.data)->packet_length);
-	  pkth.len = pkth.caplen;
-	  pkth.ts.tv_sec = ntohl(((Unified2Packet *)spooler->record.data)->packet_second);
-	  pkth.ts.tv_usec = ntohl(((Unified2Packet *)spooler->record.data)->packet_microsecond);
-	  
-	  /* decode the packet from the Unified2Packet information */
-	  datalink = ntohl(((Unified2Packet *)spooler->record.data)->linktype);
-	  DecodePacket(datalink, spooler->record.pkt, &pkth,
-		       ((Unified2Packet *)spooler->record.data)->packet_data);
-	  
-	  CallOutputPlugins(OUTPUT_TYPE__SPECIAL,
-                            spooler->record.pkt,
-                            SpoolerGetEventPtr(),
-                            type);
+	  if( (SpoolerPacketGeneric(spooler)))
+            {
+              /* XXX */
+              FatalError("SpoolerPacketGeneric(): failed.... \n");
+            }
+
+	  if(fire_output)
+	    {
+	      CallOutputPlugins(OUTPUT_TYPE__SPECIAL,
+				spooler->record.pkt,
+				SpoolerGetEventPtr(),
+				type);
+	    }
 	  
 	  /* Reset Spooler state */
 	  SpoolerState = SPOOLER_NULL;
@@ -984,7 +1007,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
       else if(type == UNIFIED2_EXTRA_DATA)
 	{
 	  LogMessage("Caught a UNIFIED2_EXTRA_DATA, spooler and output pluggin do not yet fully support  UNIFIED2_EXTRA_DATA, processing next event.\n");
-
+	  
 	  /* For the moment */
 	  pc.total_unknown++;
 	  
@@ -1004,7 +1027,8 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
       break;
       
     case SPOOLER_FAST_FORWARD:
-      LogMessage("Caught a legacy event companion event type [%lu], fast forward \n",type);
+      LogMessage("spoolerProcessRecord(): Previous event was a legacy event of type[%lu], Current event is of type [%lu],fast forward \n",
+		 UNIFIED2_EVENT,type);
       /* Reset Spooler state */
       SpoolerState = SPOOLER_NULL;
       break;
@@ -1014,6 +1038,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
       break;
     }
   
+    
   spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);  
 }
 

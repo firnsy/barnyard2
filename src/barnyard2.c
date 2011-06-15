@@ -312,15 +312,6 @@ int Barnyard2Main(int argc, char *argv[])
 
     Barnyard2Init(argc, argv);
     
-    /* init logpacket */
-    if( (InitializeLogPacket()))
-      {
-	/* XXX */
-	FatalError("InitializeLogPacket(): Unable to initialize spooler...\n");
-      }
-    /* init logpacket */
-    
-
     if (BcDaemonMode())
     {
         GoDaemon();
@@ -1050,15 +1041,7 @@ static void Barnyard2Cleanup(int exit_val)
 {
     PluginSignalFuncNode *idxPlugin = NULL;
 
-    
-    /* cleanup logpacket */
-    if( FreeLogPacket())
-      {
-	/* XXX */
-	LogMessage("FreeLogPacket(), failed ...cleanup continue\n");
-      }
-    /* cleanup logpacket */
-    
+
     /* This function can be called more than once.  For example,
      * once from the SIGINT signal handler, and once recursively
      * as a result of calling pcap_close() below.  We only need
@@ -1067,6 +1050,7 @@ static void Barnyard2Cleanup(int exit_val)
      * double-freeing any memory.  Not guaranteed to be
      * thread-safe, but it will prevent the simple cases.
      */
+
     static int already_exiting = 0;
     if( already_exiting != 0 )
     {

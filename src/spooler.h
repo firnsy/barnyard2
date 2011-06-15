@@ -96,18 +96,44 @@ typedef struct _PacketRecordNode
     struct _PacketRecordNode *next; /* reference to next event record */
 } PacketRecordNode;
 
+
+typedef struct _Spooler_unified2_references
+{
+    /* Different type of unified2 event */
+    Unified2IDSEvent_legacy *U2IdsEventLegacyPtr;
+    Unified2IDSEventIPv6_legacy *U2IdeEventV6LegacyPtr;
+    Unified2ExtraData *u2ExtraDataPtr;
+    Unified2ExtraDataHdr *u2ExtraDataHdrPtr;
+    Unified2Packet *u2PacketPtr;
+    Unified2IDSEventIPv6 *U2IdsEventV6Ptr;
+    Unified2IDSEvent *U2IdsEventPtr;
+    
+    /* Holder for possible packet */
+    Packet *LogPacket;
+
+    /* Event Pointer sent to output pluggin */
+    void *SpoolerEventPtr;
+
+    /* Spooler State */
+    int SpoolerState;
+    
+} Spooler_unified2_references;
+
 typedef struct _Spooler
 {
     InputFuncNode           *ifn;       // Processing function of input file
-
+    
     int                     fd;         // file descriptor of input file
     char                    filepath[MAX_FILEPATH_BUF]; // file path of input file
     time_t                  timestamp;  // time stamp of input file
     uint32_t                state;      // current read state
     uint32_t                offset;     // current file offest
     uint32_t                record_idx; // current record number
+    
+    uint32_t                magic;
+    
+    Spooler_unified2_references sur;    // Spooler Unified2 reference structures 
 
-    uint32_t                magic;      
     void                    *header;    // header of input file
 
     Record                  record;     // data of current Record

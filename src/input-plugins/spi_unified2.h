@@ -48,4 +48,15 @@ void Unified2PrintEventRecord(Unified2IDSEvent_legacy *);
 void Unified2PrintEvent6Record(Unified2IDSEventIPv6_legacy *);
 
 
+
+int spiUnified2GetOperationMode(void);
+
+
+enum spiOpModeContext
+{
+    LOGCTXUNIFIED2 = 0,
+    LOGCTXALERTUNIFIED2 = 2,
+    LOGCTXLOGUNIFIED2 = 4
+};
+
 #endif /* __SPI_UNIFIED2_H__ */

@@ -31,6 +31,10 @@
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#ifndef __USE_GNU
+#define __USE_GNU 1
+#endif
 #include <string.h>
 #ifdef SOLARIS
     #include <strings.h>
@@ -44,11 +48,18 @@
 
 #include "barnyard2.h"
 #include "debug.h"
+#include "mstring.h"
 #include "plugbase.h"
 #include "spi_unified2.h"
 #include "spooler.h"
 #include "strlcpyu.h"
 #include "util.h"
+
+
+/* 
+ * Define in which context we run (For spooler)
+ */
+static u_int32_t spiOpCtx = 0;
 
 
 /*
@@ -70,20 +81,133 @@ void Unified2Setup(void)
     DEBUG_WRAP(DebugMessage(DEBUG_INIT,"Input plugin: Unified2 is setup...\n"););
 }
 
+
+/* In the future this could get per-input processor thread specific with thread key for example. */
+/** 
+ *  Return Input plugin Unified2 Operation Context
+ * 
+ * 
+ * @return spiOpCtx 
+ */
+int spiUnified2GetOperationMode(void)
+{
+    return spiOpCtx;
+}
+
+/** 
+ * Parse unified2 input pluggin configuration.
+ * 
+ * @param iArgs 
+ * 
+ * @return Success [0] Failure [1]
+ */
+int parseUnified2InputArgs(char *iArgs)
+{
+    char **toks = NULL;
+    int num_toks = 0;
+    int i = 0;
+    char *op_mode = NULL;
+    
+    if(iArgs == NULL)
+    {
+	/* XXX */
+	return 1;
+    }
+    
+    toks = mSplit((char *)iArgs, ",", 31, &num_toks, '\\');
+    for(i = 0; i < num_toks; ++i)
+    {
+	char **stoks = NULL;
+	int num_stoks = 0;
+	char *index = toks[i];
+	while(isspace((int)*index))
+	    ++index;
+	
+	stoks = mSplit(index, " ", 2, &num_stoks, 0);
+	
+	if(strcasecmp("input_mode", stoks[0]) == 0)
+	{
+	    if(num_stoks >= 1)
+	    {
+		op_mode = strndup(stoks[1],64);
+		
+		if(strcasecmp("unified2",op_mode) == 0)
+		{
+		    spiOpCtx = LOGCTXUNIFIED2;
+		}
+		else if(strcasecmp("alert_unified2",op_mode) == 0)
+		{
+		    spiOpCtx= LOGCTXALERTUNIFIED2;
+		}
+		else if(strcasecmp("log_unified2",op_mode) == 0)
+		{
+		    spiOpCtx = LOGCTXLOGUNIFIED2;
+		}    
+		else
+		{
+		    if(op_mode != NULL)
+		    {
+			free(op_mode);
+		    }
+		    
+		    /* XXX */
+		    LogMessage("parseUnified2InputArgs(): Unknown mode [%s] specified to input_mode directive.\n"
+			       "\t\t\t  Unified2 Input processor accecpt one of the following mode: (unified2|alert_unified2|log_unified2) \n",stoks[1]);
+		    return 1;
+		}
+	    }
+	    else
+	    {
+		if(op_mode != NULL)
+		{
+		    free(op_mode);
+		}
+		
+		/* XXX */
+		LogMessage("parseUnified2InputArgs(): Need argument to input_mode directive: (unified2|alert_unified2|log_unified2) \n");
+		return 1;
+	    }
+	}
+	else
+	{
+	    /* XXX */
+	    LogMessage("parseUnified2InputArgs(): unsupported option [%s]\n",stoks[0]);
+	    return 1;
+	}
+    }
+    return 0;
+}
+
+
+/** 
+ *  Initialize Unified2 Input Plugin.
+ * 
+ * @param args 
+ */
 void Unified2Init(char *args)
 {
-  /* parse the argument list from the rules file */
-  //data = ParseAlertTestArgs(args);
-  
-  DEBUG_WRAP(DebugMessage(DEBUG_INIT,"Linking UnifiedLog functions to call lists...\n"););
-  
-  /* Link the input processor read/process functions to the function list */
-  AddReadRecordHeaderFuncToInputList("unified2", Unified2ReadRecordHeader);
-  AddReadRecordFuncToInputList("unified2", Unified2ReadRecord);
-  
-  /* Link the input processor exit/restart functions into the function list */
-  AddFuncToCleanExitList(Unified2CleanExitFunc, NULL);
-  AddFuncToRestartList(Unified2RestartFunc, NULL);
+    
+    if(args == NULL)
+    {
+	/* XXX*/
+	FatalError("Unified2Init(): Can't start with NULL arguments \n");
+    }
+
+    if(parseUnified2InputArgs(args))
+    {
+	/* XXX */
+       	FatalError("Unified2Init(): Can't parse unified2 arguments [%s] \n",args);
+    }
+    
+    DEBUG_WRAP(DebugMessage(DEBUG_INIT,"Linking UnifiedLog functions to call lists...\n"););
+    
+    /* Link the input processor read/process functions to the function list */
+    AddReadRecordHeaderFuncToInputList("unified2", Unified2ReadRecordHeader);
+    AddReadRecordFuncToInputList("unified2", Unified2ReadRecord);
+    
+    /* Link the input processor exit/restart functions into the function list */
+    AddFuncToCleanExitList(Unified2CleanExitFunc, NULL);
+    AddFuncToRestartList(Unified2RestartFunc, NULL);
 }
 
 /* Partial reads should rarely, if ever, happen.  Thus we should not actually

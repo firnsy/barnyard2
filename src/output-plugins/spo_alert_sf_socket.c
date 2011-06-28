@@ -320,9 +320,9 @@ void AlertSFSocket(Packet *packet, void *event, u_int32_t event_type, void *arg)
         return;
     
 /* Quick fix from decode (portscan ..mainly) ... need to dig this */
-    if(!p->iph && p->inner_iph)
+    if(!packet->iph && packet->inner_iph)
     {
-	p->iph = p->inner_iph;
+	packet->iph = packet->inner_iph;
     }
     
     if(!IPH_IS_VALID(packet)

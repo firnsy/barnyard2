@@ -316,8 +316,21 @@ void AlertSFSocket(Packet *packet, void *event, u_int32_t event_type, void *arg)
 {
     int tries = 0;
 
-    if( packet == NULL || event == NULL || !IPH_IS_VALID(packet))
+    if( packet == NULL || event == NULL) 
         return;
+    
+/* Quick fix from decode (portscan ..mainly) ... need to dig this */
+    if(!p->iph && p->inner_iph)
+    {
+	p->iph = p->inner_iph;
+    }
+    
+    if(!IPH_IS_VALID(packet)
+	{
+	    return;
+	}
+	
+
 
     /* construct the action request */
     sar.event_id = ntohl(((Unified2EventCommon *)event)->event_id);

@@ -166,6 +166,13 @@ void AlertTest(Packet *p, void *event, u_int32_t event_type, void *arg)
 
     data = (SpoAlertTestData *)arg;
 
+/* Quick fix from decode (portscan ..mainly) ... need to dig this */
+    if(!p->iph && p->inner_iph)
+    {
+	p->iph = p->inner_iph;
+    }
+
+
     if(event != NULL)
     {
         fprintf(data->file, "%lu\t%lu\t%lu\t",

@@ -190,6 +190,13 @@ static void AlertFast(Packet *p, void *event, uint32_t event_type, void *arg)
         TextLog_Puts(data->log, " [**] ");
     }
 
+/* Quick fix from decode (portscan ..mainly) ... need to dig this */
+    if(!p->iph && p->inner_iph)
+    {
+	p->iph = p->inner_iph;
+    }
+
+
     /* print the packet header to the alert file */
     if(p && IPH_IS_VALID(p))
     {

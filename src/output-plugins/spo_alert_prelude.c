@@ -132,6 +132,13 @@ static int event_to_source_target(Packet *p, idmef_alert_t *alert)
         if ( !p )
             return 0;
 
+/* Quick fix from decode (portscan ..mainly) ... need to dig this */
+	if(!p->iph && p->inner_iph)
+	{
+	    p->iph = p->inner_iph;
+	}
+
+
         if ( ! IPH_IS_VALID(p) )
                 return 0;
         
@@ -331,7 +338,14 @@ static int packet_to_data(Packet *p, void *event, idmef_alert_t *alert)
 
         add_int_data(alert, "snort_rule_sid", ntohl(((Unified2EventCommon *)event)->signature_id));
         add_int_data(alert, "snort_rule_rev", ntohl(((Unified2EventCommon *)event)->signature_revision));
-        
+     
+/* Quick fix from decode (portscan ..mainly) ... need to dig this */
+	if(!p->iph && p->inner_iph)
+	{
+	    p->iph = p->inner_iph;
+	}
+
+   
         if ( IPH_IS_VALID(p) ) {
                 add_int_data(alert, "ip_ver", GET_IPH_VER(p));
                 add_int_data(alert, "ip_hlen", GET_IPH_HLEN(p));

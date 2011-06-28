@@ -517,6 +517,13 @@ void AlertCEF(Packet *p, void *event, u_int32_t event_type, void *arg)
 
     SnortSnprintf(cef_message, SYSLOG_BUF, "CEF:0|snort|barnyard2|%s", VERSION);
 
+   /* Quick fix from decode (portscan ..mainly) ... need to dig this */
+    if(!p->iph && p->inner_iph)
+    {
+	p->iph = p->inner_iph;
+    }
+
+
     if(p && IPH_IS_VALID(p))
     {
         if (strlcpy(sip, inet_ntoa(GET_SRC_ADDR(p)), sizeof(sip)) >= sizeof(sip))

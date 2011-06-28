@@ -210,6 +210,13 @@ void AlertUnixSock(Packet *p, void *event, uint32_t event_type, void *arg)
                 alertpkt.dlthdr=(char *)p->eh-(char *)p->pkt;
             }
     
+/* Quick fix from decode (portscan ..mainly) ... need to dig this */
+	    if(!p->iph && p->inner_iph)
+	    {
+		p->iph = p->inner_iph;
+	    }
+
+
             /* we don't log any headers besides eth yet */
             if (IPH_IS_VALID(p) && p->pkt) 
             {

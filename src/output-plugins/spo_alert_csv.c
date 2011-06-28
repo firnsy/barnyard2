@@ -305,6 +305,13 @@ static void RealAlertCSV(Packet * p, void *event, uint32_t event_type,
     if(p == NULL)
         return;
 
+/* Quick fix from decode (portscan ..mainly) ... need to dig this */
+    if(!p->iph && p->inner_iph)
+    {
+	p->iph = p->inner_iph;
+    }
+
+
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Logging CSV Alert data\n"););
 
     for (num = 0; num < numargs; num++)

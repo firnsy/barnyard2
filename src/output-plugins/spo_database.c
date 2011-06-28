@@ -1801,6 +1801,13 @@ void Database(Packet *p, void *event, uint32_t event_type, void *arg)
 
     if(p != NULL)
     {
+/* Quick fix from decode (portscan ..mainly) ... need to dig this */
+	if(!p->iph && p->inner_iph)
+	{
+	    p->iph = p->inner_iph;
+	}
+
+
         if((!p->frag_flag) && (IPH_IS_VALID(p)))
         {
             /* query = NewQueryNode(query, 0); */

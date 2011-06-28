@@ -120,6 +120,14 @@ void LogAscii(Packet *p, void *event, uint32_t event_type, void *arg)
 
     if(p)
     { 
+       
+        /* Quick fix from decode (portscan ..mainly) ... need to dig this */
+	if(!p->iph && p->inner_iph)
+	{
+	    p->iph = p->inner_iph;
+	}
+
+
         if(IPH_IS_VALID(p))
             log_ptr = OpenLogFile(0, p);
 #ifndef NO_NON_ETHER_DECODER

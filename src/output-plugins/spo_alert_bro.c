@@ -148,6 +148,14 @@ void AlertBro(Packet *p, void *event, u_int32_t event_type, void *arg)
     sn = GetSigByGidSid(ntohl(uevent->generator_id),
                         ntohl(uevent->signature_id));
     
+
+    /* Quick fix from decode (portscan ..mainly) ... need to dig this */
+    if(!p->iph && p->inner_iph)
+    {
+	p->iph = p->inner_iph;
+    }
+
+
     if(p && IPH_IS_VALID(p))
     {
         ev = bro_event_new("barnyard_alert");

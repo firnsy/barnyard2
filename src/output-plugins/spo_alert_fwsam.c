@@ -51,59 +51,6 @@
  * output alert_fwsam: 192.168.0.1/borderfw  192.168.1.254/wanfw
  *
  *
- * Rule Options:
- ***************
- *
- * fwsam:   who[how],time;
- *
- *  who: src, source, dst, dest, destination
- *          IP address to be blocked according to snort rule (some rules
- *          are reversed, i.e. homenet -> any [and you want to block any]).
- *          src denotes IP to the left of -> and dst denotes IP to the right
- *
- *  how: Optional. In, out, src, dest, either, both, this, conn, connection
- *          Tells FW-1 to block packets INcoming from host, OUTgoing to host,
- *          EITHERway, or only THIS connection (IP/Service pair).
- *          See 'fw sam' for more information. May be ignored by other plugins.
- *
- * time: Duration of block in seconds. (Accepts 'days', 'months', 'weeks',
- *       'years', 'minutes', 'seconds', 'hours'. Alternatively, a value of
- *       0, or the keyword PERManent, INFinite, or ALWAYS, will block the
- *       host permanently. Be careful with this!
- *          Tells FW-1 (and others) how long to inhibit packets from the host.
- *
- * Examples:
- *
- * fwsam:  src[either],15min;
- *     or  dst[in], 2 days 4 hours
- *     or  src, 1 hour
- *
- *         (default: src[either],5min)
- *
- *
- * Effect:
- *
- * Alerts are sent to the remote SnortSam services on Firewall-1 Management Stations
- * or other hosts running SnortSam (as required for Cisco Routers and PIX).
- * The remote services will invoke the SAM configuration via the fw sam
- * command line, or by sending a packet to the SAM port 18183, or by using the official
- * OPSEC API calls, or by telnetting into Cisco routers or PIX firewalls.
- * The communication over the network is encrypted using two-fish.
- * (Implementation ripped from CryptCat by Farm9 with permission.)
- *
- * Future Plans:
- *
- * - Custom alert trigger per rule (x alerts in y secs) --> Seems to exist in Snort 1.9 now.
- * - Enable/Allow tagged fwsam: arguments to provide different values to
- *        different stations.  --> Seems to be accomplished with custom rule-types
- *
- *
- * Comments:
- *
- * It seem that above wishes can be implemented with todays setup. Feedback concerning
- * these is greatly appreciated.
- *
- *
  * sid-fwsam Parameters:
  ***********************
  *

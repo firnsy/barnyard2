@@ -1,0 +1,177 @@
+#!/usr/bin/perl
+#
+# odlaw - the waldo file viewer and manipulator
+#
+
+use strict;
+use warnings;
+#use 5.010;
+
+#
+# PERL INCLUDES
+#
+use Data::Dumper;
+use Getopt::Long;
+
+use constant { MAX_FILEPATH_BUF => 1024 };
+
+my $options = {
+    file_read => '',
+    file_edit => '',
+    help => 0,
+    spooler_dir => '',
+    spooler_filebase => '',
+    record => 0,
+    timestamp => 0,
+    verbose => 0,
+    force => 0,
+};
+
+
+#
+#
+#
+sub usage
+{
+    print "\n";
+    print "USAGE: $0 [-options]\n";
+    print "\n";
+    print " General Options:\n";
+    print "  -h            You're reading it.\n";
+    print "  -v            Verbose output.\n";
+    print "  -f            Force (skip validation).\n";
+    print "  -r <file>     File to read.\n";
+    print "  -e <file>     File to edit.\n";
+    print "\n";
+    print " Long Options:\n";
+    print "  --help        Same as '?'\n";
+    print "  --verbose     Same as 'v'\n";
+    print "  --force       Same as 'f'\n";
+    print "  --read        Same as 'r'\n";
+    print "  --edit        Same as 'e'\n";
+    print "  --filebase    Filebase to filter files on.\n";
+    print "  --directory   Directory to spool for files.\n";
+    print "  --timestamp   Timestamp of file being processed (default: 0).\n";
+    print "  --record      Record index of file being processed (default: 0).\n";
+    print "\n";
+}
+
+sub waldo_read
+{
+    my ($file) = @_;
+
+    my @fields = ('spooler_dir', 'spooler_filebase', 'timestamp', 'record');
+    my %values;
+    @values{@fields} = ('', '', 0, 0);
+
+    # read the data
+    if ( open (FD, "<$file") )
+    {
+        my $waldo_raw = <FD>;
+        # unpack
+        @values{@fields} = unpack("Z[".MAX_FILEPATH_BUF."] Z[".MAX_FILEPATH_BUF."] L L", $waldo_raw);
+
+        close(FD);
+    }
+
+    # return as hash reference
+    return \%values;
+}
+
+sub waldo_validate
+{
+    my ($data) = @_;
+
+    return ( $options->{force} || (
+               defined($data->{spooler_dir}) && ( -e $data->{spooler_dir} ) &&
+               defined($data->{spooler_filebase}) &&
+               defined($data->{timestamp}) &&
+               defined($data->{record})
+             )
+           );
+}
+
+sub waldo_print
+{
+    my ($data) = @_;
+
+    print "{\n";
+    print "  directory = " . $data->{spooler_dir} . "\n";
+    print "  filebase  = " . $data->{spooler_filebase} . "\n";
+    print "  timestamp = " . $data->{timestamp} . "\n";
+    print "  record    = " . $data->{record} . "\n";
+    print "}\n";
+}
+
+sub waldo_write
+{
+    my ($file, $data) = @_;
+
+    # validate input
+    if ( ! waldo_validate($data) )
+    {
+        print "[!] Provided waldo data is incomplete or corrupted.";
+        return;
+    }
+
+    # open and write
+    open (FD, ">$file") or die ('Unable to read file');
+
+    my $packed = pack("Z[".MAX_FILEPATH_BUF."] Z[".MAX_FILEPATH_BUF."] L L", $data->{spooler_dir}, $data->{spooler_filebase}, $data->{timestamp}, $data->{record});
+    print FD $packed;
+
+    close(FD);
+}
+
+
+#
+# MAIN
+#
+my $res = GetOptions(
+    'r|read=s'    => \$options->{file_read},
+    'e|edit=s'    => \$options->{file_edit},
+    'directory=s' => \$options->{spooler_dir},
+    'filebase=s'  => \$options->{spooler_filebase},
+    'record=s'    => \$options->{record},
+    'timestamp=s' => \$options->{timestamp},
+    'v|verbose'   => \$options->{verbose},
+    'f|force'     => \$options->{force},
+    'help|?'      => \$options->{help},
+);
+
+if( $options->{help} > 0 )
+{
+    usage();
+    exit(0);
+}
+elsif( $options->{file_read} )
+{
+    my $data = waldo_read($options->{file_read});
+    print 'waldo: ' . $options->{file_read} . "\n";
+    waldo_print($data);
+
+    if ( ! waldo_validate($data) )
+    {
+        print "[!] Read waldo data is incomplete or corrupted.\n";
+    }
+}
+elsif( $options->{file_edit} )
+{
+    my $data = waldo_read($options->{file_edit});
+
+    $data->{spooler_dir} = defined($options->{spooler_dir}) ? $options->{spooler_dir} : $data->{spooler_dir};
+    $data->{spooler_filebase} = defined($options->{spooler_filebase}) ? $options->{spooler_filebase} : $data->{spooler_filebase};
+    $data->{timestamp} = (defined($options->{timestamp}) ? $options->{timestamp} : $data->{timestamp}) + 0;
+    $data->{record} = (defined($options->{record}) ? $options->{record} : $data->{record}) + 0;
+
+    print "Preparing to write:\n";
+    waldo_print($data);
+
+    waldo_write($options->{file_edit}, $data);
+}
+else
+{
+    usage();
+    exit(1);
+}
+

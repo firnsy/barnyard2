@@ -1,0 +1,99 @@
+
+------------------------------------------------------------------------------
+0. SUMMARY
+------------------------------------------------------------------------------
+
+The SnortSam output plug-in enables barnyard2 to talk to a SnortSam firewall
+managments station.
+
+This README contains some quick information about how to set up and
+configure sguil logging with in barnyard2.
+
+Questions or comments about the snortsam plugin can be directed to SecurixLive
+devlopment <dev@securixlive.com>.
+
+
+------------------------------------------------------------------------------
+1. SGUIL SETUP
+------------------------------------------------------------------------------
+
+To get this plug-in working you must have a sguil set up and configured
+properly. Take the the following steps to get things working.
+
+   1) More to follow ...
+
+
+------------------------------------------------------------------------------
+2. PLUGIN CONFIGURATION
+------------------------------------------------------------------------------
+
+You must add some information to the barnyard configuration file
+to enable snortsam connectivity. The configuration file distributed with
+barnyard2 has some sample configuration lines.
+
+The configuration line will be of the following format:
+
+    output alert_fwsam: <station>:<port>/<key>
+
+Arguments:
+
+    station - IP address or host name of the host running SnortSam.
+    port    - Port the remote SnortSam service listens on (default 898).
+    key     - Key used for authentication (encryption really) of the 
+              communication to the remote service.
+
+Example(s):
+
+  output alert_fwsam: snortsambox/idspassword
+  output alert_fwsam: fw1.domain.tld:898/mykey
+  output alert_fwsam: 192.168.0.1/borderfw  192.168.1.254/wanfw
+
+
+------------------------------------------------------------------------------
+2. SNORTSAM RULE CONFIGURATION
+------------------------------------------------------------------------------
+
+In order for the snort-sam plugin to know what needs to be actioned on the 
+receipt of an event a block (or action) map needs to be generated and available
+in the same location as the barnyard2 configuration file.
+
+The filename is currently hardcoded as "sid-block.map" but will be fully
+configurable in future releases.
+
+The block map contains a SnortSam rule per line with the syntax described below.
+
+The snortsam rules take the form of:
+
+    sid: who[how],time;
+
+Arguments:
+
+    sid     - The Snort ID that the this Snort Sam rule is associated with.
+
+    who     - src, source, dst, dest, destination
+              IP address to be blocked according to snort rule (some rules
+              are reversed, i.e. homenet -> any [and you want to block any]).
+              src denotes IP to the left of -> and dst denotes IP to the right
+
+    how     - In, out, src, dest, either, both, this, conn, connection
+              An optional parameter that tells SnortSam to block packets
+              INcoming from host, OUTgoing to host, EITHERway, or only THIS 
+              connection (IP/Service pair).
+
+              See 'fw sam' on Firewall-1 for more information. This option may
+              be ignored by other plugins.
+
+    time    - Duration of block in seconds. (Accepts 'days', 'months', 'weeks',
+              'years', 'minutes', 'seconds', 'hours'. Alternatively, a value of
+              0, or the keyword PERManent, INFinite, or ALWAYS, will block the
+              host permanently. Be careful with this!
+
+              Tells SnortSam how long to inhibit packets from the host.
+
+Example(s):
+
+  1487: src[either],15min;
+  1292: dst[in], 2 days 4 hours
+  1638: src, 1 hour
+
+

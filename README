@@ -3,9 +3,9 @@
 0. SUMMARY
 ------------------------------------------------------------------------------
 
-Barnyard2 - version 2-1.9
+Barnyard2 - version 2-1.10
 
-This README contains some quick information about how to set up and 
+This README contains some quick information about how to set up and
 configure barnyard2 to ensure it works as it should.
 
 Distribution Site:
@@ -34,10 +34,10 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-Some of this code has been taken from Snort, which was developed by 
+Some of this code has been taken from Snort, which was developed by
 Martin Roesch and The Snort Team (http://www.snort.org/team.html).
 
-Some of this code has been taken from barnyard, which was developed by 
+Some of this code has been taken from barnyard, which was developed by
 Martin Roesch and Andrew R. Baker.
 
 Some of this code has been taken from tcpdump, which was developed
@@ -54,11 +54,11 @@ Its primary use is allowing Snort to write to disk in an efficient manner and
 leaving the task of parsing binary data into various formats to a separate
 process that will not cause Snort to miss network traffic.
 
-Barnyard2 has 3 modes of operation: 
-  1. batch (or one-shot), 
-  2. continual, and 
-  3. continual w/ bookmark.  
-  
+Barnyard2 has 3 modes of operation:
+  1. batch (or one-shot),
+  2. continual, and
+  3. continual w/ bookmark.
+
 In batch (or one-shot) mode, barnyard2 will process the explicitly specified
 file(s) and exit.
 
@@ -79,7 +79,7 @@ command directives section below for more detail.
 
 Barnyard2 processing is controlled by two main types of directives: input
 processors and output plugins. The input processors read information in from a
-specific format ( currently the spo_unified2 output module of Snort ) and 
+specific format ( currently the spo_unified2 output module of Snort ) and
 output them in one of several ways.
 
 
@@ -87,7 +87,7 @@ output them in one of several ways.
 3. USAGE
 ------------------------------------------------------------------------------
 
-Command line: 
+Command line:
 
     barnyard2 [-options]
 
@@ -119,7 +119,7 @@ Command line:
         -v         Be verbose
         -V         Show version number
         -?         Show this information
-    
+
     Continual Processing Options:
         -a <dir>   Archive processed files to <dir>
         -f <base>  Use <base> as the base filename pattern

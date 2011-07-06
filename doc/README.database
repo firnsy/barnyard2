@@ -1,14 +1,14 @@
 I. Summary
 
-The database output plug-in enables snort to log to 
+The database output plug-in enables snort to log to
 
-  - Postgresql, 
+  - Postgresql,
   - MySQL,
-  - any unixODBC database, 
-  - MS SQL Server and 
-  - Oracle. 
+  - any unixODBC database,
+  - MS SQL Server and
+  - Oracle.
 
-This README contains some quick information about how to set up and 
+This README contains some quick information about how to set up and
 configure database logging with in snort.  More complete and
 update to date documentation about this plugin can be found at:
 
@@ -20,17 +20,17 @@ update to date documentation about this plugin can be found at:
 
  http://www.andrew.cmu.edu/~rdanyliw/snort/snortdb/snortdb_faq.html
 
-Questions or comments about the database plugin can be directed to 
+Questions or comments about the database plugin can be directed to
 Roman Danyliw <roman@danyliw.com> or to the snort-users mailing
 list.
 
 II. Database Setup
 
-To get this plug-in working you must have a database set up and 
+To get this plug-in working you must have a database set up and
 configured properly. Take the the following steps to get things
 working.
 
-   1) Install MySQL, Postgresql, Oracle, MS SQL Server or 
+   1) Install MySQL, Postgresql, Oracle, MS SQL Server or
       (unixODBC + some other RDBMS)
         MySQL      => http://www.mysql.org
         Postgresql => http://www.postgesql.org
@@ -38,28 +38,28 @@ working.
         Oracle     => http://www.oracle.com
         SQL Server => http://www.microsoft.com
 
-   2) Follow directions from your database vendor to be sure your 
+   2) Follow directions from your database vendor to be sure your
       RDBMS is properly configured and secured.
 
-   3) Follow directions from your vendor to create a database for 
+   3) Follow directions from your vendor to create a database for
       snort.
 
-         MySQL example 
+         MySQL example
          % echo "CREATE DATABASE snort;" | mysql -u root -p
 
    4) Create a user that has privileges to INSERT and SELECT
-      on that database. 
+      on that database.
 
-      example 
+      example
          - First create a user - for this example we will use "snortusr"
-         - now grant the right privileges for that user 
+         - now grant the right privileges for that user
          > grant INSERT,SELECT on snort.* to snortusr@localhost;
          - In addition, grant that user the UPDATE privilege on the
            'sensor' table
          > grant INSERT,SELECT,UPDATE on snort.sensor to snortusr@localhost;
 
    5) Build the structure of the database according to files supplied
-      with snort in the "schemas" directory as the user created in 
+      with snort in the "schemas" directory as the user created in
       step 4.
 
       Do this while in the snort source directory.
@@ -71,7 +71,7 @@ working.
       % psql snort < ./schemas/create_postgresql
 
       For Oracle
-      The file "./schemas/create_oracle.sql" contains the database 
+      The file "./schemas/create_oracle.sql" contains the database
       structure.
 
       For MS SQL Server
@@ -89,15 +89,15 @@ working.
       functionality for each column as in the mysql and
       postgresql examples. The mysql file is the best example to
       follow since it is optimized (given that mysql supports tiny
-      ints and unsigned ints). I intend to document this process 
+      ints and unsigned ints). I intend to document this process
       better in the future to make this process easier.
 
-      As you create database structure files for new RDBMS mail 
+      As you create database structure files for new RDBMS mail
       them in so they can be included as part of the distribution.
 
 III. Plugin Configuration
 
-You must add some information to the snort configuration file 
+You must add some information to the snort configuration file
 to enable database logging. The configuration file distributed
 with snort has some sample configuration lines.
 
@@ -122,15 +122,15 @@ Arguments:
        All other parameters are optional but may be necessary
        depending on how you have configured your RDBMS.
 
-       dbname - the name of the database you are connecting to 
+       dbname - the name of the database you are connecting to
 
        host - the host the RDBMS is on
 
-       port - the port number the RDBMS is listening on 
+       port - the port number the RDBMS is listening on
 
        user - connect to the database as this user
 
-       password - the password for given user 
+       password - the password for given user
 
        sensor_name - specify your own name for this snort
              sensor. If you do not specify a name one will be
@@ -150,7 +150,7 @@ Arguments:
 
                 searchability....... - very good
 
-                human readability... - not readable unless you 
+                human readability... - not readable unless you
                                          are a true geek
                                        requires post processing
 
@@ -158,7 +158,7 @@ Arguments:
 
                 storage requirements - ~1.3x the size of the binary
 
-                searchability....... - impossible without post 
+                searchability....... - impossible without post
                                          processing
 
                 human readability... - not readable
@@ -169,15 +169,15 @@ Arguments:
                 Non ascii data is represented as a ".". If you choose
                 this option then data for ip and tcp options will
                 still be represented as "hex" because it does not
-                make any sense for that data to be ascii. 
+                make any sense for that data to be ascii.
 
                 storage requirements - Slightly larger than the
                                        binary because some characters
                                        are escaped (&,<,>)
 
-                searchability....... - very good for searching for 
+                searchability....... - very good for searching for
                                          a text string
-                                       impossible if you want to 
+                                       impossible if you want to
                                          search for binary
 
                 human readability... - very good
@@ -185,11 +185,11 @@ Arguments:
        detail - How much detailed data do you want to store? The options
                 are:
 
-                full: (default) log all details of a packet that 
-                      caused an alert (including ip/tcp options and 
+                full: (default) log all details of a packet that
+                      caused an alert (including ip/tcp options and
                       the payload)
 
-                fast: log only a minimum amount of data. You severely 
+                fast: log only a minimum amount of data. You severely
                       limit the potential of some analysis
                       applications if you choose this option, but
                       this is still the best choice for some
@@ -262,7 +262,7 @@ IV. Changelog
 2002-10-14: Transaction abstraction functions (Begin/Commit/Rollback)
             Fixed transaction SQL for MS-SQL
             Fixed incorrect return value for MS-SQL Insert()
-2002-10-12: Fixed (PostgreSQL) sensor initialization to the sensor table 
+2002-10-12: Fixed (PostgreSQL) sensor initialization to the sensor table
                  by setting a default last_cid value
             Fixed schema detection bug on MS-SQL enabled builds
 2002-09-17: Make sure that a packet payload larger than those supported
@@ -274,14 +274,14 @@ IV. Changelog
             The database now remembers the last used cid for a given sensor
                  (via the sensor.last_cid field).  Cids will no longer ever
                  be re-used (even if an alert are deleted).
-2002-08-13: Fixed logic to detect the DB schema version correctly when support 
+2002-08-13: Fixed logic to detect the DB schema version correctly when support
             for MS-SQL and another database are present
-2002-08-12: Fixed length bug in code that generates the SQL INSERT statement 
+2002-08-12: Fixed length bug in code that generates the SQL INSERT statement
                  into signature table
 2002-06-05: Fixed memory leak occurring when a signature is seen for the
             first time (Dirk Geschke)
 2002-04-13: Fixed memory leak with query results structure under PostgreSQL
-2002-04-15: Detect and use correct OCI library (v8 or 9) (Chad Kreimendahl) 
+2002-04-15: Detect and use correct OCI library (v8 or 9) (Chad Kreimendahl)
             Improved debugging messages on Oracle connection failure
                 (Imran Smith)
 2002-02-28: New schema v105
@@ -289,7 +289,7 @@ IV. Changelog
 2002-01-16: Fixed double-free of signature if it could not be inserted into
                 the database
 2002-01-13: Properly escaped database fields with a quote character
-2001-10-23: Truncate reference names larger than the underlying database 
+2001-10-23: Truncate reference names larger than the underlying database
                 schema will support
 2001-10-04: Catch condition where the iphdr is NULL
 2001-09-26: New schema v104
@@ -321,7 +321,7 @@ IV. Changelog
                the plugin to the alert or log facility
             Changed name from spo_log_database to spo_database
             Removed all old references to the log facility
-            Fixed a logic error that prevented messages from 
+            Fixed a logic error that prevented messages from
                the portscan preprocessor to be logged.
 2000-08-24: Fixed the full logging of tcp fields
             Added encoding and detail to sensor table
@@ -332,8 +332,8 @@ IV. Changelog
             Added encoding option so you can select hex, base64,
                or ascii for logging binary data
             Added the "detail" option so you can choose between
-               full and fast logging. 
-2000-08-23: A lot of code cleanup. 
+               full and fast logging.
+2000-08-23: A lot of code cleanup.
             Added linked list to store queries before they are
                executed.
             Added all tcp, udp, and icmp fields
@@ -341,12 +341,12 @@ IV. Changelog
             Added support for logging the packet payload
 2000-08-14: Added usage, very verbose error messages and other
                small fixes. No real functional changes. This update
-               is focused on making the plugin easier to install 
+               is focused on making the plugin easier to install
                and configure.
 2000-06-06: Multiple instantiations is now working
 2000-06-06: Added restart and cleanexit functions
 2000-06-02: Bugfixes, better error reporting
-2000-05-09: Bugfixes, documentation fixes, and added some 
+2000-05-09: Bugfixes, documentation fixes, and added some
             better error reporting
 2000-04-13: Bugfixes
 2000-04-03: Updated database structure
@@ -356,7 +356,7 @@ IV. Changelog
 2000-03-08: Added new table "sensor" and a new field to event
             table to represent the sensor
 2000-03-08: Added locking on inserts to eliminate concurrency
-               problem 
+               problem
 2000-03-08: Changed "type" and "code" in icmphdr to int2 instead
                of char
 2000-03-01: Added extra argument to RegisterOutputPlugin
@@ -365,7 +365,7 @@ IV. Changelog
 V. Changelog of Database schema
 
 2002-09-03 -- v106
-  + ALL: added sensor.last_cid to store the last used cid for a 
+  + ALL: added sensor.last_cid to store the last used cid for a
          given sid
 
 2002-02-28 -- v105
@@ -376,7 +376,7 @@ V. Changelog of Database schema
 
 2001-06-15 -- v103
   + ALL: removed 4-octet representation from iphdr
-  + ALL: removed all classification/priority definitions from the 
+  + ALL: removed all classification/priority definitions from the
          DDL scripts
   + ALL: added support for signature priorities, ID, and revision ID
 

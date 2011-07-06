@@ -73,13 +73,13 @@ Specifies the type of secret used for the Snort sensor to authenticate to the
 Aruba MC, one of:
 
   sha1      - The shared secret, represented as a SHA1 hash.  You can generate
-              this string with the openssl tool as 
-	      "echo password | openssl dgst -sha1", changing the string 
-	      "password" to the shared secret string.
+              this string with the openssl tool as
+              "echo password | openssl dgst -sha1", changing the string
+              "password" to the shared secret string.
   md5       - The shared secret, represented as a MD5 hash.  You can generate
-              this string with the openssl tool as 
-	      "echo password | openssl dgst -md5", changing the string 
-	      "password" to the shared secret string.
+              this string with the openssl tool as
+              "echo password | openssl dgst -md5", changing the string
+              "password" to the shared secret string.
   cleartext - The shared secret in plaintext.
 
 * secret *
@@ -90,14 +90,14 @@ be represented to match the secret type setting (SHA1, MD5 or cleartext).
 Specifies the action that the Aruba MC will take against the source MAC
 address of the station reported by the Snort sensor, one of:
 
-  blacklist          - Terminate all network access for the wireless user, 
+  blacklist          - Terminate all network access for the wireless user,
                        placing them on the blacklist.  Station will be unable
-		       to access the wireless network until the blacklist
-		       duration expires.
+                       to access the wireless network until the blacklist
+                       duration expires.
   setrole:<rolename> - Modify the user's role assignment to the specified role
                        name.  The new role can be configured to restrict or
-		       grant access to the network as needed by the
-		       administrator.
+                       grant access to the network as needed by the
+                       administrator.
 
 Example:
 

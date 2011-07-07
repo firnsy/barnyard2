@@ -10,15 +10,13 @@ The quick install notes for getting people up and running in with minimal fuss
 are below. Detailed instructions will follow later.
 
 1.  *** Make sure you have libpcap HEADERS installed!!! ***
-2.  autoreconf -fvi -I ./m4
+2.  ./autogen.sh
 3.  ./configure
 4.  make
 5.  make install
 6.  Create a sample rules file (eg. look at etc/barnyard2.conf)
 7.  barnyard2 -?
-8.  If you've used barnyard before, there may be a little variance in the
-    commandline parameters. 
-9.  Have fun!
+8.  HAVE FUN!
 
 
 -------------------------------------------------------------------------------
@@ -27,36 +25,36 @@ are below. Detailed instructions will follow later.
 
 `--enable-debug'
     Enable debugging options (bugreports and developers only).
-     
+
 `--with-tcl=DIR'
     Support for Tcl, turn this on if you want to use the Sguil plugin. An
-	alternative location can be supplied for non-standard Tcl installs.
+    alternative location can be supplied for non-standard Tcl installs.
 
 `--with-libpcap-includes=DIR'
     Specify location for pcap header files.
-    
+
 `--with-mysql=DIR'
     Support for mysql, turn this on if you want to use ACID/BASE with MySQL.
     NOTE: Specifying a directory will be deprecated in the future.
-    
+
 `--with-mysql-libraries=DIR'
     Specify location for mysql client library.
-    
+
 `--with-mysql-includes=DIR'
     Specify location for mysql header files.
-    
+
 `--with-odbc=DIR'
     Support for ODBC databases, turn this on if you want to use ACID/BASE with
-	a non-listed DB.
-    
+    a non-listed DB.
+
 `--with-postgresql=DIR'
     Support for Postgresql databases, turn this on if you want to use ACID/BASE
-	with PostgreSQL.
-    
+    with PostgreSQL.
+
 `--with-oracle=DIR'
     Support for Oracle databases, turn this on if you want to use ACID/BASE
-	with Oracle.
-    
+    with Oracle.
+
 
 -------------------------------------------------------------------------------
 2. BASIC INSTALLATION
@@ -87,12 +85,12 @@ The simplest way to compile this package is:
 
   1. `cd' to the directory containing the package's source code and type
      `./configure' to configure the package for your system.  If you're using
-	 `csh' on an old version of System V, you might need to type
-	 `sh ./configure' instead to prevent `csh' from trying to execute
-	 `configure' itself.
+     `csh' on an old version of System V, you might need to type
+     `sh ./configure' instead to prevent `csh' from trying to execute
+     `configure' itself.
 
      Running `configure' takes awhile.  While running, it prints some messages
-	 telling which features it is checking for.
+     telling which features it is checking for.
 
   2. Type `make' to compile the package.
 
@@ -104,9 +102,9 @@ The simplest way to compile this package is:
 
   5. You can remove the program binaries and object files from the source code
      directory by typing `make clean'.  To also remove the files that
-	 `configure' created (so you can compile the package for a different kind
-	 of computer), type `make distclean'.  There is also a
-	 `make maintainer-clean' target, but that is intended mainly for the
-	 package's developers.  If you use it, you may have to get all sorts of
-	 other programs in order to regenerate files that came with the
-	 distribution.
+     `configure' created (so you can compile the package for a different kind
+     of computer), type `make distclean'.  There is also a
+     `make maintainer-clean' target, but that is intended mainly for the
+     package's developers.  If you use it, you may have to get all sorts of
+     other programs in order to regenerate files that came with the
+     distribution.

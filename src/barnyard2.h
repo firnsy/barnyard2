@@ -62,7 +62,7 @@
 #define PROGRAM_NAME	"Barnyard"
 #define VER_MAJOR		"2"
 #define VER_MINOR		"1"
-#define VER_REVISION	"10"
+#define VER_REVISION	"10-beta1"
 #define VER_BUILD		"266"
 
 #define STD_BUF  1024

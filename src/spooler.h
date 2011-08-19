@@ -132,7 +132,7 @@ typedef struct _Spooler
     
     uint32_t                magic;
     
-    Spooler_unified2_references sur;    // Spooler Unified2 reference structures 
+    Spooler_unified2_references sur;    // Spooler Unified2 reference event structures 
 
     void                    *header;    // header of input file
 

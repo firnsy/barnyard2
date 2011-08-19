@@ -53,6 +53,12 @@ static int spoolerIpp_AlertUnified2(Spooler *,int,int);
 static int spoolerIpp_LogUnified2(Spooler *,int,int);
 static int spoolerIpp_Unified2(Spooler *,int,int);
 
+/* Generic pointers for CallOutputPlugins 
+   REMINDER: Should be moved to spooler struct for threading.
+*/
+void *logEvtPtr = NULL;
+void *logPktPtr = NULL;
+/*    REMINDER: Should be moved to spooler struct for threading. */
 
 
 #define SPOOLER_NULL         0x00000000
@@ -629,7 +635,17 @@ int ProcessContinuousWithWaldo(Waldo *waldo)
 }
 
 
-
+/** 
+ * InitializeSpoolerStatic
+ *
+ * Initialize spooler static "Event pointers"
+ * 
+ * @param iSpooler 
+ * 
+ * @return 
+ * 0 = OK
+ * 1 = ERROR
+ */
 static int InitializeSpoolerStatic(Spooler *iSpooler)
 {
 
@@ -700,6 +716,17 @@ static int InitializeSpoolerStatic(Spooler *iSpooler)
     return 0;
 }
 
+/** 
+ * FreeSpoolerStatic
+ * 
+ * Clean static allocated memory binded to a spooler.
+ *
+ * @param iSpooler 
+ * 
+ * @return 
+ * 0 = OK
+ * 1 = ERROR
+ */
 static int FreeSpoolerStatic(Spooler *iSpooler)
 {
     
@@ -754,7 +781,19 @@ static int FreeSpoolerStatic(Spooler *iSpooler)
   return 0;
 }
 
-
+/** 
+ * SpoolerSetStaticEvent
+ * Wrap event, copy generic information to appropriate event and
+ * set generic pointer for outputplugin copy.
+ *
+ * @param type 
+ * @param iSpooler 
+ * 
+ * @return 
+ * 0 OK
+ * 1 ERROR
+ * 
+ */
 int SpoolerSetStaticEvent(u_int32_t type,Spooler *iSpooler)
 {
     if((iSpooler == NULL) ||
@@ -768,19 +807,37 @@ int SpoolerSetStaticEvent(u_int32_t type,Spooler *iSpooler)
     {
 	
     case UNIFIED2_IDS_EVENT:
-    case UNIFIED2_IDS_EVENT_MPLS:
-    case UNIFIED2_IDS_EVENT_VLAN:
-	memset(iSpooler->sur.U2IdsEventPtr,'\0',sizeof(Unified2IDSEvent));
-	memcpy(iSpooler->sur.U2IdsEventPtr,iSpooler->record.data,sizeof(Unified2IDSEvent)); 
+	memset(iSpooler->sur.U2IdsEventLegacyPtr,'\0',sizeof(Unified2IDSEvent_legacy));
+	memcpy(iSpooler->sur.U2IdsEventLegacyPtr,iSpooler->record.data,sizeof(Unified2IDSEvent_legacy)); 
 	iSpooler->sur.SpoolerEventPtr =(void *)iSpooler->sur.U2IdsEventPtr;
 	break;
 	
     case UNIFIED2_IDS_EVENT_IPV6:
-    case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+	memset(iSpooler->sur.U2IdeEventV6LegacyPtr,'\0',sizeof(Unified2IDSEventIPv6_legacy));
+	memcpy(iSpooler->sur.U2IdeEventV6LegacyPtr,iSpooler->record.data,sizeof(Unified2IDSEventIPv6_legacy)); 
+	iSpooler->sur.SpoolerEventPtr =(void *)iSpooler->sur.U2IdsEventPtr;
+	break;
+	
+	
+    case UNIFIED2_IDS_EVENT_VLAN:
+	memset(iSpooler->sur.U2IdsEventPtr,'\0',sizeof(Unified2IDSEvent));
+	memcpy(iSpooler->sur.U2IdsEventPtr,iSpooler->record.data,sizeof(Unified2IDSEvent)); 
+	iSpooler->sur.SpoolerEventPtr =(void *)iSpooler->sur.U2IdsEventPtr;
+	break;	
+
+
     case UNIFIED2_IDS_EVENT_IPV6_VLAN:
 	memset(iSpooler->sur.U2IdsEventV6Ptr,'\0',sizeof(Unified2IDSEventIPv6));
 	memcpy(iSpooler->sur.U2IdsEventV6Ptr,iSpooler->record.data,sizeof(Unified2IDSEventIPv6));
 	iSpooler->sur.SpoolerEventPtr =(void *)iSpooler->sur.U2IdsEventV6Ptr;
+	break;
+
+    case UNIFIED2_IDS_EVENT_MPLS:
+	/* not available yet */
+	break;
+	
+    case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+	/* not available yet */
 	break;
 	
     default:
@@ -792,7 +849,16 @@ int SpoolerSetStaticEvent(u_int32_t type,Spooler *iSpooler)
     return 0;
 }
 
-
+/** 
+ * SpoolerCheckEventPtr
+ * Validate if the generic event pointer is set
+ * 
+ * @param iSpooler 
+ * 
+ * @return 
+ * 0 = OK
+ * 1 = ERROR
+ */
 int SpoolerCheckEventPtr(Spooler *iSpooler)
 {
     if((iSpooler == NULL) || 
@@ -805,6 +871,17 @@ int SpoolerCheckEventPtr(Spooler *iSpooler)
     return 0;
 }
 
+/** 
+ * SpoolerGetEventPtr
+ *
+ * Return the generic event pointer
+ *
+ * @param iSpooler 
+ * 
+ * @return 
+ * valid ptr = OK
+ * NULL      = ERROR
+ */
 void * SpoolerGetEventPtr(Spooler *iSpooler)
 {
     if(iSpooler == NULL)
@@ -815,6 +892,18 @@ void * SpoolerGetEventPtr(Spooler *iSpooler)
     return iSpooler->sur.SpoolerEventPtr;
 }
 
+/** 
+ * SpoolerPacketGeneric
+ *
+ * Call generic functions needed when processing 
+ * packet event by the spooler.
+ *
+ * @param iSpooler 
+ * 
+ * @return 
+ * 0 = OK
+ * 1 = ERROR
+ */
 int SpoolerPacketGeneric(Spooler *iSpooler)
 {
     struct pcap_pkthdr      pkth;
@@ -972,8 +1061,6 @@ WALDO_WRITE:
 /* InputPlugin [alert_unified2] Context logging function */
 static int spoolerIpp_AlertUnified2(Spooler *iSpooler,int evtType,int vLog)
 {
-    void *logEvtPtr = NULL;
-    
     if(iSpooler == NULL)
     {
 	/* XXX */
@@ -1000,7 +1087,6 @@ static int spoolerIpp_AlertUnified2(Spooler *iSpooler,int evtType,int vLog)
 	    return 0;
 	    break; /* UNIFIED2_EXTRA_DATA */
 	    
-
 	default:	
 	    /*Should be an event ..*/   	    
 	    if( (SpoolerSetStaticEvent(evtType,iSpooler)))
@@ -1009,12 +1095,19 @@ static int spoolerIpp_AlertUnified2(Spooler *iSpooler,int evtType,int vLog)
 		LogMessage("SpoolerSetStaticEvent(), failed \n");
 		return 1;
 	    }
-
+	    
 	    /* we should mabey shortcut this but the function is usefull 
 	       and it makes a single api to manage something that could be 
 	       errorprone to change at many places.
-	     */
-	    logEvtPtr = (void *)SpoolerGetEventPtr(iSpooler);
+	    */
+	    if( (logEvtPtr = (void *)SpoolerGetEventPtr(iSpooler)) )
+	    {
+		/* XXX */
+		LogMessage("Spooler in event state and caught a null event...flow issue [an event was probably not logged [FUNCTION[%s()]LINE[%d]\n",
+			   __FUNCTION__,
+			   __LINE__);
+		return 1;
+	    }
 	    
 	    /* We are now in Event State, return. */
 	    break; /* default */
@@ -1027,19 +1120,20 @@ static int spoolerIpp_AlertUnified2(Spooler *iSpooler,int evtType,int vLog)
 	break; /* default */
     }
     
-
 /*
  * If we need a fastforward kickback enable the label..
  * Spooler_ALERT_UNIFIED2_OUTPUT:
-*/
+ */
     if(vLog)
     {
         CallOutputPlugins(OUTPUT_TYPE__ALERT,
                           NULL,
                           logEvtPtr,
                           evtType);
+	
+	logEvtPtr = NULL;
     }
-
+    
     return 0;
 }
 
@@ -1047,8 +1141,6 @@ static int spoolerIpp_AlertUnified2(Spooler *iSpooler,int evtType,int vLog)
 /* InputPlugin [log_Unified2] Context logging function */
 static int spoolerIpp_LogUnified2(Spooler *iSpooler,int evtType,int vLog)
 {
-    void *logPktPtr = NULL;
-    
     if(iSpooler == NULL)
     {
 	/* XXX */
@@ -1061,7 +1153,7 @@ static int spoolerIpp_LogUnified2(Spooler *iSpooler,int evtType,int vLog)
     case SPOOLER_NULL:
 	
 	/* Callback in case dual event would be logged...(shoudln't happen)*/
-    
+	
 	switch (evtType)
 	{
 	case UNIFIED2_PACKET:
@@ -1087,7 +1179,6 @@ static int spoolerIpp_LogUnified2(Spooler *iSpooler,int evtType,int vLog)
 	    return 0; /* Return to buisness */
 	    break; /* DEFAULT */
 	}
-        
 	break; /* SPOOLER_NULL */
 	
     default:
@@ -1096,44 +1187,56 @@ static int spoolerIpp_LogUnified2(Spooler *iSpooler,int evtType,int vLog)
 	
 	break; /* DEFAULT */
     }
+    
 /*
  * If we need a fastforward kickback enable the label..    
  * Spooler_LOG_UNIFIED2_OUTPUT:
-*/
+ */
     if(vLog)
     {
         CallOutputPlugins(OUTPUT_TYPE__LOG,
 			  logPktPtr,
 			  NULL,
 			  evtType);
+	
+	logPktPtr = NULL;
     }
     
     return 0;
 }
 
-/* InputPlugin [unified2] Context logging function */
+
+/** 
+ * spoolerIpp_Unified2
+ * 
+ * Context processing if the input plugin is configured for Unified2 logging.
+ *
+ * @param iSpooler 
+ * @param evtType 
+ * @param vLog 
+ * 
+ * @return 
+ * 0 = OK
+ * 1 = ERROR
+ */
 static int spoolerIpp_Unified2(Spooler *iSpooler,int evtType,int vLog)
 {
-    void *logEvtPtr = NULL;
-    void *logPktPtr = NULL;
-    
     if(iSpooler == NULL)
     {
 	/* XXX */
 	return 1;
     }
-
+    
     switch(iSpooler->sur.SpoolerState)
     {
-	
     case SPOOLER_NULL:
-	
 	/* Callback in case dual event would be logged...(shoudln't happen)*/
     EVENT_PROCESS_UNIFIED2:
 	
 	/* SpoolerState and evtType inner switch */
 	switch (evtType)
 	{
+	    
 	case UNIFIED2_PACKET:
 	    
 	    if( (SpoolerPacketGeneric(iSpooler)))
@@ -1143,15 +1246,18 @@ static int spoolerIpp_Unified2(Spooler *iSpooler,int evtType,int vLog)
 	    }
 	    
 	    logPktPtr = (void *)iSpooler->record.pkt;
+	    
 	    break; /* UNIFIED2_PACKET */
 	    
-	case  UNIFIED2_EXTRA_DATA:
+	case UNIFIED2_EXTRA_DATA:
+	    
 	    LogMessage("[%s()]: Read a UNIFIED2_EXTRA_DATA type : [%lu] record without an event\n" 
 		       "since output plugins do not yet support UNIFIED2_EXTRA_DATA, we will fastforward. \n",__FUNCTION__,evtType);
 	    return 0;
 	    break; /* UNIFIED2_EXTRA_DATA */
 	    
-	    /*Should be an event ..*/   
+	    /* Should be an event .. */   
+	    
 	default:	    
 	    if( (SpoolerSetStaticEvent(evtType,iSpooler)))
 	    {
@@ -1162,6 +1268,7 @@ static int spoolerIpp_Unified2(Spooler *iSpooler,int evtType,int vLog)
 	    
 	    /* We are now in Event State, return. */
 	    iSpooler->sur.SpoolerState = SPOOLER_EVENT;
+	    
 	    return 0; /* Return to buisness */
 	    break; /* default */
 	}
@@ -1171,6 +1278,7 @@ static int spoolerIpp_Unified2(Spooler *iSpooler,int evtType,int vLog)
 	
 	switch(evtType)
 	{
+	    
 	case UNIFIED2_PACKET:
 	    
 	    if( SpoolerCheckEventPtr(iSpooler))
@@ -1187,7 +1295,12 @@ static int spoolerIpp_Unified2(Spooler *iSpooler,int evtType,int vLog)
             }
 	    
 	    logPktPtr = (void *)iSpooler->record.pkt;
-	    logEvtPtr = (void *)SpoolerGetEventPtr(iSpooler);
+	    
+	    if( (logEvtPtr = (void *)SpoolerGetEventPtr(iSpooler)))
+	    {
+		/* XXX */
+		return 1;
+	    }
 	    break; /* UNIFIED2_PACKET */
 	    
 	case UNIFIED2_EVENT:
@@ -1200,11 +1313,23 @@ static int spoolerIpp_Unified2(Spooler *iSpooler,int evtType,int vLog)
 	    
 	    if(vLog)
 	    {
-		logEvtPtr = (void *)SpoolerGetEventPtr(iSpooler);
+		if( (logEvtPtr = (void *)SpoolerGetEventPtr(iSpooler)) == NULL)
+		{
+		    /* XXX */
+		    LogMessage("Spooler in event state and caught a null event...flow issue [an event was probably not logged [FUNCTION[%s()]LINE[%d]\n",
+			       __FUNCTION__,
+			       __LINE__);
+		    return 1;
+		}
+		
+		/* Sooner or later CallOutputPlugins will need to 
+		   return something for daddy. */
 		CallOutputPlugins(OUTPUT_TYPE__SPECIAL,
 				  logPktPtr,
 				  logEvtPtr,
 				  evtType);
+		logEvtPtr = NULL;
+		logPktPtr = NULL;
 		iSpooler->sur.SpoolerState = SPOOLER_NULL;
 		goto EVENT_PROCESS_UNIFIED2;
 	    }
@@ -1220,19 +1345,24 @@ static int spoolerIpp_Unified2(Spooler *iSpooler,int evtType,int vLog)
             iSpooler->sur.SpoolerState = SPOOLER_NULL;
 	    
 	    /* log current event anyways */ 
-	    logEvtPtr = (void *)SpoolerGetEventPtr(iSpooler);
+	    if( (logEvtPtr = (void *)SpoolerGetEventPtr(iSpooler)) == NULL)
+	    {
+		/* XXX */
+                LogMessage("Spooler in event state and caught a null event...flow issue [an event was probably not logged [FUNCTION[%s()]LINE[%d]\n",
+                           __FUNCTION__,
+                           __LINE__);
+		return 1;
+	    }
 	    break; /* UNIFIED2_EXTRA_DATA */
 	    
 	default:
 	    LogMessage("[%s()]: Encountered an unknown spooler state [%lu], error... \n",__FUNCTION__,iSpooler->sur.SpoolerState);
 	    return 1;
-	    
 	    break; /* default */
 	}
 	
 	iSpooler->sur.SpoolerState = SPOOLER_NULL;
 	break; /* SPOOLER_EVENT */
-
     }
     
 /*
@@ -1245,6 +1375,10 @@ static int spoolerIpp_Unified2(Spooler *iSpooler,int evtType,int vLog)
 			  logPktPtr,
 			  logEvtPtr,
 			  evtType);
+	
+	logEvtPtr = NULL;
+	logPktPtr = NULL;
+	
     }
     
     return 0;

@@ -237,10 +237,18 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
 		return;
 	}
 
-    if ( p->ip6h != NULL )
-    {
-        return;
-    }
+	//Added a quick for for input check every outpug-plugins will need to be more tigheter on checks.
+	if(p!= NULL)
+	{
+	    if(p->ip6h != NULL )
+	    {
+		return;
+	    }
+	}
+	else
+	{
+	    return;
+	}
 
     data = (SpoSguilData *)arg;
 

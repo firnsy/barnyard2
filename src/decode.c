@@ -216,25 +216,23 @@ int DecodePacket(int linktype, Packet *p, const struct pcap_pkthdr *pkthdr, cons
             DecodeNullPkt(p, pkthdr, pkt);
             break;
 
-#ifdef DLT_RAW /* Not supported in some arch or older pcap
-                * versions */
+
+#ifdef DLT_RAW
         case DLT_RAW:
-#ifdef DLT_IPV4
-        case DLT_IPV4:
 #endif
-#ifdef DLT_IPV6
-        case DLT_IPV6:
-#endif
+        case 228:       /*Defined in some bpf implementation as  DLT_IPV4: */
+        case 229:      /* Defined in some bpf implementation as     DLT_IPV6 */
+
             if (BcOutputDataLink())
             {
                 LogMessage("There's no second layer header available for "
-                        "this datalink\n");
+                     "this datalink\n");
 
                 barnyard2_conf->output_flags &= ~OUTPUT_FLAG__SHOW_DATA_LINK;
             }
             DecodeRawPkt(p, pkthdr, pkt);
             break;
-#endif
+
             /*
              * you need the I4L modified version of libpcap to get this stuff
              * working

@@ -95,6 +95,13 @@ static char _PATH_VARRUN[STD_BUF];
 
 #define FILE_MAX_UTIL  (PATH_MAX_UTIL + NAME_MAX_UTIL)
 
+
+#ifndef MAX_QUERY_LENGTH
+//#define MAX_QUERY_LENGTH 8192
+#define MAX_QUERY_LENGTH 65536 /* Lets add some space for payload decoding and query esaping..*/
+#endif  /* MAX_QUERY_LENGTH */
+
+
 /****************************************************************************
  *
  * Function: CalcPct(uint64_t, uint64_t)
@@ -1897,33 +1904,70 @@ char *GetTimestampByComponent(uint32_t sec, uint32_t usec, int tz)
 {
     struct tm			*lt;  /* localtime */
     char				*buf;
-	time_t				Time;
+    time_t				Time;
     int					msec;
-
-	buf = (char *)SnortAlloc(SMALLBUFFER * sizeof(char));
     
-	Time = sec;
+    buf = (char *)SnortAlloc(SMALLBUFFER * sizeof(char));
+    
+    Time = sec;
     msec = usec / 1000;
 
-	if (BcOutputUseUtc())
-	{
-		lt = gmtime(&Time);
+    if (BcOutputUseUtc())
+    {
+	lt = gmtime(&Time);
         SnortSnprintf(buf, SMALLBUFFER,
-                "%04i-%02i-%02i %02i:%02i:%02i.%03i",
-                1900 + lt->tm_year, lt->tm_mon + 1, lt->tm_mday,
-                lt->tm_hour, lt->tm_min, lt->tm_sec, msec);
-	}
-	else
-	{
-		lt = localtime(&Time);
+		      "%04i-%02i-%02i %02i:%02i:%02i.%03i",
+		      1900 + lt->tm_year, lt->tm_mon + 1, lt->tm_mday,
+		      lt->tm_hour, lt->tm_min, lt->tm_sec, msec);
+    }
+    else
+    {
+	lt = localtime(&Time);
         SnortSnprintf(buf, SMALLBUFFER,
-                "%04i-%02i-%02i %02i:%02i:%02i.%03i+%03i",
-                1900 + lt->tm_year, lt->tm_mon + 1, lt->tm_mday,
-                lt->tm_hour, lt->tm_min, lt->tm_sec, msec, tz);
-	}
-
+		      "%04i-%02i-%02i %02i:%02i:%02i.%03i+%03i",
+		      1900 + lt->tm_year, lt->tm_mon + 1, lt->tm_mday,
+		      lt->tm_hour, lt->tm_min, lt->tm_sec, msec, tz);
+    }
+    
     return buf;
 }
+
+/* Same a above using a static buffer */
+u_int32_t GetTimestampByComponent_STATIC(uint32_t sec, uint32_t usec, int tz,char *buf)
+{
+    struct tm                   *lt;  /* localtime */
+    time_t                              Time;
+    int                                 msec;
+    
+    if(buf == NULL)
+    {
+	/* XXX */
+	return 1;
+    }
+    
+    Time = sec;
+    msec = usec / 1000;
+
+    if (BcOutputUseUtc())
+    {
+        lt = gmtime(&Time);
+        SnortSnprintf(buf, SMALLBUFFER,
+                      "%04i-%02i-%02i %02i:%02i:%02i.%03i",
+                      1900 + lt->tm_year, lt->tm_mon + 1, lt->tm_mday,
+                      lt->tm_hour, lt->tm_min, lt->tm_sec, msec);
+    }
+    else
+    {
+        lt = localtime(&Time);
+        SnortSnprintf(buf, SMALLBUFFER,
+                      "%04i-%02i-%02i %02i:%02i:%02i.%03i+%03i",
+                      1900 + lt->tm_year, lt->tm_mon + 1, lt->tm_mday,
+                      lt->tm_hour, lt->tm_min, lt->tm_sec, msec, tz);
+    }
+    
+    return 0;
+}
+
 
 /****************************************************************************
  *
@@ -1965,6 +2009,41 @@ char *GetTimestampByStruct(register const struct timeval *tvp, int tz)
 
     return buf;
 }
+
+
+/* Same as above using static buffer */
+u_int32_t GetTimestampByStruct_STATIC(register const struct timeval *tvp, int tz,char *buf)
+{
+    struct tm *lt;  /* localtime */
+    int msec;
+    
+    if(buf == NULL)
+    {
+	/* XXX */
+	return 1;
+    }
+    
+    msec = tvp->tv_usec / 1000;
+    
+    if (BcOutputUseUtc())
+    {
+        lt = gmtime((time_t *)&tvp->tv_sec);
+        SnortSnprintf(buf, SMALLBUFFER, "%04i-%02i-%02i %02i:%02i:%02i.%03i",
+		      1900 + lt->tm_year, lt->tm_mon + 1, lt->tm_mday,
+		      lt->tm_hour, lt->tm_min, lt->tm_sec, msec);
+    }
+    else
+    {
+        lt = localtime((time_t *)&tvp->tv_sec);
+        SnortSnprintf(buf, SMALLBUFFER,
+		      "%04i-%02i-%02i %02i:%02i:%02i.%03i+%03i",
+		      1900 + lt->tm_year, lt->tm_mon + 1, lt->tm_mday,
+		      lt->tm_hour, lt->tm_min, lt->tm_sec, msec, tz);
+    }
+    
+    return 0;
+}
+
 
 /****************************************************************************
  *
@@ -2008,7 +2087,7 @@ int GetLocalTimezone()
  * Returns: char * -- You must free this char * when you are done with it.
  *
  ***************************************************************************/
-char *GetCurrentTimestamp()
+char *GetCurrentTimestamp(void)
 {
     struct tm *lt;
     struct timezone tz;
@@ -2047,6 +2126,54 @@ char *GetCurrentTimestamp()
 
     return buf;
 }
+
+/* Same as above using static */
+u_int32_t GetCurrentTimestamp_STATIC(char *buf)
+{
+    struct tm *lt;
+    struct timezone tz;
+    struct timeval tv;
+    struct timeval *tvp;
+    int tzone;
+    int msec;
+
+    if(buf == NULL)
+    {
+	/* XXX */
+	return 1;
+    }
+
+
+    bzero((char *)&tz,sizeof(tz));
+    gettimeofday(&tv,&tz);
+    tvp = &tv;
+
+    msec = tvp->tv_usec/1000;
+
+    if (BcOutputUseUtc())
+    {
+        lt = gmtime((time_t *)&tvp->tv_sec);
+        SnortSnprintf(buf, SMALLBUFFER, "%04i-%02i-%02i %02i:%02i:%02i.%03i",
+		      1900 + lt->tm_year, lt->tm_mon + 1, lt->tm_mday,
+		      lt->tm_hour, lt->tm_min, lt->tm_sec, msec);
+    }
+    else
+    {
+        lt = localtime((time_t *)&tvp->tv_sec);
+
+        tzone = GetLocalTimezone();
+
+        SnortSnprintf(buf, SMALLBUFFER,
+		      "%04i-%02i-%02i %02i:%02i:%02i.%03i+%03i",
+		      1900 + lt->tm_year, lt->tm_mon + 1, lt->tm_mday,
+		      lt->tm_hour, lt->tm_min, lt->tm_sec, msec, tzone);
+    }
+    
+    return 0;
+}
+
+
+
 
 /****************************************************************************
  * Function: base64(char * xdata, int length)
@@ -2131,6 +2258,85 @@ char * base64(const u_char * xdata, int length)
     return payloadptr;
 } 
 
+/* Same as above but uses a static buffer provided as a 3rd argument to function.. */
+u_int32_t base64_STATIC(const u_char * xdata, int length,char *output)
+{
+    int count, cols, bits, c, char_count;
+    unsigned char alpha[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";  /* 64 bytes */
+    char * payloadptr;
+    
+    char_count = 0;
+    bits = 0;
+    cols = 0;
+
+    if( ((length * 1.5) + 4 ) > MAX_QUERY_LENGTH)
+    {
+	/* XXX */
+	return 1;
+    }
+    
+    memset(output,'\0',MAX_QUERY_LENGTH);
+
+    payloadptr = output;
+
+    for(count = 0; count < length; count++)
+    {
+        c = xdata[count];
+
+        if(c > 255)
+        {
+            ErrorMessage("plugbase.c->base64(): encountered char > 255 (decimal %d)\n If you see this error message a char is more than one byte on your machine\n This means your base64 results can not be trusted", c);
+        }
+
+        bits += c;
+        char_count++;
+
+        if(char_count == 3)
+        {
+            *output = alpha[bits >> 18]; output++;
+            *output = alpha[(bits >> 12) & 0x3f]; output++;
+            *output = alpha[(bits >> 6) & 0x3f]; output++;
+            *output = alpha[bits & 0x3f]; output++;
+            cols += 4;
+            if(cols == 72)
+            {
+                *output = '\n'; output++;
+                cols = 0;
+            }
+            bits = 0;
+            char_count = 0;
+        }
+        else
+        {
+            bits <<= 8;
+        }
+    }
+
+    if(char_count != 0)
+    {
+        bits <<= 16 - (8 * char_count);
+        *output = alpha[bits >> 18]; output++;
+        *output = alpha[(bits >> 12) & 0x3f]; output++;
+        if(char_count == 1)
+        {
+            *output = '='; output++;
+            *output = '='; output++;
+        }
+        else
+        {
+            *output = alpha[(bits >> 6) & 0x3f];
+            output++; *output = '=';
+            output++;
+        }
+    }
+    *output = '\0';
+
+
+    return 0;
+}
+
+
+
 /****************************************************************************
  *
  * Function: ascii(u_char *xdata, int length)
@@ -2211,6 +2417,77 @@ char *ascii(const u_char *xdata, int length)
      return ret_val;
 }
 
+/* Same as above but working with a static buffer .. */
+u_int32_t ascii_STATIC(const u_char *xdata, int length,char *ret_val)
+{
+    char *d_ptr;
+    int i,count = 0;
+    int size;
+    
+    if( (xdata == NULL) ||
+	(ret_val == NULL))
+    {
+	return 1;
+    }
+    
+    for(i=0;i<length;i++)
+    {
+	if(xdata[i] == '<')
+	    count+=4;              /* &lt; */
+	else if(xdata[i] == '&')
+	    count+=5;              /* &amp; */
+	else if(xdata[i] == '>')   /* &gt;  */
+	    count += 4;
+    }
+
+    size = length + count + 1;
+
+    if(size > MAX_QUERY_LENGTH)
+    {
+	return 1;
+    }
+    
+    memset(ret_val,'\0',MAX_QUERY_LENGTH);
+    
+    d_ptr = ret_val;
+
+    for(i=0;i<length;i++)
+    {
+	if((xdata[i] > 0x1F) && (xdata[i] < 0x7F))
+	{
+	    if(xdata[i] == '<')
+	    {
+		SnortStrncpy(d_ptr, "&lt;", size - (d_ptr - ret_val));
+		d_ptr+=4;
+	    }
+	    else if(xdata[i] == '&')
+	    {
+		SnortStrncpy(d_ptr, "&amp;", size - (d_ptr - ret_val));
+		d_ptr += 5;
+	    }
+	    else if(xdata[i] == '>')
+	    {
+		SnortStrncpy(d_ptr, "&gt;", size - (d_ptr - ret_val));
+		d_ptr += 4;
+	    }
+	    else
+	    {
+		*d_ptr++ = xdata[i];
+	    }
+	}
+	else
+	{
+	    *d_ptr++ = '.';
+	}
+    }
+
+    *d_ptr++ = '\0';
+
+    return 0;
+    
+}
+
+
 /****************************************************************************
  *
  * Function: hex(u_char *xdata, int length)
@@ -2253,6 +2530,8 @@ char *hex(const u_char *xdata, int length)
 
 
 
+
+
 char *fasthex(const u_char *xdata, int length)
 {
     char conv[] = "0123456789ABCDEF";
@@ -2275,6 +2554,40 @@ char *fasthex(const u_char *xdata, int length)
 
     return retbuf;
 }
+
+/* same as above but working with a static buffer */
+u_int32_t fasthex_STATIC(const u_char *xdata, int length,char *retbuf)
+{
+    char conv[] = "0123456789ABCDEF";
+    const u_char *index;
+    const u_char *end;
+    char *ridx;
+
+    if( (xdata == NULL) ||
+	(retbuf == NULL) ||
+	(((length *2) + 1) > MAX_QUERY_LENGTH))
+    {
+	/* XXX */
+	return 1;
+    }
+
+    index = xdata;
+    end = xdata + length;
+    
+    memset(retbuf,'\0',MAX_QUERY_LENGTH);
+    
+    ridx = retbuf;
+    
+    while(index < end)
+    {
+        *ridx++ = conv[((*index & 0xFF)>>4)];
+        *ridx++ = conv[((*index & 0xFF)&0x0F)];
+        index++;
+    }
+    
+    return 0;
+}
+
 
 /*
  *   Fatal Integer Parser

@@ -64,6 +64,7 @@ typedef struct _ReferenceSystemNode
     char *name;
     char *url;
     struct _ReferenceSystemNode *next;
+
 } ReferenceSystemNode;
 
 ReferenceSystemNode * ReferenceSystemAdd(ReferenceSystemNode **, char *, char *);
@@ -77,9 +78,9 @@ void DeleteReferenceSystems(struct _Barnyard2Config *);
 
 typedef struct _ReferenceNode
 {
-	char *id;
-    ReferenceSystemNode		*system;
-	struct _ReferenceNode	*next;
+    char *id;
+    ReferenceSystemNode *system;
+    struct _ReferenceNode *next;
 } ReferenceNode;
 
 ReferenceNode * AddReference(struct _Barnyard2Config *, ReferenceNode **, char *, char *);
@@ -88,12 +89,31 @@ void DeleteReferences(struct _Barnyard2Config *);
 
 typedef struct _ClassType
 {
-	char				*type;		
-	uint32_t			id;			
-	char				*name;		/* "pretty" name */
-	uint32_t			priority;	
-	struct _ClassType	*next;
+    char *type;		
+    char *name;		/* "pretty" name */
+    uint32_t id;			
+    uint32_t priority;	
+    struct _ClassType	*next;
+
+
 } ClassType;
+
+
+typedef struct _SigNode
+{
+    uint32_t			generator;	/* generator ID */
+    uint32_t			id;			/* Snort ID */
+    uint32_t			rev;		/* revision (for future expansion) */
+    uint32_t			class_id;
+    uint32_t			priority;			
+    char			*msg;		/* messages */
+    ClassType			*classType;
+    ReferenceNode		*refs;		/* references (eg bugtraq) */
+    struct _SigNode		*next;
+
+} SigNode;
+
+
 
 ClassType * ClassTypeLookupByType(struct _Barnyard2Config *, char *);
 ClassType * ClassTypeLookupById(struct _Barnyard2Config *, int);
@@ -102,21 +122,6 @@ int ReadClassificationFile(struct _Barnyard2Config *, const char *);
 void ParseClassificationConfig(struct _Barnyard2Config *, char *args);
 
 void DeleteClassTypes();
-
-
-typedef struct _SigNode
-{
-    uint32_t			generator;	/* generator ID */
-    uint32_t			id;			/* Snort ID */
-    uint32_t			rev;		/* revision (for future expansion) */
-	uint32_t			class_id;
-	ClassType			*classType;
-	uint32_t			priority;			
-    char				*msg;		/* messages */
-    ReferenceNode		*refs;		/* references (eg bugtraq) */
-
-    struct _SigNode		*next;
-} SigNode;
 
 SigNode *GetSigByGidSid(uint32_t, uint32_t);
 

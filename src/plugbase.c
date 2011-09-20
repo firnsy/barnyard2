@@ -72,6 +72,7 @@
 #include "output-plugins/spo_log_tcpdump.h"
 #include "output-plugins/spo_platypus.h"
 #include "output-plugins/spo_sguil.h"
+#include "output-plugins/spo_syslog_full.h"
 
 extern InputConfigFuncNode  *input_config_funcs;
 extern OutputConfigFuncNode *output_config_funcs;
@@ -352,6 +353,9 @@ void RegisterOutputPlugins(void)
 
     PlatypusSetup();
     SguilSetup();
+
+    OpSyslog_Setup();
+
 }
 
 /****************************************************************************

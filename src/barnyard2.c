@@ -1825,7 +1825,8 @@ static void SetNoCores(void)
 
 static void InitSignals(void)
 {
-#ifndef WIN32
+#if !defined(WIN32) && !defined(__CYGWIN32__) && !defined(__CYGWIN__) && \
+    !defined( __CYGWIN64__)
 # if defined(LINUX) || defined(FREEBSD) || defined(OPENBSD) || \
      defined(SOLARIS) || defined(BSD) || defined(MACOS)
     sigset_t set;

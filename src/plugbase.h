@@ -45,7 +45,10 @@
 #  include <sys/socket.h>
 #endif
 
+#if !defined(__SOLARIS__) && !defined(__CYGWIN32__) && !defined(__CYGWIN__) && \
+    !defined( __CYGWIN64__)
 #include <net/route.h>
+#endif
 
 #ifdef ENABLE_SSL
 #  undef Free

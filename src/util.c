@@ -1986,7 +1986,8 @@ int GetLocalTimezone()
     time(&ut);
     ltm = localtime(&ut);
 
-#if defined(WIN32) || defined(SOLARIS) || defined(AIX) || defined(HPUX)
+#if defined(WIN32) || defined(SOLARIS) || defined(AIX) || defined(HPUX) ||\
+    defined(__CYGWIN__) || defined( __CYGWIN64__) || defined(__CYGWIN__)
     /* localtime() sets the global timezone variable,
        which is defined in <time.h> */
     seconds_away_from_utc = timezone;

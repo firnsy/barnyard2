@@ -109,6 +109,10 @@ case "$host" in
     AC_DEFINE([BROKEN_SIOCGIFMTU],[1],[Define if broken SIOCGIFMTU])
     LDFLAGS="${LDFLAGS} -L/sw/lib"
     extra_incl="-I/sw/include"
+    ;;
+  *-cygwin*)
+   AC_DEFINE([CYGWIN],[1],[Define if CYGWIN])
+    ;;
 esac
 
 # This is really meant for Solaris Sparc v9 where it has 32bit and 64bit
@@ -311,8 +315,51 @@ if test "x$with_libpfring_libraries" != "xno"; then
    LDFLAGS="${LDFLAGS} -L${with_libpfring_libraries}"
 fi
 
+
+PCAP_HEADERS=""
+# Test for pcap headers
+
+AC_CHECK_HEADERS(pcap.h,,PCAP_HEADERS="no")
+
+if test "x$PCAP_HEADERS" = "xno"; then
+
+    if test "x$CYGWIN" = "x1" ; then
+
+    echo
+    echo "   ERROR: You will need to get Winpcap, install libraries and headers in your path"
+    echo "   Downlad from http://www.winpcap.org, uncompress it and copy */Lib/* to your lib path (/lib)"
+    echo "   and */Include/* to your include path (/usr/include)"
+    echo "   or use the --with-libpcap-* options, if you have it installed"
+    echo "   in unusual place.  Also check if your libpcap depends on another"
+    echo "   shared library that may be installed in an unusual place"
+
+    exit 1
+
+    else
+
+    echo
+    echo "   ERROR!  Libpcap library/headers (libpcap.a (or .so)/pcap.h)"
+    echo "   not found, go get it from http://www.tcpdump.org"
+    echo "   or use the --with-libpcap-* options, if you have it installed"
+    echo "   in unusual place.  Also check if your libpcap depends on another"
+    echo "   shared library that may be installed in an unusual place"
+    exit 1
+
+    fi
+
+fi
+
+
 LPCAP=""
-AC_CHECK_LIB(pcap, pcap_datalink,, LPCAP="no")
+
+if test "x$with_libpcap_libraries" != "xyes"; then
+     if test "x$CYGWIN" = "x1"; then
+      	 AC_CHECK_LIB(wpcap, pcap_datalink,, LPCAP="no")
+      else
+         AC_CHECK_LIB(pcap, pcap_datalink,, LPCAP="no")
+      fi
+fi
+
 
 # If the normal AC_CHECK_LIB for pcap fails then check to see if we are
 # using a pfring-enabled pcap.
@@ -336,6 +383,21 @@ fi
 # If both the AC_CHECK_LIB for normal pcap and pfring-enabled pcap fail then exit.
 if test "x$LPCAP" = "xno"; then
   if test "x$LPFRING_PCAP" = "xno"; then
+
+         if test "x$CYGWIN" = "1" ; then
+    	 
+    echo	
+    echo "   ERROR: You will need to get Winpcap, install libraries and headers in your path"
+    echo "   Downlad from http://www.winpcap.org, uncompress it and copy */Lib/* to your lib path (/lib)"
+    echo "   and */Include/* to your include path (/usr/include)"
+    echo "   or use the --with-libpcap-* options, if you have it installed"
+    echo "   in unusual place.  Also check if your libpcap depends on another"
+    echo "   shared library that may be installed in an unusual place"
+
+    exit 1	
+
+    else
+    
     echo
     echo "   ERROR!  Libpcap library/headers (libpcap.a (or .so)/pcap.h)"
     echo "   not found, go get it from http://www.tcpdump.org"
@@ -343,6 +405,9 @@ if test "x$LPCAP" = "xno"; then
     echo "   in unusual place.  Also check if your libpcap depends on another"
     echo "   shared library that may be installed in an unusual place"
     exit 1
+
+    fi
+
   fi
 fi
 

@@ -237,7 +237,7 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
 		return;
 	}
 
-    if ( p->ip6h != NULL )
+    if ( (p != NULL) && (p->ip6h != NULL) )
     {
         return;
     }

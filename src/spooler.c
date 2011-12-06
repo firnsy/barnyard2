@@ -439,6 +439,10 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
                 continue;
             }
 
+	    spooler->record_idx = 0;
+            spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);
+
+
             waiting_logged = 0;
 
             /* set timestamp to ensure we look for a newer file next time */

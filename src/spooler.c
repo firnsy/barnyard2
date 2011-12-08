@@ -440,7 +440,8 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
                 pc_ret = -1;
                 continue;
             }
-
+	    
+	    record_start = 0;
 	    spooler->record_idx = 0;
             spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);
 

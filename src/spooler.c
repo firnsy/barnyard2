@@ -378,6 +378,9 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
     int                 waiting_logged = 0;
     uint32_t            skipped = 0;
     uint32_t            extension = 0;
+
+    u_int32_t waldo_timestamp = 0;
+    waldo_timestamp = timestamp; /* fix possible bug by keeping invocated timestamp at the time of the initial call */
  
     if (BcProcessNewRecordsOnly())
     {
@@ -404,6 +407,15 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
         {
             /* find the next file to spool */
             ret = FindNextExtension(dirpath, filebase, timestamp, &extension);
+
+	    /* The file found is not the same as specified in the waldo,
+               thus we need to reset record_start, since we are obviously not processing the same file*/
+            if(waldo_timestamp != extension)
+            {
+                record_start = 0; /* There is no danger to resetting record_start to 0
+                                     if called timestamp is not the same */
+            }
+
 
             /* no new extensions found */
             if (ret == SPOOLER_EXTENSION_NONE)
@@ -438,6 +450,11 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
                 pc_ret = -1;
                 continue;
             }
+
+            /* Make sure we create a new waldo even if we did not have processed an event */
+            spooler->record_idx = 0;
+            spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);
+
 
             waiting_logged = 0;
 

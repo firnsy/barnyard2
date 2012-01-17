@@ -1106,12 +1106,20 @@ u_int32_t ConvertClassificationCache(ClassType **iHead, MasterCache *iMasterCach
  */
 u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **iArrayPtr,u_int32_t *array_length)
 {
-
-    int result = 0;
     u_int32_t queryColCount =0;
     u_int32_t curr_row = 0;
 
-    
+#ifdef ENABLE_MYSQL
+    int result = 0;
+#endif
+
+#ifdef ENABLE_POSTGRESQL
+    char *pg_val = NULL;
+    u_int32_t curr_col = 0;
+    int num_row = 0;
+    u_int8_t pgStatus = 0;
+#endif /* ENABLE_POSTGRESQL */
+
     if( (data == NULL) ||
         ( ( iArrayPtr == NULL )  && ( *iArrayPtr != NULL )) ||
         ( array_length == NULL))
@@ -1188,9 +1196,13 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
 		}
 		else
 		{
+
 		    /* XXX */
-		    free(*iArrayPtr);
-		    *iArrayPtr = NULL;
+		    if(iArrayPtr != NULL)
+		    {
+			free(*iArrayPtr);
+			*iArrayPtr = NULL;
+		    }
                     mysql_free_result(data->m_result);
                     data->m_result = NULL;
                     LogMessage("[%s()]: No signature found in database ... \n",
@@ -1209,7 +1221,7 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
 		    *iArrayPtr = NULL;
                     mysql_free_result(data->m_result);
                     data->m_result = NULL;
-                    LogMessage("[%s()] To mutch column returned by query [%u]...\n",
+                    LogMessage("[%s()] To many column returned by query [%u]...\n",
                                __FUNCTION__,
                                queryColCount);
                     return 1;
@@ -1285,57 +1297,154 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
                        __FUNCTION__,
                        data->SQL_SELECT);
 	    break;
-
+	    
         }
-
+	
         /* XXX */
         return 1;
-
         break;
-
 #endif /* ENABLE_MYSQL */
-
+	    
 #ifdef ENABLE_POSTGRESQL
     case DB_POSTGRESQL:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
+	
+	
+	data->p_result = PQexec(data->p_connection,data->SQL_SELECT);
+	
+	pgStatus = PQresultStatus(data->p_result);
+	switch(pgStatus)
+	    {
+		
+	    case PGRES_TUPLES_OK:
+		
+		if( (num_row = PQntuples(data->p_result)))
+		{
+
+		    *array_length = num_row;
+		    
+		    if( (queryColCount = PQnfields(data->p_result)) !=  NUM_ROW_CLASSIFICATION)
+		    {
+			LogMessage("[%s()] To many column returned by query [%u]...\n",
+				   __FUNCTION__,
+				   queryColCount);
+			PQclear(data->p_result);
+			data->p_result = NULL;
+			return 1;
+		    }
+		    
+		    
+		    if( (*iArrayPtr = SnortAlloc( (sizeof(dbClassificationObj) * num_row))) == NULL)
+		    {
+			if(data->p_result)
+			{
+			    PQclear(data->p_result);
+			    data->p_result = NULL;
+			}
+			FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+				   __FUNCTION__);
+		    }
+		    
+		    for(curr_row = 0 ; curr_row < num_row ; curr_row++)
+		    {
+			dbClassificationObj *cPtr = &(*iArrayPtr)[curr_row];
+			
+			for(curr_col = 0 ; curr_col < queryColCount ; curr_col ++)
+			{
+			    pg_val = NULL;
+			    if( (pg_val = PQgetvalue(data->p_result,curr_row,curr_col)) == NULL)
+			    {
+				/* XXX */
+				/* Something went wrong */
+				PQclear(data->p_result);
+				data->p_result = NULL;
+				return 1;
+			    }		
+			    
+			    switch(curr_col)
+			    {
+			    case 0:
+				cPtr->db_sig_class_id = strtoul(pg_val,NULL,10);
+				break;
+			    case 1:
+				strncpy(cPtr->sig_class_name,pg_val,CLASS_NAME_LEN);
+				cPtr->sig_class_name[CLASS_NAME_LEN-1] = '\0'; //safety
+				break;
+			    default:
+				/* We should bail here*/
+				break;
+			    }
+			}
+		    }
+		}
+		else
+		{
+		    *array_length = 0;
+		}
+		
+		
+		if(data->p_result)
+		{
+		    PQclear(data->p_result);
+		    data->p_result = NULL;
+		}
+		
+		return 0;
+		break;
+		
+	    default:
+		if(PQerrorMessage(data->p_connection)[0] != '\0')
+		{
+		    ErrorMessage("ERROR database: postgresql_error: %s\n",
+				 PQerrorMessage(data->p_connection));
+		    return 1;
+		}
+		break;
+	    }
+	    
+	    return 1;
+	    break;
+	    
 #endif /* ENABLE_POSTGRESQL */
-
+	    
 #ifdef ENABLE_ORACLE
-    case DB_ORACLE:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-
-        break;
+	case DB_ORACLE:
+	    LogMessage("[%s()], is not yet implemented for DBMS configured\n",
+		       __FUNCTION__);
+	    
+	    break;
 #endif /* ENABLE_ORACLE */
-
+	    
 #ifdef ENABLE_ODBC
-    case DB_ODBC:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
+	case DB_ODBC:
+	    LogMessage("[%s()], is not yet implemented for DBMS configured\n",
                    __FUNCTION__);
-        break;
+	    break;
 #endif /* ENABLE_ODBC */
-
+	    
 #ifdef ENABLE_MSSQL
-    case DB_MSSQL:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
+	case DB_MSSQL:
+	    LogMessage("[%s()], is not yet implemented for DBMS configured\n",
                    __FUNCTION__);
-        break;
+	    break;
 #endif /* ENABLE_MSSQL */
-
-
+	    
     default:
-
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
-
+	
+	LogMessage("[%s()], is not yet implemented for DBMS configured\n",
+		   __FUNCTION__);
+	break;
+	
+	return 1;
     }
     
-    
-    return 0;
+    /* XXX */
+    return 1;
 }
+    
+
+
+
+	   
 
 /** 
  *  Merge internal Classification cache with database data, detect difference, tag known node for database update
@@ -1444,12 +1553,12 @@ u_int32_t ClassificationPopulateDatabase(DatabaseData  *data,cacheClassification
 	{
 	    
 	    if( (snort_escape_string_STATIC(cacheHead->obj.sig_class_name,CLASS_NAME_LEN,data)))
-            {
-                FatalError("ERROR database: [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-                           "[%s], Exiting. \n",
-                           __FUNCTION__,
-                           &cacheHead->obj.sig_class_name);
-            }
+	    {
+		FatalError("ERROR database: [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+			   "[%s], Exiting. \n",
+			   __FUNCTION__,
+			   &cacheHead->obj.sig_class_name);
+	    }
 
 	    DatabaseCleanInsert(data);
 	    if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
@@ -1591,8 +1700,6 @@ u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cache
 	return 1;
     }
 
-	
-
     if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
     {
         /* A This shouldn't happen since we are in failed transaction state */
@@ -1607,8 +1714,14 @@ u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cache
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
+    
+    if( (BeginTransaction(data)))
+    {
+	/* XXX */
+	return 1;
+    }
+    
 
-	    BeginTransaction(data);
     
     while(cacheHead != NULL)
     {
@@ -1673,13 +1786,21 @@ u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cache
 
 
     }
+    
+    
 
-	    CommitTransaction(data);
+    if(CommitTransaction(data))
+    {
+	/* XXX */
+	return 1;
+    }
 
+	    
     return 0;
     
 TransactionFail:
     RollbackTransaction(data);
+
     return 1;    
 }
 
@@ -1752,11 +1873,21 @@ u_int32_t SignatureCacheUpdateDBid(dbSignatureObj *iDBList,u_int32_t array_lengt
  */
 u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,u_int32_t *array_length)
 {
-    int result = 0;
+
     u_int32_t queryColCount =0;
     u_int32_t curr_row = 0;
 
+#ifdef ENABLE_MYSQL
+    int result = 0;
+#endif
     
+#ifdef ENABLE_POSTGRESQL
+    char *pg_val = NULL;
+    int num_row = 0;
+    u_int32_t curr_col = 0;    
+    u_int8_t pgStatus = 0;
+#endif /* ENABLE_POSTGRESQL */
+
     if( (data == NULL) ||
         ( ( iArrayPtr == NULL )  && ( *iArrayPtr != NULL )) ||
         ( array_length == NULL))
@@ -1853,7 +1984,7 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
 		    *iArrayPtr = NULL;
                     mysql_free_result(data->m_result);
                     data->m_result = NULL;
-                    LogMessage("[%s()] To mutch column returned by query [%u]...\n",
+                    LogMessage("[%s()] To many column returned by query [%u]...\n",
                                __FUNCTION__,
                                queryColCount);
                     return 1;
@@ -1960,9 +2091,121 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
 
 #ifdef ENABLE_POSTGRESQL
     case DB_POSTGRESQL:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
+
+        data->p_result = PQexec(data->p_connection,data->SQL_SELECT);
+
+        pgStatus = PQresultStatus(data->p_result);
+        switch(pgStatus)
+	{
+
+	case PGRES_TUPLES_OK:
+
+	    if( (num_row = PQntuples(data->p_result)))
+	    {
+		*array_length = num_row;
+		
+		if( (queryColCount = PQnfields(data->p_result)) !=  NUM_ROW_SIGNATURE)
+		{
+		    LogMessage("[%s()] To many column returned by query [%u]...\n",
+			       __FUNCTION__,
+			       queryColCount);
+		    PQclear(data->p_result);
+		    data->p_result = NULL;
+		    return 1;
+		}
+		
+		if( (*iArrayPtr = SnortAlloc( (sizeof(dbSignatureObj) * num_row))) == NULL)
+		{
+		    if(data->p_result)
+		    {
+			PQclear(data->p_result);
+			data->p_result = NULL;
+		    }
+		    FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+			       __FUNCTION__);
+		}
+
+		for(curr_row = 0 ; curr_row < num_row ; curr_row++)
+		{
+		    dbSignatureObj *cPtr = &(*iArrayPtr)[curr_row];
+
+		    for(curr_col = 0 ; curr_col < queryColCount ; curr_col ++)
+		    {
+			pg_val = NULL;
+			if( (pg_val = PQgetvalue(data->p_result,curr_row,curr_col)) == NULL)
+			{
+			    /* XXX */
+			    /* Something went wrong */
+			    PQclear(data->p_result);
+			    data->p_result = NULL;
+			    return 1;
+			}
+			switch(curr_col)
+			{
+			case 0:
+			    cPtr->db_id = strtoul(pg_val,NULL,10);
+			    break;
+
+			case 1:
+			    cPtr->sid= strtoul(pg_val,NULL,10);
+			    break;
+
+			case 2:
+			    cPtr->gid = strtoul(pg_val,NULL,10);
+			    break;
+
+			case 3:
+			    cPtr->rev = strtoul(pg_val,NULL,10);
+			    break;
+
+			case 4:
+			    cPtr->class_id = strtoul(pg_val,NULL,10);
+			    break;
+
+			case 5:
+			    cPtr->priority_id = strtoul(pg_val,NULL,10);
+			    break;
+
+			case 6:
+			    strncpy(cPtr->message,pg_val,SIG_MSG_LEN);
+			    cPtr->message[SIG_MSG_LEN-1] = '\0'; //safety
+			    break;
+			default:
+			    /* We should bail here*/
+			    break;
+			}
+		    }
+		}
+	    }
+	    else
+	    {
+		*array_length = 0;
+	    }
+
+
+	    if(data->p_result)
+	    {
+		PQclear(data->p_result);
+		data->p_result = NULL;
+	    }
+
+	    return 0;
+	    break;
+
+	default:
+	    if(PQerrorMessage(data->p_connection)[0] != '\0')
+	    {
+		ErrorMessage("ERROR database: postgresql_error: %s\n",
+			     PQerrorMessage(data->p_connection));
+		return 1;
+	    }
+	    break;
+	}
+
+	return 1;
+	break;
+
+
 #endif /* ENABLE_POSTGRESQL */
 
 #ifdef ENABLE_ORACLE
@@ -2090,9 +2333,22 @@ u_int32_t SignatureCacheSynchronize(DatabaseData *data,cacheSignatureObj **cache
  */
 u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,u_int32_t *array_length)
 {
-    int result = 0;
     u_int32_t queryColCount =0;
     u_int32_t curr_row = 0;
+
+
+
+#ifdef ENABLE_MYSQL
+    int result = 0;
+#endif
+
+#ifdef ENABLE_POSTGRESQL
+    char *pg_val = NULL;
+    int num_row = 0;
+    u_int32_t curr_col = 0;
+    u_int8_t pgStatus = 0;
+#endif /* ENABLE_POSTGRESQL */
+
     
     
     if( (data == NULL) ||
@@ -2189,7 +2445,7 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
                     *iArrayPtr = NULL;
                     mysql_free_result(data->m_result);
                     data->m_result = NULL;
-                    LogMessage("[%s()] To mutch column returned by query [%u]...\n",
+                    LogMessage("[%s()] To many column returned by query [%u]...\n",
                                __FUNCTION__,
                                queryColCount);
                     return 1;
@@ -2230,7 +2486,7 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
 				break;
 
 			    case 2:
-				strncpy(cPtr->ref_tag,row[i],strlen(row[i]));
+				strncpy(cPtr->ref_tag,row[i],REF_TAG_LEN);
 				cPtr->ref_tag[REF_TAG_LEN-1] = '\0'; //toasty.
 				break;
 
@@ -2281,9 +2537,109 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
 
 #ifdef ENABLE_POSTGRESQL
     case DB_POSTGRESQL:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
+
+        data->p_result = PQexec(data->p_connection,data->SQL_SELECT);
+
+        pgStatus = PQresultStatus(data->p_result);
+        switch(pgStatus)
+	{
+
+	case PGRES_TUPLES_OK:
+
+	    if( (num_row = PQntuples(data->p_result)))
+	    {
+
+		*array_length = num_row;
+
+		if( (queryColCount = PQnfields(data->p_result)) !=  NUM_ROW_REF)
+		{
+		    LogMessage("[%s()] To many column returned by query [%u]...\n",
+			       __FUNCTION__,
+			       queryColCount);
+		    PQclear(data->p_result);
+		    data->p_result = NULL;
+		    return 1;
+		}
+
+
+		if( (*iArrayPtr = SnortAlloc( (sizeof(dbReferenceObj) * num_row))) == NULL)
+		{
+		    if(data->p_result)
+		    {
+			PQclear(data->p_result);
+			data->p_result = NULL;
+		    }
+
+		    FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+			       __FUNCTION__);
+		}
+
+		for(curr_row = 0 ; curr_row < num_row ; curr_row++)
+		{
+		    dbReferenceObj *cPtr = &(*iArrayPtr)[curr_row];
+
+		    for(curr_col = 0 ; curr_col < queryColCount ; curr_col ++)
+		    {
+			pg_val = NULL;
+			if( (pg_val = PQgetvalue(data->p_result,curr_row,curr_col)) == NULL)
+			{
+			    /* XXX */
+			    /* Something went wrong */
+			    PQclear(data->p_result);
+			    data->p_result = NULL;
+			    return 1;
+			}
+			switch(curr_col)
+			{
+			case 0:
+			    cPtr->ref_id = strtoul(pg_val,NULL,10);
+			    break;
+
+			case 1:
+			    /* Do nothing for now but could be used to do a consistency check */
+			    cPtr->system_id = strtoul(pg_val,NULL,10);
+			    break;
+
+			case 2:
+			    strncpy(cPtr->ref_tag,pg_val,REF_TAG_LEN);
+			    cPtr->ref_tag[REF_TAG_LEN-1] = '\0'; //toasty.
+			    break;
+
+			default:
+			    /* We should bail here*/
+			    break;
+			}
+		    }
+		}
+	    }
+	    else
+	    {
+		*array_length = 0;
+	    }
+
+
+	    if(data->p_result)
+	    {
+		PQclear(data->p_result);
+		data->p_result = NULL;
+	    }
+
+	    return 0;
+	    break;
+
+	default:
+	    if(PQerrorMessage(data->p_connection)[0] != '\0')
+	    {
+		ErrorMessage("ERROR database: postgresql_error: %s\n",
+			     PQerrorMessage(data->p_connection));
+		return 1;
+	    }
+	    break;
+	}
+
+	return 1;
+	break;
+
 #endif /* ENABLE_POSTGRESQL */
 
 #ifdef ENABLE_ORACLE
@@ -2333,9 +2689,20 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
  */
 u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int32_t *array_length)
 {
-    int result = 0;
+
     u_int32_t queryColCount =0;
     u_int32_t curr_row = 0;
+
+#ifdef ENABLE_MYSQL
+    int result = 0;
+#endif
+
+#ifdef ENABLE_POSTGRESQL
+    char *pg_val = NULL;
+    int num_row = 0;
+    u_int32_t curr_col = 0;
+    u_int8_t pgStatus = 0;
+#endif /* ENABLE_POSTGRESQL */
 
 
     if( (data == NULL) ||
@@ -2433,7 +2800,7 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
                     *iArrayPtr = NULL;
                     mysql_free_result(data->m_result);
                     data->m_result = NULL;
-                    LogMessage("[%s()] To mutch column returned by query [%u]...\n",
+                    LogMessage("[%s()] To many column returned by query [%u]...\n",
                                __FUNCTION__,
                                queryColCount);
                     return 1;
@@ -2520,9 +2887,106 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
 
 #ifdef ENABLE_POSTGRESQL
     case DB_POSTGRESQL:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
+
+        data->p_result = PQexec(data->p_connection,data->SQL_SELECT);
+
+        pgStatus = PQresultStatus(data->p_result);
+        switch(pgStatus)
+	{
+
+	case PGRES_TUPLES_OK:
+
+	    if( (num_row = PQntuples(data->p_result)))
+	    {
+
+		*array_length = num_row;
+
+		if( (queryColCount = PQnfields(data->p_result)) !=  NUM_ROW_REFERENCE_SYSTEM)
+		{
+		    LogMessage("[%s()] To many column returned by query [%u]...\n",
+			       __FUNCTION__,
+			       queryColCount);
+		    PQclear(data->p_result);
+		    data->p_result = NULL;
+		    return 1;
+		}
+
+
+		if( (*iArrayPtr = SnortAlloc( (sizeof(dbSystemObj) * num_row))) == NULL)
+		{
+		    if(data->p_result)
+		    {
+			PQclear(data->p_result);
+			data->p_result = NULL;
+		    }
+
+		    FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+			       __FUNCTION__);
+		}
+
+		for(curr_row = 0 ; curr_row < num_row ; curr_row++)
+		{
+                    dbSystemObj *cPtr = &(*iArrayPtr)[curr_row];
+
+		    for(curr_col = 0 ; curr_col < queryColCount ; curr_col ++)
+		    {
+			pg_val = NULL;
+			if( (pg_val = PQgetvalue(data->p_result,curr_row,curr_col)) == NULL)
+			{
+			    /* XXX */
+			    /* Something went wrong */
+			    PQclear(data->p_result);
+			    data->p_result = NULL;
+			    return 1;
+			}
+			
+			switch(curr_col)
+			{
+			    
+			case 0:
+			    cPtr->db_ref_system_id = strtoul(pg_val,NULL,10);
+			    break;
+
+			case 1:
+			    strncpy(cPtr->ref_system_name,pg_val,SYSTEM_NAME_LEN);
+			    cPtr->ref_system_name[SYSTEM_NAME_LEN-1] = '\0'; //toasty.
+			    break;
+
+			default:
+			    /* We should bail here*/
+			    break;
+			}
+		    }
+		}
+	    }
+	    else
+	    {
+		*array_length = 0;
+	    }
+
+
+	    if(data->p_result)
+	    {
+		PQclear(data->p_result);
+		data->p_result = NULL;
+	    }
+
+	    return 0;
+	    break;
+
+	default:
+	    if(PQerrorMessage(data->p_connection)[0] != '\0')
+	    {
+		ErrorMessage("ERROR database: postgresql_error: %s\n",
+			     PQerrorMessage(data->p_connection));
+		return 1;
+	    }
+	    break;
+	}
+
+	return 1;
+	break;
+
 #endif /* ENABLE_POSTGRESQL */
 
 #ifdef ENABLE_ORACLE
@@ -2881,7 +3345,7 @@ u_int32_t SystemPopulateDatabase(DatabaseData  *data,cacheSystemObj *cacheHead)
 	    cacheReferenceObj *tNode = cacheHead->obj.refList;
 	    while(tNode != NULL)
 	    {
-		tNode->obj.parent = &cacheHead->obj;
+		tNode->obj.parent = (cacheSystemObj *)&cacheHead->obj;
 		tNode->obj.system_id = cacheHead->obj.db_ref_system_id;
 		tNode = tNode->next;
 	    }
@@ -3122,9 +3586,22 @@ u_int32_t GenerateSigRef(cacheSignatureReferenceObj **iHead,cacheSignatureObj *s
  */
 u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferenceObj **iArrayPtr,u_int32_t *array_length)
 {
-    int result = 0;
+
     u_int32_t queryColCount =0;
     u_int32_t curr_row = 0;
+
+#ifdef ENABLE_MYSQL
+    int result = 0;
+#endif
+
+
+#ifdef ENABLE_POSTGRESQL
+    char *pg_val = NULL;
+    int num_row = 0;
+    u_int32_t curr_col = 0;
+    u_int8_t pgStatus = 0;
+#endif /* ENABLE_POSTGRESQL */
+
     
     if( (data == NULL) ||
         ( ( iArrayPtr == NULL )  && ( *iArrayPtr != NULL )) ||
@@ -3220,7 +3697,7 @@ u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferen
                     *iArrayPtr = NULL;
                     mysql_free_result(data->m_result);
                     data->m_result = NULL;
-                    LogMessage("[%s()] To mutch column returned by query [%u]...\n",
+                    LogMessage("[%s()] To many column returned by query [%u]...\n",
                                __FUNCTION__,
                                queryColCount);
                     return 1;
@@ -3304,9 +3781,109 @@ u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferen
 
 #ifdef ENABLE_POSTGRESQL
     case DB_POSTGRESQL:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
+
+        data->p_result = PQexec(data->p_connection,data->SQL_SELECT);
+
+        pgStatus = PQresultStatus(data->p_result);
+        switch(pgStatus)
+	{
+
+	case PGRES_TUPLES_OK:
+
+	    if( (num_row = PQntuples(data->p_result)))
+	    {
+
+		*array_length = num_row;
+
+		if( (queryColCount = PQnfields(data->p_result)) !=  NUM_ROW_SIGREF)
+		{
+		    LogMessage("[%s()] To many column returned by query [%u]...\n",
+			       __FUNCTION__,
+			       queryColCount);
+		    PQclear(data->p_result);
+		    data->p_result = NULL;
+		    return 1;
+		}
+
+
+		if( (*iArrayPtr = SnortAlloc( (sizeof(dbSignatureReferenceObj) * num_row))) == NULL)
+		{
+		    if(data->p_result)
+		    {
+			PQclear(data->p_result);
+			data->p_result = NULL;
+		    }
+
+		    FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+			       __FUNCTION__);
+		}
+
+		for(curr_row = 0 ; curr_row < num_row ; curr_row++)
+		{
+		    dbSignatureReferenceObj *cPtr = &(*iArrayPtr)[curr_row];
+
+		    for(curr_col = 0 ; curr_col < queryColCount ; curr_col ++)
+		    {
+			pg_val = NULL;
+			if( (pg_val = PQgetvalue(data->p_result,curr_row,curr_col)) == NULL)
+			{
+			    /* XXX */
+			    /* Something went wrong */
+			    PQclear(data->p_result);
+			    data->p_result = NULL;
+			    return 1;
+			}
+
+			switch(curr_col)
+			{
+			case 0:
+                            cPtr->db_ref_id = strtoul(pg_val,NULL,10);
+                            break;
+
+                        case 1:
+                            cPtr->db_sig_id = strtoul(pg_val,NULL,10);
+                            break;
+
+                        case 2:
+                            cPtr->ref_seq = strtoul(pg_val,NULL,10);
+			    break;
+
+			default:
+			    /* We should bail here*/
+			    break;
+			}
+		    }
+		}
+	    }
+	    else
+	    {
+		*array_length = 0;
+	    }
+
+
+	    if(data->p_result)
+	    {
+		PQclear(data->p_result);
+		data->p_result = NULL;
+	    }
+
+	    return 0;
+	    break;
+
+	default:
+	    if(PQerrorMessage(data->p_connection)[0] != '\0')
+	    {
+		ErrorMessage("ERROR database: postgresql_error: %s\n",
+			     PQerrorMessage(data->p_connection));
+		return 1;
+	    }
+	    break;
+	}
+
+	return 1;
+	break;
+
+
 #endif /* ENABLE_POSTGRESQL */
 
 #ifdef ENABLE_ORACLE
@@ -3781,8 +4358,8 @@ void MasterCacheFlush(DatabaseData *data)
     cacheReferenceObj *MCcacheReference;
     cacheSystemObj *MCcacheSystem;
     
-    void *holder ;
-    void *holder2 ;
+    void *holder;
+    void *holder2;
 
     if(data == NULL)
     {

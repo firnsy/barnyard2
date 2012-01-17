@@ -84,7 +84,7 @@ u_int32_t SQL_Initialize(DatabaseData *data)
     
     for(x = 0 ; x < data->SQL.query_total ; x++)
     {
-	if( (data->SQL.query_array[x] = SnortAlloc( (sizeof(char) * MAX_QUERY_LENGTH))) == NULL)
+	if( (data->SQL.query_array[x] = SnortAlloc( (sizeof(char) * MAX_QUERY_LENGTH ))) == NULL)
 	{
 	    /* XXX */
 	    return 1;
@@ -259,7 +259,7 @@ u_int32_t SynchronizeEventId(DatabaseData *data)
         /* XXX*/
         return 1;
     }
-    
+   
     for(itr = 0; itr < num_tables ; itr++)
     {
 	c_cid = 0;
@@ -441,8 +441,8 @@ void DatabasePluginPrintData(DatabaseData *data)
 #endif /* ENABLE_MYSQL */
     
 #ifdef ENABLE_POSTGRESQL
-    if (data->ssl_mode != NULL)
-	LogMessage("database:       ssl_mode = %s\n", data->ssl_mode);
+    if (data->dbRH[data->dbtype_id].ssl_mode != NULL)
+	LogMessage("database:       ssl_mode = %s\n", data->dbRH[data->dbtype_id].ssl_mode);
 #endif /* ENABLE_POSTGRESQL */
     
     if(data->facility != NULL)
@@ -482,19 +482,31 @@ void DatabaseInit(char *args)
     
     switch(data->dbtype_id)
     {
-	
+#ifdef ENABLE_MYSQL	
     case DB_MYSQL:
 	data->dbRH[data->dbtype_id].dbConnectionStatus = dbConnectionStatusMYSQL;
-	data->dbRH[data->dbtype_id].dbConnectionCount=0;
+	data->dbRH[data->dbtype_id].dbConnectionCount = 0;
 	break;
-	
+#endif /* ENABLE_MYSQL */
+
+#ifdef ENABLE_POSTGRESQL	
     case DB_POSTGRESQL:
+	data->dbRH[data->dbtype_id].dbConnectionStatus = dbConnectionStatusPOSTGRESQL;
+	data->dbRH[data->dbtype_id].dbConnectionCount = 0;
+	break;
+#endif /* ENABLE_POSTGRESQL */
+
+#ifdef ENABLE_ODBC
+#ifdef ENABLE_ORACLE
+#ifdef ENABLE_MSSQL	
     case DB_MSSQL:
     case DB_ORACLE:
     case DB_ODBC:
 	FatalError("ERROR database: The database family you want to use is currently not supported by this build \n");
 	break;
-	
+#endif 	/* ENABLE MSSQL */
+#endif 	/* ENABLE ORACLE */
+#endif 	/* ENABLE ODBC */
     default:
 	FatalError("ERROR database: Unknown database type defined: [%lu] \n",data->dbtype_id);
 	break;
@@ -713,35 +725,38 @@ u_int32_t DatabasePluginInitializeSensor(DatabaseData *data)
         }
     }
     
-    
-    
-    if( Select(data->SQL_SELECT,
-	       data,
-	       (u_int32_t *)&data->sid))
+        
+    if( (Select(data->SQL_SELECT,data,(u_int32_t *)&data->sid)))
     {
+	/* XXX */
+	LogMessage("Error database: Problem querying the sensor table with [%s] failing initialization \n",
+	    data->SQL_SELECT);
+	
+	goto exit_funct;
+    }
+    
+    if(data->sid == 0)
+    {
+	if(Insert(data->SQL_INSERT,data))
+	{
+	    /* XXX */
+	    FatalError("ERROR database: Error inserting [%s] \n",data->SQL_INSERT);
+	}
+	
+	if( Select(data->SQL_SELECT,data,(u_int32_t *)&data->sid))
+	{
+	    /* XXX */
+	    FatalError("ERROR database: Error Executing [%s] \n",data->SQL_SELECT);
+	}
 	
 	if(data->sid == 0)
 	{
-	    if(Insert(data->SQL_INSERT,data))
-	    {
-		/* XXX */
-		FatalError("ERROR database: Error inserting [%s] \n",data->SQL_INSERT);
-	    }
-	    
-	    if( Select(data->SQL_SELECT,data,(u_int32_t *)&data->sid))
-	    {
-		/* XXX */
-		FatalError("ERROR database: Error Executing [%s] \n",data->SQL_SELECT);
-	    }
-	    
-	    if(data->sid == 0)
-	    {
-		ErrorMessage("ERROR database: Problem obtaining SENSOR ID (sid) from %s->sensor\n",
-			     data->dbname);
-		FatalError("%s\n%s\n", FATAL_NO_SENSOR_1, FATAL_NO_SENSOR_2);
-	    }
+	    ErrorMessage("ERROR database: Problem obtaining SENSOR ID (sid) from %s->sensor\n",
+			 data->dbname);
+	    FatalError("%s\n%s\n", FATAL_NO_SENSOR_1, FATAL_NO_SENSOR_2);
 	}
     }
+
     
 exit_funct:
     if(escapedSensorName != NULL)
@@ -1083,7 +1098,7 @@ void ParseDatabaseArgs(DatabaseData *data)
                  (!strncasecmp(a1, KEYWORD_SSL_MODE_PREFER, strlen(KEYWORD_SSL_MODE_PREFER))) ||
                  (!strncasecmp(a1, KEYWORD_SSL_MODE_REQUIRE, strlen(KEYWORD_SSL_MODE_REQUIRE))) )
             {
-                data->ssl_mode = a1;
+                data->dbRH[data->dbtype_id].ssl_mode = a1;
                 data->use_ssl = 1;
             }
             else
@@ -1134,22 +1149,21 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
 {
 
     u_int32_t db_sig_id = 0;
-
+    
     if( (data == NULL) ||
 	(iUpdateSig == NULL))
     {
 	/* XXX */
 	return 1;
     }
-
-
+    
     if( BeginTransaction(data) )
     {
-	/* XXX */
+	    /* XXX */
 	FatalError("ERROR database: [%s()]: Failed to Initialize transaction, bailing ... \n",
 		   __FUNCTION__);
     }
-    
+	
     
     DatabaseCleanSelect(data);
     DatabaseCleanInsert(data);
@@ -1225,7 +1239,8 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
         }
         return 1;
     }
-    
+
+
     if(CommitTransaction(data))
     {
 	/* XXX */
@@ -1235,16 +1250,17 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
 	setTransactionCallFail(&data->dbRH[data->dbtype_id]);
 	
 	
-        if(RollbackTransaction(data))
-        {
-            /* XXX */
-            FatalError("ERROR database: Unable to rollback transaction\n");
-        }
-	return 1;
+	    if(RollbackTransaction(data))
+	    {
+		/* XXX */
+		FatalError("ERROR database: Unable to rollback transaction\n");
+	    }
+	    return 1;
     }
-
+    
+    
     return 0;
-
+    
 }
 
 int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t event_type, 
@@ -2176,6 +2192,8 @@ TransacRollback:
 	    /* XXX */
 	    FatalError("ERROR database: Unable to rollback transaction\n");
 	}
+	
+	resetTransactionState(&data->dbRH[data->dbtype_id]);
     }
     
     if( BeginTransaction(data) )
@@ -2439,6 +2457,10 @@ char * snort_escape_string(char * from, DatabaseData * data)
 */
 u_int32_t snort_escape_string_STATIC(char *from, u_int32_t buffer_max_len ,DatabaseData *data)
 {
+
+    int error = 0;
+    size_t write_len = 0;
+
     char * to = NULL;
     char * to_start = NULL;
     char * end = NULL;
@@ -2496,6 +2518,7 @@ u_int32_t snort_escape_string_STATIC(char *from, u_int32_t buffer_max_len ,Datab
 	}
 	break;
 #endif
+
 #ifdef ENABLE_MSSQL
     case DB_MSSQL:
 
@@ -2516,10 +2539,8 @@ u_int32_t snort_escape_string_STATIC(char *from, u_int32_t buffer_max_len ,Datab
 /* Historically these were together in a common "else".
  * Keeping it that way until somebody complains...
  */
-#if defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)
+#ifdef ENABLE_MYSQL
     case DB_MYSQL:
-    case DB_POSTGRESQL:
-
 	for(end=from+from_length; from != end; from++)
 	{
 	    switch(*from)
@@ -2561,6 +2582,10 @@ u_int32_t snort_escape_string_STATIC(char *from, u_int32_t buffer_max_len ,Datab
 		*to++= '\\';
 		*to++= '\\';
 		break;
+	    case '/':
+		*to++= '\\';      /* / --> \\/ */
+		*to++= '/';
+		break;
 	    case '\'':           /* '  -->  \' */
 		*to++= '\\';
 		*to++= '\'';
@@ -2585,7 +2610,33 @@ u_int32_t snort_escape_string_STATIC(char *from, u_int32_t buffer_max_len ,Datab
 	    }
 	}
     	break;
+#endif /* MYSQL */
 	
+#ifdef ENABLE_POSTGRESQL
+    case DB_POSTGRESQL:
+	
+	if( (write_len = PQescapeStringConn(data->p_connection,
+					    data->sanitize_buffer,
+					    from,
+					    buffer_max_len,&error)) == 0)
+	{
+	    /* XXX */
+	    return 1;
+	}
+	
+	if(error != 1)
+	{
+	    memcpy(from_start,data->sanitize_buffer,write_len+1);
+	}
+	else
+	{
+	    /* XXX */
+	    return 1;
+	}
+	
+	return 0;
+	break;
+#endif /* ENABLE_POSTGRESQL*/	
     default:
 
 	for (end=from+from_length; from != end; from++)
@@ -2601,7 +2652,6 @@ u_int32_t snort_escape_string_STATIC(char *from, u_int32_t buffer_max_len ,Datab
 	    }
 	}
 	break;
-#endif
     }
     
     *to='\0';
@@ -2798,6 +2848,12 @@ u_int32_t BeginTransaction(DatabaseData * data)
     }
 
     
+    if(checkTransactionState(&data->dbRH[data->dbtype_id]))
+    {
+	/* We already are in a transaction, possible nested call do not sub BEGIN..*/
+	return 0;
+    }
+
 
     switch(data->dbtype_id)
     {
@@ -2864,6 +2920,13 @@ u_int32_t  CommitTransaction(DatabaseData * data)
                    __FUNCTION__);
     }
     
+    if((checkTransactionState(&data->dbRH[data->dbtype_id])) == 0)
+    {
+	/* We are not in a transaction, effect of some possible nested call
+	   be quiet */
+	return 0;
+    }
+
     switch(data->dbtype_id)
     {
 #ifdef ENABLE_ODBC
@@ -2932,10 +2995,9 @@ u_int32_t  CommitTransaction(DatabaseData * data)
     /* XXX */
     return 1;
     
-    
 transaction_success:
     /* Reset the transaction error count */
-    data->dbRH[data->dbtype_id].transactionErrorCount = 0;
+    resetTransactionState(&data->dbRH[data->dbtype_id]);
     return 0;
 
 }
@@ -2954,17 +3016,14 @@ u_int32_t RollbackTransaction(DatabaseData * data)
         FatalError("ERROR database: [%s()], Invoked with NULL DatabaseData \n",
                    __FUNCTION__);
     }
-        
-    
-   /* Since We could get called from different places we are gown up and reset out self. */
-    resetTransactionState(&data->dbRH[data->dbtype_id]);
-    
+
     if(data->dbRH[data->dbtype_id].transactionErrorCount >= data->dbRH[data->dbtype_id].transactionErrorThreshold)
     {
 	/* XXX */
 	LogMessage("[%s(): Call failed, we reached the maximum number of transaction error [%u] \n",
 		   __FUNCTION__,
 		   data->dbRH[data->dbtype_id].transactionErrorThreshold);
+	return 1;
     }
 
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
@@ -2975,15 +3034,24 @@ u_int32_t RollbackTransaction(DatabaseData * data)
         return 1;
     }
     
-    
+    if((checkTransactionState(&data->dbRH[data->dbtype_id])) == 0)
+    {
+	/* We reached a rollback when not in transaction state announce it */
+	LogMessage("[%s()] Rollback called while not in transaction \n",
+		   __FUNCTION__);
+	return 1;
+    }
+
     if(getReconnectState(&data->dbRH[data->dbtype_id]))
     {
+	/* Since We could get called from different places we are gown up and reset out self. */
+	resetTransactionState(&data->dbRH[data->dbtype_id]);
+	
 	/* We reconnected, transaction call failed , we can't call "ROLLBACK" since the transaction should have aborted  */
 	/* We reset state */
 	setReconnectState(&data->dbRH[data->dbtype_id],0);
 	return 0;
     }
-
 
     switch(data->dbtype_id)
     {
@@ -3018,7 +3086,7 @@ u_int32_t RollbackTransaction(DatabaseData * data)
 #endif
 #ifdef ENABLE_MSSQL
     case DB_MSSQL:
-	return Insert("ROLLBACK TRANSACTION;", data);
+	return 	Insert("ROLLBACK TRANSACTION;", data);
 	break;
 #endif
 #ifdef ENABLE_ORACLE
@@ -3058,7 +3126,6 @@ int Insert(char * query, DatabaseData * data)
 	return 1;
     }
     
-    
     if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
     {
 	/* A This shouldn't happen since we are in failed transaction state */
@@ -3090,6 +3157,7 @@ int Insert(char * query, DatabaseData * data)
             }
         }
         PQclear(data->p_result);
+	return 0;
     }
 #endif
     
@@ -3133,8 +3201,6 @@ int Insert(char * query, DatabaseData * data)
 	}
 	
     }
-    
-
 #endif
 
 #ifdef ENABLE_ODBC
@@ -3298,21 +3364,22 @@ int Select(char * query, DatabaseData * data,u_int32_t *rval)
         /* XXX */
         return 1;
     }
-    
+
+#ifdef ENABLE_MYSQL    
 Select_reconnect:
+#endif
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
 	/* XXX */
 	FatalError("ERROR database: Select Query[%s] failed check to dbConnectionStatus()\n",query);
     }
     
-
     switch(data->dbtype_id)
     {
 	
 #ifdef ENABLE_POSTGRESQL
     case DB_POSTGRESQL:
-    
+	
         data->p_result = PQexec(data->p_connection,query);
         if((PQresultStatus(data->p_result) == PGRES_TUPLES_OK))
         {
@@ -3323,6 +3390,7 @@ Select_reconnect:
                     ErrorMessage("ERROR database: warning (%s) returned more than one result\n",
                                  query);
                     result = 0;
+		    return 1;
                 }
                 else
                 {
@@ -3336,6 +3404,7 @@ Select_reconnect:
             {
                 ErrorMessage("ERROR database: postgresql_error: %s\n",
                              PQerrorMessage(data->p_connection));
+		return 1;
             }
         }
         PQclear(data->p_result);
@@ -3558,7 +3627,7 @@ void Connect(DatabaseData * data)
             data->p_connection =
                 PQsetdbLogin(data->host,
                              data->port,
-                             data->ssl_mode,
+                             data->dbRH[data->dbtype_id].ssl_mode,
                              NULL,
                              data->dbname,
                              data->user,
@@ -3580,7 +3649,7 @@ void Connect(DatabaseData * data)
         if(PQstatus(data->p_connection) == CONNECTION_BAD)
         {
             PQfinish(data->p_connection);
-            FatalError("ERROR database: Connection to database '%s' failed\n", data->dbRH[data->dbtype_id]->dbname);
+            FatalError("ERROR database: Connection to database '%s' failed\n", data->dbname);
         }
 	break;
 #endif
@@ -3851,7 +3920,7 @@ void Disconnect(DatabaseData * data)
     switch(data->dbtype_id)
     {
 #ifdef ENABLE_POSTGRESQL
-    case DB_POSTGRESQL
+    case DB_POSTGRESQL:
 	if(data->p_connection)
 	{
 	    PQfinish(data->p_connection);
@@ -3996,6 +4065,7 @@ void SpoDatabaseCleanExitFunction(int signal, void *arg)
     if(data != NULL)
     {
 	MasterCacheFlush(data);    
+
 	SQL_Finalize(data);
 	
 	UpdateLastCid(data, data->sid, ((data->cid)-1));
@@ -4036,6 +4106,7 @@ void SpoDatabaseRestartFunction(int signal, void *arg)
 	UpdateLastCid(data,
 		      data->sid, 
 		      (data->cid)-1);
+	
 	Disconnect(data);
 	free(data->args);
 	free(data);
@@ -4044,7 +4115,6 @@ void SpoDatabaseRestartFunction(int signal, void *arg)
     
     return;
 }
-
 
 
 /* CHECKME: -elz , compilation with MSSQL will have to be worked out ... */
@@ -4130,6 +4200,7 @@ void resetTransactionState(dbReliabilityHandle *pdbRH)
     
     pdbRH->checkTransaction = 0;
     pdbRH->transactionCallFail=0;
+    pdbRH->transactionErrorCount = 0;
 
     return;
 }
@@ -4477,17 +4548,7 @@ MYSQL_RetryConnection:
 		{
 		    goto MYSQL_RetryConnection;
 		}
-		
-		
-		/* Calling rollback if we reconnected will bring us in a dead loop */
-		/* 
-		   if( RollbackTransaction(pdbRH->dbdata))
-		   {
-		   FatalError("[%s()]: Failed in a transaction, the process need to be restarted \n",
-		   __FUNCTION__);
-		   }
-		*/
-		
+						
 		/* ResetState for the caller */
 		setReconnectState(pdbRH,1);
 		setTransactionCallFail(pdbRH);
@@ -4523,9 +4584,57 @@ MYSQL_RetryConnection:
 #endif
     
 #ifdef ENABLE_POSTGRESQL
-u_int32_t dbConnectionStatusPOSTGRESQL(struct  dbReliabilityHandle *pdbRH);
+u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH)
 {
-    if(dbSharedData == NULL)
+
+    DatabaseData *data = NULL;
+
+    int conStatus = 0;
+
+    if( (pdbRH == NULL) ||
+        (pdbRH->dbdata == NULL))
+    {
+        /* XXX */
+        return 1;
+    }
+    
+    data = pdbRH->dbdata;
+    
+conn_retry:
+    if(data->p_connection != NULL)
+    {
+	conStatus = PQstatus(data->p_connection);
+
+	switch(conStatus)
+	{
+	case CONNECTION_OK:
+	    return 0;
+	    break;
+	    
+	case CONNECTION_BAD:
+	default:
+
+	    if(checkTransactionState(pdbRH))
+	    {
+		/* ResetState for the caller */
+		setReconnectState(pdbRH,1);
+		setTransactionCallFail(pdbRH);
+		setTransactionState(pdbRH);
+	    }
+	    
+	    if(dbReconnectSetCounters(pdbRH))
+	    {
+		/* XXX */
+		FatalError("ERROR database: [%s()]: Call failed, the process will need to be restarted \n",__FUNCTION__);
+	    }
+	    
+	    PQreset(data->p_connection);
+	    goto conn_retry;
+	    break;
+	}
+	
+    }
+    else
     {
 	/* XXX */
 	return 1;
@@ -4536,12 +4645,13 @@ u_int32_t dbConnectionStatusPOSTGRESQL(struct  dbReliabilityHandle *pdbRH);
 #endif
 
 #ifdef ENABLE_ODBC
-u_int32_t dbConnectionStatusODBC(struct  dbReliabilityHandle *pdbRH);
+u_int32_t dbConnectionStatusODBC(dbReliabilityHandle *pdbRH)
 {
-    if(dbSharedData == NULL)
+    if( (pdbRH == NULL) ||
+        (pdbRH->dbdata == NULL))
     {
-	/* XXX */
-	return 1;
+        /* XXX */
+        return 1;
     }
 
     return 0;
@@ -4549,12 +4659,13 @@ u_int32_t dbConnectionStatusODBC(struct  dbReliabilityHandle *pdbRH);
 #endif
 
 #ifdef ENABLE_ORACLE
-u_int32_t dbConnectionStatusORACLE(struct  dbReliabilityHandle *pdbRH);
+u_int32_t dbConnectionStatusORACLE(dbReliabilityHandle *pdbRH)
 {
-    if(dbSharedData == NULL)
+    if( (pdbRH == NULL) ||
+        (pdbRH->dbdata == NULL))
     {
-	/* XXX */
-	return 1;
+        /* XXX */
+        return 1;
     }
 
     return 0;
@@ -4564,12 +4675,13 @@ u_int32_t dbConnectionStatusORACLE(struct  dbReliabilityHandle *pdbRH);
 #ifdef ENABLE_MSSQL
 u_int32_t dbConnectionStatusMSSQL(struct  dbReliabilityHandle *pdbRH);
 {
-    if(dbSharedData == NULL)
+    if( (pdbRH == NULL) ||
+        (pdbRH->dbdata == NULL))
     {
-	/* XXX */
-	return 1;
+        /* XXX */
+        return 1;
     }
-    
+
     return 0;
 }
 #endif

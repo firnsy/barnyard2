@@ -102,7 +102,7 @@ typedef SQLCHAR   ODBC_SQLCHAR;
 
 #ifndef MAX_QUERY_LENGTH 
 //#define MAX_QUERY_LENGTH 8192
-#define MAX_QUERY_LENGTH 65536 /* Lets add some space for payload decoding and query esaping..*/
+#define MAX_QUERY_LENGTH (65536 * 2) /* Lets add some space for payload decoding and query esaping..*/
 #endif  /* MAX_QUERY_LENGTH */
 
 #ifndef MAX_SQL_QUERY_OPS
@@ -668,6 +668,8 @@ u_int32_t cacheEventSignatureLookup(cacheSignatureObj *iHead,
 u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache *iMasterCache);
 u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead);
 void MasterCacheFlush(DatabaseData *data);
+
+u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH);
 
 
 #endif  /* __SPO_DATABASE_H__ */

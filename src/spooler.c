@@ -603,7 +603,8 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
     }
 
     /* close waldo if appropriate */
-    spoolerCloseWaldo(&barnyard2_conf->waldo);
+    if(barnyard2_conf)
+	spoolerCloseWaldo(&barnyard2_conf->waldo);
 
     return pc_ret;
 }
@@ -964,10 +965,11 @@ int spoolerOpenWaldo(Waldo *waldo, uint8_t mode)
 */
 int spoolerCloseWaldo(Waldo *waldo)
 {
+
     /* check we have a valid file descriptor */
     if (waldo->state & WALDO_STATE_OPEN)
         return WALDO_FILE_EOPEN;
-
+    
     /* close the file */
     close(waldo->fd);
     waldo->fd = -1;
@@ -995,7 +997,10 @@ int spoolerReadWaldo(Waldo *waldo)
     /* check if we have a file in the correct mode (READ) */
     if ( waldo->mode != WALDO_MODE_READ )
     {
-        spoolerCloseWaldo(waldo);
+	/* close waldo if appropriate */
+	if(barnyard2_conf)
+	    spoolerCloseWaldo(waldo);
+
         if ( (ret=spoolerOpenWaldo(waldo, WALDO_MODE_READ)) != WALDO_FILE_SUCCESS )
             return ret;
     }
@@ -1025,8 +1030,10 @@ int spoolerReadWaldo(Waldo *waldo)
         waldo->data.spool_dir, waldo->data.spool_filebase,
         waldo->data.timestamp, waldo->data.record_idx););
 
-    /* close the file */
-    spoolerCloseWaldo(waldo);
+    
+    /* close waldo if appropriate */
+    if(barnyard2_conf)
+	spoolerCloseWaldo(waldo);
 
     return WALDO_FILE_SUCCESS;
 }
@@ -1057,7 +1064,11 @@ int spoolerWriteWaldo(Waldo *waldo, Spooler *spooler)
     /* check if we have a file in the correct mode (READ) */
     if ( waldo->mode != WALDO_MODE_WRITE )
     {
-        spoolerCloseWaldo(waldo);
+	/* close waldo if appropriate */
+        if(barnyard2_conf)
+            spoolerCloseWaldo(waldo);
+
+
         spoolerOpenWaldo(waldo, WALDO_MODE_WRITE);
     }
     else if ( ! (waldo->state & WALDO_STATE_OPEN) )

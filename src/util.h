@@ -211,6 +211,18 @@ char *GetIP(char *);
 char *GetHostname();
 int GetLocalTimezone();
 
+
+u_int32_t fasthex_STATIC(const u_char *xdata, int length,char *retbuf);
+u_int32_t base64_STATIC(const u_char * xdata, int length,char *output);
+u_int32_t ascii_STATIC(const u_char *xdata, int length,char *ret_val);
+
+u_int32_t GetTimestampByComponent_STATIC(uint32_t sec, uint32_t usec, int tz,char *buf);
+u_int32_t GetTimestampByStruct_STATIC(register const struct timeval *tvp, int tz,char *buf);
+u_int32_t GetCurrentTimestamp_STATIC(char *buf);
+
+
+
+
 /***********************************************************
  If you use any of the functions in this section, you need
  to call free() on the char * that is returned after you are

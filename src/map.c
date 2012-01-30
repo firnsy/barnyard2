@@ -31,7 +31,11 @@
 **   Ideas stolen liberally from:
 **     1. the orginal barnyard (A. Baker, M. Roesch)
 **
+** 
+**
+**  
 ** TODO:
+**   -ERROR CHECKING..........!@#$%@
 **   1. Convert existing linked lists to adaptive splayed trees.
 */
 
@@ -272,7 +276,7 @@ int ReadReferenceFile(Barnyard2Config *bc, const char *file)
             if(num_toks > 1)
             {
                 ParseReferenceSystemConfig(bc, toks[1]);
-        count++;
+		count++;
             }
 
             mSplitFree(&toks, num_toks);
@@ -291,6 +295,7 @@ int ReadReferenceFile(Barnyard2Config *bc, const char *file)
 /************************ Class/Priority Implementation ***********************/
 
 /* NOTE:  This lookup can only be done during parse time */
+/* Wut ...*/
 ClassType * ClassTypeLookupByType(Barnyard2Config *bc, char *type)
 {
     ClassType *node;
@@ -315,6 +320,7 @@ ClassType * ClassTypeLookupByType(Barnyard2Config *bc, char *type)
 }
 
 /* NOTE:  This lookup can only be done during parse time */
+/* Wut ...*/
 ClassType * ClassTypeLookupById(Barnyard2Config *bc, int id)
 {
     ClassType *node;
@@ -440,12 +446,12 @@ int ReadClassificationFile(Barnyard2Config *bc, const char *file)
     char        *index;
     char        **toks;
     int         num_toks;
-  int         count = 0;
-
-
+    int         count = 0;
+    
+    
     DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: opening file %s\n", file););
     
-  if((fd = fopen(file, "r")) == NULL)
+    if((fd = fopen(file, "r")) == NULL)
     {
         LogMessage("ERROR: Unable to open Classification file '%s' (%s)\n", 
                 file, strerror(errno));
@@ -471,7 +477,7 @@ int ReadClassificationFile(Barnyard2Config *bc, const char *file)
             if(num_toks > 1)
             {
                 ParseClassificationConfig(bc, toks[1]);
-        count++;
+		count++;
             }
 
             mSplitFree(&toks, num_toks);
@@ -524,7 +530,9 @@ int ReadSidFile(Barnyard2Config *bc, const char *file)
             count++;
         }
     }
-
+    
+    //LogMessage("Read [%u] signature \n",count);
+    
   if(fd != NULL)
     fclose(fd);
 
@@ -620,6 +628,8 @@ void ParseSidMapLine(Barnyard2Config *bc, char *data)
     }
 
     mSplitFree(&toks, num_toks);
+
+    return;
 }
 
 SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid)
@@ -644,13 +654,13 @@ SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid)
     }
 
   /* create a default message since we didn't find any match */
-  sn = CreateSigNode(&sigTypes);
+    sn = CreateSigNode(&sigTypes);
     sn->generator = gid;
     sn->id = sid;
     sn->rev = 0;
     sn->msg = (char *)SnortAlloc(42);
     snprintf(sn->msg, 42, "Snort Alert [%u:%u:%u]", gid, sid, 0);
-    
+ 
     return sn;
 }
 
@@ -668,12 +678,15 @@ SigNode *CreateSigNode(SigNode **head)
         sn = *head;
 
         while (sn->next != NULL) 
-      sn = sn->next;
-
+	    sn = sn->next;
+	
         sn->next = (SigNode *) SnortAlloc(sizeof(SigNode));
-
+	
         return sn->next;
     }
+    
+    /* XXX */
+    return NULL;
 }
 
 int ReadGenFile(Barnyard2Config *bc, const char *file)
@@ -706,15 +719,18 @@ int ReadGenFile(Barnyard2Config *bc, const char *file)
         if( (*index != '#') && (*index != 0x0a) && (index != NULL) )
         {
             ParseGenMapLine(index);
-      count++;
+	    count++;
         }
     }
+
+    //LogMessage("Read [%u] gen \n",count);
 
   if(fd != NULL)
     fclose(fd);
 
   return 0;
 }
+
 
 void ParseGenMapLine(char *data)
 {
@@ -723,16 +739,16 @@ void ParseGenMapLine(char *data)
     int i;
     char *idx;
     SigNode       *sn; 
-
+    
     toks = mSplitSpecial(data, "||", 32, &num_toks, '\0');
-
+    
     if(num_toks < 2)
     {
         LogMessage("WARNING: Ignoring bad line in SID file: \"%s\"\n", data);
-    return;
+	return;
     }
-
-  sn = CreateSigNode(&sigTypes);
+    
+    sn = CreateSigNode(&sigTypes);
     
     for(i=0; i<num_toks; i++)
     {
@@ -742,24 +758,24 @@ void ParseGenMapLine(char *data)
             
         switch(i)
         {
-            case 0: /* gen */
-        //TODO: error checking on conversion
-                sn->generator = strtoul(idx, NULL, 10);
-                break;
-
-            case 1: /* sid */
-        //TODO: error checking on conversion
-                sn->id = strtoul(idx, NULL, 10);
-                break;
-
-            case 2: /* msg */
-                sn->msg = SnortStrdup(idx);
-                break;
-
-            default: 
-                break;
+	case 0: /* gen */
+		//TODO: error checking on conversion
+	    sn->generator = strtoul(idx, NULL, 10);
+	    break;
+	    
+	case 1: /* sid */
+		//TODO: error checking on conversion
+	    sn->id = strtoul(idx, NULL, 10);
+	    break;
+	    
+	case 2: /* msg */
+	    sn->msg = SnortStrdup(idx);
+	    break;
+	    
+	default: 
+	    break;
         }
     }
-
+    
     mSplitFree(&toks, num_toks);
 }

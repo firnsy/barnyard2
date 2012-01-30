@@ -993,12 +993,17 @@ static void SigExitHandler(int signal)
     if (exit_signal != 0)
         return;
 
+    
+
     /* Don't want to have to wait to start processing packets before
      * getting out of dodge */
     if (barnyard2_initializing)
         _exit(0);
 
     exit_signal = signal;
+
+    Barnyard2Cleanup(signal);
+
 }
 
 static void SigUsrHandler(int signal)
@@ -1007,11 +1012,17 @@ static void SigUsrHandler(int signal)
         return;
 
     usr_signal = signal;
+
+    Barnyard2Cleanup(signal);
+
+
 }
 
 static void SigHupHandler(int signal)
 {
     hup_signal = 1;
+    Barnyard2Cleanup(signal);
+
 }
 
 /****************************************************************************

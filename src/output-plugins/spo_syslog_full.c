@@ -1,6 +1,6 @@
 /*
-** 2011 Modified and enchanced for barnyard2 by the Barnyard2 Team.
-**
+** 
+** Copyright (C) 2011-2012 Modified and enchanced for barnyard2 by the Barnyard2 Team.
 ** Copyright (C) 2011 Tim Shelton
 ** Copyright (C) 2011 HAWK Network Defense, Inc. hawkdefense.com
 **
@@ -23,18 +23,29 @@
 /*
 # syslog_full
 #-------------------------------
-# Available as both a log and alert output plugin.  Used to output data via TCP/UDP
+# Available as both a log and alert output plugin.  Used to output data via TCP/UDP or LOCAL ie(syslog())
 # Arguments:
 #      sensor_name $sensor_name         - unique sensor name
 #      server $server                   - server the device will report to
+#      local                            - if defined, ignore all remote information and use syslog() to send message.
 #      protocol $protocol               - protocol device will report over (tcp/udp)
 #      port $port                       - destination port device will report to (default: 514)
-#      delimiters                       - define a character that will delimit message sections ex:  "|", will use | as message section delimiters. (default: |)
-#      separators                       - define field separator included in each message ex: " " ,  will use space as field separator.             (default: [:space:])
+#      delimiters $delimiters           - define a character that will delimit message sections ex:  "|", will use | as message section delimiters. (default: |)
+#      separators $separators           - define field separator included in each message ex: " " ,  will use space as field separator.             (default: [:space:])
+#      operation_mode $operaion_mode    - default | complete : default mode is compatible with default snort syslog message, complete prints more information such as the raw packet (hexed)
+#      log_priority   $log_priority     - used by local option for syslog priority call. (man syslog(3) for supported options) (default: LOG_INFO)
+#      log_facility  $log_facility      - used by local option for syslog facility call. (man syslog(3) for supported options) (default: LOG_USER)
+
+# Usage Examples:
+# output alert_syslog_full: sensor_name snortIds1-eth2, server xxx.xxx.xxx.xxx, protocol udp, port 514, operation_mode default
+# output alert_syslog_full: sensor_name snortIds1-eth2, server xxx.xxx.xxx.xxx, protocol udp, port 514, operation_mode complete
+# output log_syslog_full: sensor_name snortIds1-eth2, server xxx.xxx.xxx.xxx, protocol udp, port 514, operation_mode default
+# output log_syslog_full: sensor_name snortIds1-eth2, server xxx.xxx.xxx.xxx, protocol udp, port 514, operation_mode complete
 # output alert_syslog_full: sensor_name snortIds1-eth2, server xxx.xxx.xxx.xxx, protocol udp, port 514
 # output log_syslog_full: sensor_name snortIds1-eth2, server xxx.xxx.xxx.xxx, protocol udp, port 514
-# output alert_syslog_full: sensor_name snortIds1-eth2, server xxx.xxx.xxx.xxx, protocol udp, port 514
-# output log_syslog_full: sensor_name snortIds1-eth2, server xxx.xxx.xxx.xxx, protocol udp, port 514
+# output alert_syslog_full: sensor_name snortIds1-eth2, local
+# output log_syslog_full: sensor_name snortIds1-eth2, local, log_priority LOG_CRIT,log_facility LOG_CRON
+
 */
 
 #include "output-plugins/spo_syslog_full.h"
@@ -116,8 +127,19 @@ void OpSyslog_Init(char *args)
     {
 	
     case OUTPUT_TYPE_FLAG__LOG:
-	AddFuncToOutputList(OpSyslog_Log, OUTPUT_TYPE__LOG, (void *)syslogContext);
-	break;
+	switch(syslogContext->operation_mode)
+        {
+        case 1:
+            AddFuncToOutputList(OpSyslog_Log, OUTPUT_TYPE__LOG, (void *)syslogContext);
+            break;
+	    
+        case 0:
+        default:
+            LogMessage("[%s()]: OUTPUT_TYPE__LOG was selected but operation_mode is set to \"default\", using defaut logging hook \n",
+                       __FUNCTION__);
+            AddFuncToOutputList(OpSyslog_Alert, OUTPUT_TYPE__ALERT, (void *)syslogContext);
+            break;
+        }
 	
     case OUTPUT_TYPE_FLAG__ALERT:
 	AddFuncToOutputList(OpSyslog_Alert, OUTPUT_TYPE__ALERT, (void *)syslogContext);
@@ -223,15 +245,36 @@ int OpSyslog_Concat(OpSyslog_Data *syslogContext)
 	return 1;
     }
     
-    if( (syslogContext->payload_current_pos += snprintf((syslogContext->payload+syslogContext->payload_current_pos),
-							(SYSLOG_MAX_QUERY_SIZE - syslogContext->payload_current_pos),
-							"%c %s %c",
-							syslogContext->delim,
-							syslogContext->formatBuffer,
-							syslogContext->delim))  >= SYSLOG_MAX_QUERY_SIZE)
+    switch(syslogContext->operation_mode)
     {
-	/* XXX */
-	return 1;
+
+    case 0:
+	if( (syslogContext->payload_current_pos += snprintf((syslogContext->payload+syslogContext->payload_current_pos),
+							    (SYSLOG_MAX_QUERY_SIZE - syslogContext->payload_current_pos),
+							    "%s",
+							    syslogContext->formatBuffer))  >= SYSLOG_MAX_QUERY_SIZE)
+	{
+	    /* XXX */
+	    return 1;
+	}
+	break;
+	
+    case 1:
+	if( (syslogContext->payload_current_pos += snprintf((syslogContext->payload+syslogContext->payload_current_pos),
+							    (SYSLOG_MAX_QUERY_SIZE - syslogContext->payload_current_pos),
+							    "%c %s %c",
+							    syslogContext->delim,
+							    syslogContext->formatBuffer,
+							    syslogContext->delim))  >= SYSLOG_MAX_QUERY_SIZE)
+	{
+	    /* XXX */
+	    return 1;
+	}
+	break;
+	
+    default:
+	break;
+	
     }
     
     memset(syslogContext->formatBuffer,'\0',SYSLOG_MAX_QUERY_SIZE);
@@ -254,12 +297,23 @@ int OpSyslog_LogConfig(void *pSyslogContext)
     LogMessage("spo_syslog_full config:\n");
     LogMessage("\tDetail Level: %s\n",
 	       iSyslogContext->detail == 1 ? "Full" : "Fast");
-    LogMessage("\tSyslog Server: %s:%u\n",
-	       iSyslogContext->server, 
-	       iSyslogContext->port);
-    LogMessage("\tReporting Protocol: %s\n", 
-	       db_proto[iSyslogContext->proto]);
-    return 0;
+    
+    if(iSyslogContext->local_logging == 0)
+    {
+	LogMessage("\tSyslog Server: %s:%u\n",
+		   iSyslogContext->server, 
+		   iSyslogContext->port);
+	LogMessage("\tReporting Protocol: %s\n", 
+		   db_proto[iSyslogContext->proto]);
+    }
+    else if(iSyslogContext->local_logging == 1)
+    {
+	LogMessage("\tConfigured to log to local syslog \n");
+	LogMessage("\tConfigure syslog Facility : [%s] \n",iSyslogContext->syslog_tx_facility);
+	LogMessage("\tConfigure syslog Priority : [%s] \n",iSyslogContext->syslog_tx_priority);
+    }
+    
+	return 0;
 }
 
 
@@ -317,12 +371,12 @@ static int Syslog_FormatTrigger(OpSyslog_Data *syslogData, Unified2EventCommon *
 	}
 	break;
     case 1:
+	/* Log */
 	if( (syslogData->format_current_pos += snprintf(syslogData->formatBuffer,SYSLOG_MAX_QUERY_SIZE,"[SNORTIDS[LOG]: [%s] ]", syslogData->sensor_name)) >=  SYSLOG_MAX_QUERY_SIZE)
 	{
 	    /* XXX */
 	    return 1;
 	}
-	/* Log */
 	break;
 	
     default:
@@ -803,6 +857,13 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 {
     OpSyslog_Data *syslogContext = NULL;    
     Unified2EventCommon *iEvent = NULL;
+
+    SigNode                         *sn = NULL;
+    ClassType                       *cn = NULL;
+
+
+    char sip[16] = {0};
+    char dip[16] = {0};
     
     if( (p == NULL) ||
 	(event == NULL) ||
@@ -816,13 +877,13 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	return;
     }
     
-    
     if(event_type != UNIFIED2_IDS_EVENT)
     {
         LogMessage("OpSyslog_Alert(): Is currently unable to handle Event Type [%u] \n",
                    event_type);
+	return;
     }
-
+    
     
     syslogContext = (OpSyslog_Data *)arg;
     iEvent = event;
@@ -832,63 +893,272 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
     syslogContext->payload_current_pos = 0;
     syslogContext->format_current_pos = 0;
     
-    if(Syslog_FormatTrigger(syslogContext, iEvent,0) ) 
+    switch(syslogContext->operation_mode)
     {
-	LogMessage("WARNING: Unable to append Trigger header.\n");
-	return;
-    }
-    
-    /* Support for portscan ip */
-    if(p->iph ||
-       p->inner_iph)
-    {
-	if(Syslog_FormatIPHeaderAlert(syslogContext, p) ) 
+
+    case 0:  /* Ze Classic (Requested) */
+
+	if(IPH_IS_VALID(p))
+	{	
+	    if (strlcpy(sip, inet_ntoa(GET_SRC_ADDR(p)), sizeof(sip)) >= sizeof(sip))
+	    {
+		FatalError("[%s()], strlcpy() error , bailing \n",
+			   __FUNCTION__);
+		return;
+	    }
+	    
+	    
+	    if (strlcpy(dip, inet_ntoa(GET_DST_ADDR(p)), sizeof(dip)) >= sizeof(dip))
+	    {
+		FatalError("[%s()], strlcpy() error , bailing \n",
+		       __FUNCTION__);
+		return;
+	    }
+	}
+	
+	sn = GetSigByGidSid(ntohl(iEvent->generator_id),
+			    ntohl(iEvent->signature_id));
+	
+	cn = ClassTypeLookupById(barnyard2_conf,
+				 ntohl(iEvent->classification_id));
+	
+	if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
+							"[%u:%u:%u] ",
+							ntohl(iEvent->generator_id),
+							ntohl(iEvent->signature_id),
+							ntohl(iEvent->signature_revision))) >=  SYSLOG_MAX_QUERY_SIZE)
+	{
+	    /* XXX */
+	    FatalError("[%s()], failed call to snprintf \n",
+		       __FUNCTION__);
+	    return;
+	}
+	
+	if( OpSyslog_Concat(syslogContext))
+        {
+            /* XXX */
+            FatalError("OpSyslog_Concat(): Failed \n");
+        }
+	
+	if(sn != NULL)
+	{
+	    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
+							    "%s ",
+							    sn->msg)) >=  SYSLOG_MAX_QUERY_SIZE)
+	    {
+		/* XXX */
+		FatalError("[%s()], failed call to snprintf \n",
+			   __FUNCTION__);
+	    }
+	}
+	else
+	{
+	    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
+							       "ALERT ")) >=  SYSLOG_MAX_QUERY_SIZE)
+            {
+                /* XXX */
+                FatalError("[%s()], failed call to snprintf \n",
+                           __FUNCTION__);
+            }
+	    
+	}
+	
+	if( OpSyslog_Concat(syslogContext))
+        {
+            /* XXX */
+            FatalError("OpSyslog_Concat(): Failed \n");
+        }
+
+
+	
+	if(cn != NULL)
+        {
+            if( cn->name )
+            {
+                if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
+								"[Classification: %s] [Priority: %d]:",
+								cn->name,
+								ntohl(((Unified2EventCommon *)event)->priority_id))) >= SYSLOG_MAX_QUERY_SIZE)
+		{
+		    /* XXX */
+		    FatalError("[%s()], failed call to snprintf \n",
+			       __FUNCTION__);
+                    return ;
+		}
+		
+            }
+        }
+        else if( ntohl(((Unified2EventCommon *)event)->priority_id) != 0 )
+        {
+	    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
+							    "[Priority: %d]:",
+							    ntohl(((Unified2EventCommon *)event)->priority_id))) >= SYSLOG_MAX_QUERY_SIZE)
+	    {
+		/* XXX */
+		FatalError("[%s()], failed call to snprintf \n",
+			   __FUNCTION__);
+		return ;
+	    }
+        }
+	
+	if( OpSyslog_Concat(syslogContext))
+        {
+            /* XXX */
+            FatalError("OpSyslog_Concat(): Failed \n");
+        }	
+	
+	
+	if( (IPH_IS_VALID(p)) &&	
+	    (((GET_IPH_PROTO(p) != IPPROTO_TCP &&
+	       GET_IPH_PROTO(p) != IPPROTO_UDP &&
+	       GET_IPH_PROTO(p) != IPPROTO_ICMP) ||
+	      p->frag_flag)))
+	{
+	    if(!BcAlertInterface())
+	    {
+		if( protocol_names[GET_IPH_PROTO(p)] )
+		{
+		    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
+								       " {%s} %s -> %s",
+								       protocol_names[GET_IPH_PROTO(p)],
+								       sip, dip))   >= SYSLOG_MAX_QUERY_SIZE)
+		    {
+			/* XXX */
+			return ;
+		    }
+		}
+	    }
+	    else
+	    {
+		if( protocol_names[GET_IPH_PROTO(p)] )
+		{
+		    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
+								       " <%s> {%s} %s -> %s",
+								       barnyard2_conf->interface,
+								       protocol_names[GET_IPH_PROTO(p)],
+								       sip, dip)) >= SYSLOG_MAX_QUERY_SIZE)
+		    {
+			/* XXX */
+			FatalError("[%s()], failed call to snprintf \n",
+				   __FUNCTION__);
+			return ;
+		    }
+		}
+	    }
+	}
+	else
+	{
+	    if(BcAlertInterface())
+	    {
+		if( protocol_names[GET_IPH_PROTO(p)] )
+		{
+		    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
+								       " <%s> {%s} %s:%i -> %s:%i",
+								       barnyard2_conf->interface,
+								       protocol_names[GET_IPH_PROTO(p)], sip,
+								       p->sp, dip, p->dp)) >= SYSLOG_MAX_QUERY_SIZE)
+		    {
+			/* XXX */
+			FatalError("[%s()], failed call to snprintf \n",
+				   __FUNCTION__);
+			return;
+		    }
+		}
+	    }
+	    else
+	    {
+		if( protocol_names[GET_IPH_PROTO(p)] )
+		{
+		    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
+								       " {%s} %s:%i -> %s:%i",
+								       protocol_names[GET_IPH_PROTO(p)], sip, p->sp,
+								       dip, p->dp)) >= SYSLOG_MAX_QUERY_SIZE)
+		    {
+			/* XXX */
+			FatalError("[%s()], failed call to snprintf \n",
+				   __FUNCTION__);
+			return;
+		    }
+		}
+	    }
+	}
+	
+	
+	if( OpSyslog_Concat(syslogContext))
+	{
+	    /* XXX */
+	    FatalError("OpSyslog_Concat(): Failed \n");
+	}
+
+	break;
+	
+    case 1: /* Ze verbose */
+	
+	if(Syslog_FormatTrigger(syslogContext, iEvent,0) ) 
 	{
 	    LogMessage("WARNING: Unable to append Trigger header.\n");
 	    return;
 	}
-    }	
 	
-    if(p->iph)
-    {
-        /* build the protocol specific header information */
-	switch(p->iph->ip_proto)
+	/* Support for portscan ip */
+	if(p->iph ||
+	   p->inner_iph)
 	{
-	case IPPROTO_TCP:
-	    Syslog_FormatTCPHeaderAlert(syslogContext, p);
-	    break;
-	case IPPROTO_UDP:
-	    Syslog_FormatUDPHeaderAlert(syslogContext, p);
-	    break;
-	case IPPROTO_ICMP:
-	    Syslog_FormatICMPHeaderAlert(syslogContext, p);
-	    break;
+	    if(Syslog_FormatIPHeaderAlert(syslogContext, p) ) 
+	    {
+		LogMessage("WARNING: Unable to append Trigger header.\n");
+		return;
+	    }
+	}	
+	
+	if(p->iph)
+	{
+	    /* build the protocol specific header information */
+	    switch(p->iph->ip_proto)
+	    {
+	    case IPPROTO_TCP:
+		Syslog_FormatTCPHeaderAlert(syslogContext, p);
+		break;
+	    case IPPROTO_UDP:
+		Syslog_FormatUDPHeaderAlert(syslogContext, p);
+		break;
+	    case IPPROTO_ICMP:
+		Syslog_FormatICMPHeaderAlert(syslogContext, p);
+		break;
+	    }
 	}
-    }
-    
-
-    /* CHECKME: -elz will update formating later on .. */
-    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
-						       "\n")) >= SYSLOG_MAX_QUERY_SIZE)
-    {
-	/* XXX */
-        FatalError("Couldn't finalize payload string ....\n");
-    }
-    
-    if( OpSyslog_Concat(syslogContext))
-    {
-        /* XXX */
-        FatalError("OpSyslog_Concat(): Failed \n");
+	
+	/* CHECKME: -elz will update formating later on .. */
+	if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
+							   "\n")) >= SYSLOG_MAX_QUERY_SIZE)
+	{
+	    /* XXX */
+	    FatalError("Couldn't finalize payload string ....\n");
+	}
+	
+	if( OpSyslog_Concat(syslogContext))
+	{
+	    /* XXX */
+	    FatalError("OpSyslog_Concat(): Failed \n");
+	}
+	
+	break;
+	
+    default:
+	FatalError("[%s()]: Unknown operation_mode ... bailing \n",
+		   __FUNCTION__);
+	break;
     }
     
     if(NetSend(syslogContext)) 
     {
 	NetClose(syslogContext);
-	FatalError("NetSend(): call failed for host:port '%s:%u' bailing...\n", syslogContext->server, syslogContext->port);
+	if(syslogContext->local_logging != 1)
+	{
+	    FatalError("NetSend(): call failed for host:port '%s:%u' bailing...\n", syslogContext->server, syslogContext->port);
+	}
 	return;
     }
-
-    
     return;
 }
 
@@ -918,7 +1188,7 @@ void OpSyslog_Log(Packet *p, void *event, uint32_t event_type, void *arg)
 
     syslogContext = (OpSyslog_Data *)arg;
     iEvent = event;
-    
+
     memset(syslogContext->payload,'\0',(SYSLOG_MAX_QUERY_SIZE));
     memset(syslogContext->formatBuffer,'\0',(SYSLOG_MAX_QUERY_SIZE));
     syslogContext->payload_current_pos = 0;
@@ -1095,57 +1365,290 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
 			}
 		    }		   
 		}
-	    }    
+	    }
+	    else if(strcasecmp("operation_mode", stoks[0]) == 0)
+            {
+		if(num_stoks >=1)
+		{
+		    if(strcasecmp("default",stoks[1]))
+		    {
+			op_data->operation_mode = 0;
+		    }
+		    else if(strcasecmp("complete",stoks[1]))
+		    {
+			op_data->operation_mode = 1;
+		    }
+		    else
+		    {
+			LogMessage("Invalid operation_mode defined [%s], will use default mode \n",stoks[1]);
+		    }
+		}
+		else
+		{
+		    LogMessage("Invalid operation_mode defined, will use default mode \n");
+		}
+		
+	    }
+	    else if(strcasecmp("local", stoks[0]) == 0)
+	    {
+		op_data->local_logging = 1;
+	    }
+	    else if(strcasecmp("log_facility", stoks[0]) == 0)
+	    {
+		if(num_stoks >=1)
+		{
+		    if(!strcasecmp("LOG_KERN", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_KERN;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_KERN");
+		    }
+		    else if(!strcasecmp("LOG_MAIL", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_MAIL;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_MAIL");
+		    }
+		    else if(!strcasecmp("LOG_DAEMON", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_DAEMON;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_DAEMON");
+		    }
+		    else if(!strcasecmp("LOG_AUTH", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_AUTH;
+			snprintf(op_data->syslog_tx_facility,"%s","");
+		    }
+		    else if(!strcasecmp("LOG_SYSLOG", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_SYSLOG;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_SYSLOG");
+		    }
+		    else if(!strcasecmp("LOG_LPR", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_LPR;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LPR");
+		    }
+		    else if(!strcasecmp("LOG_NEWS", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_NEWS;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_NEWS");
+		    }
+		    else if(!strcasecmp("LOG_UUCP", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_UUCP;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_UUCP");
+		    }
+		    else if(!strcasecmp("LOG_CRON", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_CRON;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_CRON");
+		    }
+		    else if(!strcasecmp("LOG_AUTHPRIV", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_AUTHPRIV;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_AUTHPRIV");
+		    }
+		    else if(!strcasecmp("LOG_FTP", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_FTP;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_FTP");
+		    }
+		    else if(!strcasecmp("LOG_LOCAL1", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_LOCAL1;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LOCAL1");
+		    }
+		    else if(!strcasecmp("LOG_LOCAL2", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_LOCAL2;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LOCAL2");
+		    }
+		    else if(!strcasecmp("LOG_LOCAL3", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_LOCAL3;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LOCAL3");
+		    }
+		    else if(!strcasecmp("LOG_LOCAL4", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_LOCAL4;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LOCAL4");
+		    }
+		    else if(!strcasecmp("LOG_LOCAL5", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_LOCAL5;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LOCAL5");
+		    }
+		    else if(!strcasecmp("LOG_LOCAL6", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_LOCAL6;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LOCAL6");
+		    }
+
+		    else if(!strcasecmp("LOG_LOCAL7", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_LOCAL7;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LOCAL7");
+			
+		    }
+		    else if(!strcasecmp("LOG_USER", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_USER;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_USER");
+		    }
+		    else
+		    {
+			LogMessage("[%s()]: Unknown log_facility defined [%s], using \"LOG_USER\" as default \n",
+				   __FUNCTION__,
+				   stoks[1]);
+			op_data->syslog_priority |= LOG_USER;
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_USER");
+		    }
+
+		}
+		else
+		{
+		    LogMessage("No default log_facility defined, using LOG_USER as default \n");
+		    op_data->syslog_priority |= LOG_USER;
+		}
+		
+	    }
+	    else if(strcasecmp("log_priority", stoks[0]) == 0)
+	    {
+		if(num_stoks >=1)
+		{
+		    if(!strcasecmp("LOG_EMERG",stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_EMERG;
+			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_EMERG");
+		    }
+		    else if(!strcasecmp("LOG_ALERT", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_ALERT;
+			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_ALERT");
+		    }
+		    else if(!strcasecmp("LOG_CRIT", stoks[1]))
+		    {
+			op_data->syslog_priority |=LOG_CRIT;
+			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_CRIT");
+		    }
+		    else if(!strcasecmp("LOG_ERR", stoks[1]))
+		    {
+			op_data->syslog_priority |=LOG_ERR;
+			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_ERR");
+		    }
+		    else if(!strcasecmp("LOG_WARNING", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_WARNING;
+			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_WARNING");
+		    }
+		    else if(!strcasecmp("LOG_NOTICE", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_NOTICE;
+			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_NOTICE");
+		    }
+		    else if(!strcasecmp("LOG_INFO", stoks[1]))
+		    {
+			op_data->syslog_priority |=LOG_INFO;
+			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_INFO");
+		    }
+		    else if(!strcasecmp("LOG_DEBUG", stoks[1]))
+		    {
+			op_data->syslog_priority |= LOG_DEBUG;
+			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_DEBUG");
+		    }
+		    else
+		    {
+			LogMessage("[%s()]: Unknown log_priority defined [%s], using \"LOG_INFO\" as default \n",
+				   __FUNCTION__,
+				   stoks[1]);
+			op_data->syslog_priority |= LOG_INFO;
+		    }
+		}
+		else
+		{
+		    LogMessage("No default log_priority defined, using LOG_INFO as default \n");
+		    op_data->syslog_priority |= LOG_INFO;
+		}
+	    }
 	    else
             {
                 fprintf(stderr, "WARNING %s (%d) => Unrecognized argument for "
                         "SyslogFull plugin: %s\n", file_name, file_line, index);
-            }
-	    mSplitFree(&stoks, num_stoks);
-        }
-        /* free your mSplit tokens */
-        mSplitFree(&toks, num_toks);
-    }
-    
-    /* Default */    
-    if(op_data->delim == 0)
-    {
-	LogMessage("Using default delimiters for syslog messages \"|\"\n");
-	op_data->delim = '|';
-    }
-    else
-    {
-	LogMessage("Using \"%c\" as delimiters for syslog messages \n",op_data->delim);
-    }
-    
-    if(op_data->field_separators == 0)
-    {
-	LogMessage("Using default field separators for syslog messages \" \"\n");
-	op_data->field_separators= ' ';
-    }
-    else
-    {
-	LogMessage("Using \"%c\" as field separators for syslog messages \n",op_data->field_separators);
-    }
+            }	
 
-    if(op_data->port == 0)
-    {
-	LogMessage("Using default Syslog port [%u] \n",op_data->port);
-	op_data->port = 514;
+
+	}
+	/* free your mSplit tokens */
+	mSplitFree(&toks, num_toks);
     }
-    
-    
+	
+    /* Default */    
     if(op_data->sensor_name == NULL)
     {
 	FatalError("You must specify a sensor name\n");
     }
 
-    if(op_data->server == NULL)
+    if(op_data->syslog_priority == 0)
     {
+	op_data->syslog_priority =  LOG_INFO | LOG_USER;
+	snprintf(op_data->syslog_tx_facility,16,"%s","LOG_USER");
+	snprintf(op_data->syslog_tx_priority,16,"%s","LOG_INFO");
+    }
+
+    
+    if(op_data->local_logging == 1)
+    {
+	LogMessage("Local logging enabled, WILL NOT send information to a remote syslog \n");
+    }
+
+    if( op_data->local_logging == 0)
+    {
+	if(op_data->port == 0)
+	{
+	    LogMessage("Using default Syslog port [%u] \n",op_data->port);
+	    op_data->port = 514;
+	}
 	
-	FatalError("You must specify a valid server \n");
+	if( op_data->server == NULL) 
+	{
+	    FatalError("You must specify a valid server \n");
+	}
+	
     }
     
+    if(op_data->operation_mode == 0)
+    {
+	LogMessage("using operation_mode: default \n");
+    }
+    else if(op_data->operation_mode == 1)
+    {
+	LogMessage("using operation_mode: complete \n");
+	
+	if(op_data->delim == 0)
+	{
+	    LogMessage("Using default delimiters for syslog messages \"|\"\n");
+	    op_data->delim = '|';
+	}
+	else
+	{
+	    LogMessage("Using \"%c\" as delimiters for syslog messages \n",op_data->delim);
+	}
+	
+	if(op_data->field_separators == 0)
+	{
+	    LogMessage("Using default field separators for syslog messages \" \"\n");
+	    op_data->field_separators= ' ';
+	}
+	else
+	{
+	    LogMessage("Using \"%c\" as field separators for syslog messages \n",op_data->field_separators);
+	}
+    }
+    else
+    {
+	LogMessage("Defaulting operation_mode to default. \n");
+	op_data->operation_mode = 0;
+    }
+	
     
     return op_data;
 }
@@ -1221,6 +1724,11 @@ int NetConnect(OpSyslog_Data *op_data)
 	return 1;
     }
     
+    if(op_data->local_logging == 1)
+    {
+	return 0;
+    }
+
     if(op_data->socket > 0)
     {
 	if(NetTestSocket(op_data))
@@ -1278,7 +1786,13 @@ int NetClose(OpSyslog_Data *op_data)
 	/* XXX */
 	return -1;
     }
-    
+
+    if(op_data->local_logging == 1)
+    {
+	/* We Skip */
+        return 0;
+    }
+
     if(op_data->socket)
     {
 	rval = close(op_data->socket);
@@ -1300,6 +1814,13 @@ int NetTestSocket(OpSyslog_Data *op_data)
 	return 1;
     }
     
+    if(op_data->local_logging == 1)
+    {
+	/* We skip */
+        return 0;
+    }
+
+
     if( getsockname(op_data->socket,&addr,&socklen) != 0)
     {
 	/* XXX */
@@ -1334,6 +1855,14 @@ int NetSend(OpSyslog_Data *op_data)
     }
     
     sendSize=strlen(op_data->payload);
+    
+    if(op_data->local_logging == 1)
+    {
+	syslog(op_data->syslog_priority,
+	       op_data->payload);
+	return 0;
+    }
+    
 
     switch(op_data->proto) 
     {

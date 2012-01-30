@@ -28,6 +28,7 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <time.h>
@@ -38,12 +39,22 @@
 #include "mstring.h"
 #include "parser.h"
 #include "plugbase.h"
+#include "strlcpyu.h"
 #include "unified2.h"
 
 typedef struct _OpSyslog_Data 
 {
     char *server;
     char *sensor_name;
+    
+    u_int8_t operation_mode;
+    u_int8_t local_logging;
+    u_int32_t syslog_priority;
+    
+    char syslog_tx_facility[16];
+    char syslog_tx_priority[16];
+    
+
     u_int32_t port;
     u_int16_t detail;
     u_int16_t proto;

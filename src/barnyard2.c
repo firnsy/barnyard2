@@ -1185,6 +1185,10 @@ static void Barnyard2Cleanup(int exit_val)
 
     if (barnyard2_conf_dir != NULL)
         free(barnyard2_conf_dir);
+
+    
+    _exit(exit_val);
+
 }
 
 void Restart(void)

@@ -467,7 +467,11 @@ void FreeOutputList(OutputFuncNode *list)
         OutputFuncNode *tmp = list;
 
         list = list->next;
-        free(tmp);
+
+	if(tmp != NULL)
+	{
+	    free(tmp);
+	}
     }
 }
 

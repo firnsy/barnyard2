@@ -482,8 +482,6 @@ static int Syslog_FormatTrigger(OpSyslog_Data *syslogData, Unified2EventCommon *
 
 static int Syslog_FormatIPHeaderAlert(OpSyslog_Data *data, Packet *p) 
 {
-    int inner_ip = 0;
-    
     char *p_ip = NULL;
     char s_ip[16] ={0};
     char d_ip[16] ={0};
@@ -494,15 +492,6 @@ static int Syslog_FormatIPHeaderAlert(OpSyslog_Data *data, Packet *p)
     {
 	/* XXX */
 	return 1;
-    }
-    
-    
-    /* This might not be fixed but meanwhile its a fix */
-    if( (p->iph == NULL) &&
-	(p->inner_iph))
-    {
-	p->iph = p->inner_iph;
-	inner_ip =1;
     }
     
     if(p->iph)
@@ -519,35 +508,18 @@ static int Syslog_FormatIPHeaderAlert(OpSyslog_Data *data, Packet *p)
 						  d_ip)) >= SYSLOG_MAX_QUERY_SIZE)
 	{
 	    /* XXX */
-	    if(inner_ip)
-	    {
-		p->iph = NULL;
-	    }
 	    return 1;
 	}
-    }
-    
-    if(inner_ip)
-    {
-	p->iph = NULL;
     }
     
     return OpSyslog_Concat(data);
 }
 
-static int Syslog_FormatIPHeaderLog(OpSyslog_Data *data, Packet *p) {
-
-    int inner_ip = 0;
+static int Syslog_FormatIPHeaderLog(OpSyslog_Data *data, Packet *p) 
+{
 
     unsigned int s, d, proto, ver, hlen, tos, len, id, off, ttl, csum;
     s=d=proto=ver=hlen=tos=len=id=off=ttl=csum=0;
-
-    if( (p->iph == NULL) &&
-        (p->inner_iph))
-    {
-        p->iph = p->inner_iph;
-        inner_ip =1;
-    }
 
     if(p->iph) 
     {
@@ -596,20 +568,9 @@ static int Syslog_FormatIPHeaderLog(OpSyslog_Data *data, Packet *p) {
 					      csum)) >= SYSLOG_MAX_QUERY_SIZE)
     {
 	/* XXX */
-	if(inner_ip)
-	{
-	    p->iph = NULL;
-	}
-	
 	return 1;
     }
 
-    if(inner_ip)
-    {
-	p->iph = NULL;
-    }
-    
-    
     return OpSyslog_Concat(data);
 }
 
@@ -1099,8 +1060,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	}
 	
 	/* Support for portscan ip */
-	if(p->iph ||
-	   p->inner_iph)
+	if(p->iph)
 	{
 	    if(Syslog_FormatIPHeaderAlert(syslogContext, p) ) 
 	    {
@@ -1198,7 +1158,7 @@ void OpSyslog_Log(Packet *p, void *event, uint32_t event_type, void *arg)
 	FatalError("WARNING: Unable to append Trigger header.\n");
     }
     
-    if(p->iph || p->inner_iph)
+    if(p->iph)
     {
 	Syslog_FormatIPHeaderLog(syslogContext, p);
     }

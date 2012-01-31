@@ -861,7 +861,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
     SigNode                         *sn = NULL;
     ClassType                       *cn = NULL;
 
-
+    
     char sip[16] = {0};
     char dip[16] = {0};
     
@@ -892,6 +892,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
     memset(syslogContext->formatBuffer,'\0',(SYSLOG_MAX_QUERY_SIZE));
     syslogContext->payload_current_pos = 0;
     syslogContext->format_current_pos = 0;
+
     
     switch(syslogContext->operation_mode)
     {
@@ -931,7 +932,6 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	    /* XXX */
 	    FatalError("[%s()], failed call to snprintf \n",
 		       __FUNCTION__);
-	    return;
 	}
 	
 	if( OpSyslog_Concat(syslogContext))
@@ -983,7 +983,6 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 		    /* XXX */
 		    FatalError("[%s()], failed call to snprintf \n",
 			       __FUNCTION__);
-                    return ;
 		}
 		
             }
@@ -997,7 +996,6 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 		/* XXX */
 		FatalError("[%s()], failed call to snprintf \n",
 			   __FUNCTION__);
-		return ;
 	    }
         }
 	
@@ -1016,7 +1014,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	{
 	    if(!BcAlertInterface())
 	    {
-		if( protocol_names[GET_IPH_PROTO(p)] )
+		if(protocol_names[GET_IPH_PROTO(p)])
 		{
 		    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
 								       " {%s} %s -> %s",
@@ -1024,14 +1022,16 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 								       sip, dip))   >= SYSLOG_MAX_QUERY_SIZE)
 		    {
 			/* XXX */
-			return ;
+			FatalError("[%s()], failed call to snprintf \n",
+				   __FUNCTION__);
 		    }
 		}
 	    }
 	    else
 	    {
-		if( protocol_names[GET_IPH_PROTO(p)] )
+		if(protocol_names[GET_IPH_PROTO(p)])
 		{
+		    
 		    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
 								       " <%s> {%s} %s -> %s",
 								       barnyard2_conf->interface,
@@ -1041,7 +1041,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 			/* XXX */
 			FatalError("[%s()], failed call to snprintf \n",
 				   __FUNCTION__);
-			return ;
+		    
 		    }
 		}
 	    }
@@ -1050,7 +1050,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	{
 	    if(BcAlertInterface())
 	    {
-		if( protocol_names[GET_IPH_PROTO(p)] )
+		if(protocol_names[GET_IPH_PROTO(p)])
 		{
 		    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
 								       " <%s> {%s} %s:%i -> %s:%i",
@@ -1061,13 +1061,12 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 			/* XXX */
 			FatalError("[%s()], failed call to snprintf \n",
 				   __FUNCTION__);
-			return;
 		    }
 		}
 	    }
 	    else
 	    {
-		if( protocol_names[GET_IPH_PROTO(p)] )
+		if(protocol_names[GET_IPH_PROTO(p)])
 		{
 		    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
 								       " {%s} %s:%i -> %s:%i",
@@ -1077,7 +1076,6 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 			/* XXX */
 			FatalError("[%s()], failed call to snprintf \n",
 				   __FUNCTION__);
-			return;
 		    }
 		}
 	    }
@@ -1157,8 +1155,9 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	{
 	    FatalError("NetSend(): call failed for host:port '%s:%u' bailing...\n", syslogContext->server, syslogContext->port);
 	}
-	return;
     }
+
+
     return;
 }
 
@@ -1415,7 +1414,7 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
 		    else if(!strcasecmp("LOG_AUTH", stoks[1]))
 		    {
 			op_data->syslog_priority |= LOG_AUTH;
-			snprintf(op_data->syslog_tx_facility,"%s","");
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_AUTH");
 		    }
 		    else if(!strcasecmp("LOG_SYSLOG", stoks[1]))
 		    {

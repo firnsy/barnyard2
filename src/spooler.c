@@ -673,6 +673,13 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
         DecodePacket(datalink, spooler->record.pkt, &pkth, 
                      ((Unified2Packet *)spooler->record.data)->packet_data);
 
+	/* This is a fixup for portscan... */
+	if( (spooler->record.pkt->iph == NULL) && 
+	    ((spooler->record.pkt->inner_iph != NULL) && (spooler->record.pkt->inner_iph->ip_proto == 255)))
+	    {
+		spooler->record.pkt->iph = spooler->record.pkt->inner_iph;
+	    }
+
         /* check if it's been re-assembled */
         if (spooler->record.pkt->packet_flags & PKT_REBUILT_STREAM)
         {
@@ -856,32 +863,52 @@ uint8_t spoolerEventCacheHeadUsed(Spooler *spooler)
 
 int spoolerEventCacheClean(Spooler *spooler)
 {
-    EventRecordNode     *ernCurrent;
-    EventRecordNode     *ernPrevious = NULL;
-
+    EventRecordNode     *ernCurrent = NULL;
+    EventRecordNode     *ernPrev = NULL;
+    EventRecordNode     *ernNext = NULL;
+    
     if (spooler == NULL || spooler->event_cache == NULL )
         return 1;
-
+    
+    ernPrev = spooler->event_cache;
     ernCurrent = spooler->event_cache;
-
+    
     while (ernCurrent != NULL && spooler->events_cached > CACHED_EVENTS_MAX )
     {
-        if ( ernCurrent->used == 1 )
+	ernNext = ernCurrent->next;
+	
+	if ( ernCurrent->used == 1 )
         {
-            /* clear the node from the list */
-            if (ernPrevious == NULL)
-                spooler->event_cache = ernCurrent->next;
+	    /* Delete from list */
+	    if (ernCurrent == spooler->event_cache)
+	    {
+                spooler->event_cache = ernNext;
+	    }
             else
-                ernPrevious->next = ernCurrent->next;
-
+	    {
+                ernPrev->next = ernNext;
+	    }
+	    
             spooler->events_cached--;
 
-            free(ernCurrent->data);
-            free(ernCurrent);
+	    if(ernCurrent->data != NULL)
+	    {
+		free(ernCurrent->data);
+	    }
+	    
+	    if(ernCurrent != NULL)
+	    {
+		free(ernCurrent);
+	    }
         }
+	
+	if(ernCurrent != NULL)
+	{
+	    ernPrev = ernCurrent;
+	}
+	
+	ernCurrent = ernNext;
 
-        ernPrevious = ernCurrent;
-        ernCurrent = ernCurrent->next;
     }
 
     return 0;
@@ -1014,7 +1041,7 @@ int spoolerReadWaldo(Waldo *waldo)
         /* ensure we are at the beggining since we must be open and in read */
         lseek(waldo->fd, 0, SEEK_SET);
     }
-
+    
     /* read values into temporary WaldoData structure */
     ret = read(waldo->fd, &wd, sizeof(WaldoData));
 

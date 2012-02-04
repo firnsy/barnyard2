@@ -482,8 +482,6 @@ static int Syslog_FormatTrigger(OpSyslog_Data *syslogData, Unified2EventCommon *
 
 static int Syslog_FormatIPHeaderAlert(OpSyslog_Data *data, Packet *p) 
 {
-    int inner_ip = 0;
-    
     char *p_ip = NULL;
     char s_ip[16] ={0};
     char d_ip[16] ={0};
@@ -494,15 +492,6 @@ static int Syslog_FormatIPHeaderAlert(OpSyslog_Data *data, Packet *p)
     {
 	/* XXX */
 	return 1;
-    }
-    
-    
-    /* This might not be fixed but meanwhile its a fix */
-    if( (p->iph == NULL) &&
-	(p->inner_iph))
-    {
-	p->iph = p->inner_iph;
-	inner_ip =1;
     }
     
     if(p->iph)
@@ -519,35 +508,18 @@ static int Syslog_FormatIPHeaderAlert(OpSyslog_Data *data, Packet *p)
 						  d_ip)) >= SYSLOG_MAX_QUERY_SIZE)
 	{
 	    /* XXX */
-	    if(inner_ip)
-	    {
-		p->iph = NULL;
-	    }
 	    return 1;
 	}
-    }
-    
-    if(inner_ip)
-    {
-	p->iph = NULL;
     }
     
     return OpSyslog_Concat(data);
 }
 
-static int Syslog_FormatIPHeaderLog(OpSyslog_Data *data, Packet *p) {
-
-    int inner_ip = 0;
+static int Syslog_FormatIPHeaderLog(OpSyslog_Data *data, Packet *p) 
+{
 
     unsigned int s, d, proto, ver, hlen, tos, len, id, off, ttl, csum;
     s=d=proto=ver=hlen=tos=len=id=off=ttl=csum=0;
-
-    if( (p->iph == NULL) &&
-        (p->inner_iph))
-    {
-        p->iph = p->inner_iph;
-        inner_ip =1;
-    }
 
     if(p->iph) 
     {
@@ -596,20 +568,9 @@ static int Syslog_FormatIPHeaderLog(OpSyslog_Data *data, Packet *p) {
 					      csum)) >= SYSLOG_MAX_QUERY_SIZE)
     {
 	/* XXX */
-	if(inner_ip)
-	{
-	    p->iph = NULL;
-	}
-	
 	return 1;
     }
 
-    if(inner_ip)
-    {
-	p->iph = NULL;
-    }
-    
-    
     return OpSyslog_Concat(data);
 }
 
@@ -861,7 +822,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
     SigNode                         *sn = NULL;
     ClassType                       *cn = NULL;
 
-
+    
     char sip[16] = {0};
     char dip[16] = {0};
     
@@ -892,6 +853,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
     memset(syslogContext->formatBuffer,'\0',(SYSLOG_MAX_QUERY_SIZE));
     syslogContext->payload_current_pos = 0;
     syslogContext->format_current_pos = 0;
+
     
     switch(syslogContext->operation_mode)
     {
@@ -931,7 +893,6 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	    /* XXX */
 	    FatalError("[%s()], failed call to snprintf \n",
 		       __FUNCTION__);
-	    return;
 	}
 	
 	if( OpSyslog_Concat(syslogContext))
@@ -983,7 +944,6 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 		    /* XXX */
 		    FatalError("[%s()], failed call to snprintf \n",
 			       __FUNCTION__);
-                    return ;
 		}
 		
             }
@@ -997,7 +957,6 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 		/* XXX */
 		FatalError("[%s()], failed call to snprintf \n",
 			   __FUNCTION__);
-		return ;
 	    }
         }
 	
@@ -1016,7 +975,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	{
 	    if(!BcAlertInterface())
 	    {
-		if( protocol_names[GET_IPH_PROTO(p)] )
+		if(protocol_names[GET_IPH_PROTO(p)])
 		{
 		    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
 								       " {%s} %s -> %s",
@@ -1024,14 +983,16 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 								       sip, dip))   >= SYSLOG_MAX_QUERY_SIZE)
 		    {
 			/* XXX */
-			return ;
+			FatalError("[%s()], failed call to snprintf \n",
+				   __FUNCTION__);
 		    }
 		}
 	    }
 	    else
 	    {
-		if( protocol_names[GET_IPH_PROTO(p)] )
+		if(protocol_names[GET_IPH_PROTO(p)])
 		{
+		    
 		    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
 								       " <%s> {%s} %s -> %s",
 								       barnyard2_conf->interface,
@@ -1041,7 +1002,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 			/* XXX */
 			FatalError("[%s()], failed call to snprintf \n",
 				   __FUNCTION__);
-			return ;
+		    
 		    }
 		}
 	    }
@@ -1050,7 +1011,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	{
 	    if(BcAlertInterface())
 	    {
-		if( protocol_names[GET_IPH_PROTO(p)] )
+		if(protocol_names[GET_IPH_PROTO(p)])
 		{
 		    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
 								       " <%s> {%s} %s:%i -> %s:%i",
@@ -1061,13 +1022,12 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 			/* XXX */
 			FatalError("[%s()], failed call to snprintf \n",
 				   __FUNCTION__);
-			return;
 		    }
 		}
 	    }
 	    else
 	    {
-		if( protocol_names[GET_IPH_PROTO(p)] )
+		if(protocol_names[GET_IPH_PROTO(p)])
 		{
 		    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
 								       " {%s} %s:%i -> %s:%i",
@@ -1077,7 +1037,6 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 			/* XXX */
 			FatalError("[%s()], failed call to snprintf \n",
 				   __FUNCTION__);
-			return;
 		    }
 		}
 	    }
@@ -1101,8 +1060,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	}
 	
 	/* Support for portscan ip */
-	if(p->iph ||
-	   p->inner_iph)
+	if(p->iph)
 	{
 	    if(Syslog_FormatIPHeaderAlert(syslogContext, p) ) 
 	    {
@@ -1157,8 +1115,9 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	{
 	    FatalError("NetSend(): call failed for host:port '%s:%u' bailing...\n", syslogContext->server, syslogContext->port);
 	}
-	return;
     }
+
+
     return;
 }
 
@@ -1199,7 +1158,7 @@ void OpSyslog_Log(Packet *p, void *event, uint32_t event_type, void *arg)
 	FatalError("WARNING: Unable to append Trigger header.\n");
     }
     
-    if(p->iph || p->inner_iph)
+    if(p->iph)
     {
 	Syslog_FormatIPHeaderLog(syslogContext, p);
     }
@@ -1415,7 +1374,7 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
 		    else if(!strcasecmp("LOG_AUTH", stoks[1]))
 		    {
 			op_data->syslog_priority |= LOG_AUTH;
-			snprintf(op_data->syslog_tx_facility,"%s","");
+			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_AUTH");
 		    }
 		    else if(!strcasecmp("LOG_SYSLOG", stoks[1]))
 		    {

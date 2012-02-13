@@ -138,7 +138,7 @@ u_int32_t cacheSignatureReferenceLookup(dbSignatureReferenceObj *iLookup,cacheSi
     if( (iLookup == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbReferenceSignatureObj[0x%x] cacheSignatureReferenceObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbReferenceSignatureObj[0x%x] cacheSignatureReferenceObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -216,7 +216,7 @@ u_int32_t cacheSignatureLookup(dbSignatureObj *iLookup,cacheSignatureObj *iHead)
     if( (iLookup == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbSignatureObj[0x%x] cacheSignatureObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbSignatureObj[0x%x] cacheSignatureObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -258,7 +258,7 @@ cacheSignatureObj * cacheSignatureGetObject(dbSignatureObj *iLookup,cacheSignatu
     if( (iLookup == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbSignatureObj[0x%x] cacheSignatureObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbSignatureObj[0x%x] cacheSignatureObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -317,7 +317,7 @@ u_int32_t cacheClassificationLookup(dbClassificationObj *iLookup,cacheClassifica
     if( (iLookup == NULL))
     {
 	/* XXX */
-        FatalError("ERROR database: [%s()], Called with dbClassiciationObj[0x%x] cacheClassificationObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbClassiciationObj[0x%x] cacheClassificationObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -360,7 +360,7 @@ u_int32_t cacheSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead,cacheSyst
 	(rcacheSystemObj == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbReferenceObj[0x%x] cacheReferenceObj[0x%x] **rcacheSystemObj[0x%x]\n",
+        FatalError("database [%s()], Called with dbReferenceObj[0x%x] cacheReferenceObj[0x%x] **rcacheSystemObj[0x%x]\n",
                    __FUNCTION__,
                    iLookup,
                    iHead,
@@ -401,7 +401,7 @@ u_int32_t cacheReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead,
 	(retRefLookupNode == NULL))
     {
 	/* XXX */
-	FatalError("ERROR database: [%s()], Called with dbReferenceObj[0x%x] cacheReferenceObj[0x%x] \n",
+	FatalError("database [%s()], Called with dbReferenceObj[0x%x] cacheReferenceObj[0x%x] \n",
 		   __FUNCTION__,
 		   iLookup,
 		   iHead);
@@ -444,7 +444,7 @@ u_int32_t dbSignatureReferenceLookup(dbSignatureReferenceObj *iLookup,cacheSigna
 	 (retSigRef == NULL))
      {
 	 /* XXX */
-	 FatalError("ERROR database: [%s()], Called with dbReferenceSignatureObj[0x%x] cacheSignatureReferenceObj [0x%x] \n",
+	 FatalError("database [%s()], Called with dbReferenceSignatureObj[0x%x] cacheSignatureReferenceObj [0x%x] \n",
                    __FUNCTION__,
 		    iLookup,
 		    iHead);
@@ -504,7 +504,7 @@ u_int32_t dbReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead)
     if( (iLookup == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbReferenceObj[0x%x] cacheReferenceObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbReferenceObj[0x%x] cacheReferenceObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -554,7 +554,7 @@ u_int32_t dbSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead)
     if( (iLookup == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbSystemObj[0x%x] cacheSystemObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbSystemObj[0x%x] cacheSystemObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -606,7 +606,7 @@ u_int32_t dbSignatureLookup(dbSignatureObj *iLookup,cacheSignatureObj *iHead)
     if( (iLookup == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbSignatureObj[0x%x] cacheSignatureObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbSignatureObj[0x%x] cacheSignatureObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -693,7 +693,7 @@ u_int32_t dbClassificationLookup(dbClassificationObj *iLookup,cacheClassificatio
     if( (iLookup == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbReferenceObj[0x%x] cacheClassificationObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbReferenceObj[0x%x] cacheClassificationObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -1138,7 +1138,7 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
     if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                        SQL_SELECT_ALL_CLASSIFICATION)!=  SNORT_SNPRINTF_SUCCESS))
     {
-        FatalError("ERROR database: [%s()], Unable to allocate memory for query, bailing ...\n",
+        FatalError("database [%s()], Unable to allocate memory for query, bailing ...\n",
 		   __FUNCTION__);
     }
     
@@ -1152,7 +1152,7 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -1190,7 +1190,7 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
 		    {
 			mysql_free_result(data->m_result);
 			data->m_result = NULL;
-			FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+			FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
 				   __FUNCTION__);
 		    }
 		}
@@ -1243,7 +1243,7 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
 			    *iArrayPtr = NULL;
                             mysql_free_result(data->m_result);
                             data->m_result = NULL;
-                            FatalError("ERROR database: [%s()], mysql_fetch_lengths() call failed .. \n",
+                            FatalError("database [%s()], mysql_fetch_lengths() call failed .. \n",
                                        __FUNCTION__);
                         }
 			
@@ -1340,7 +1340,7 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
 			    PQclear(data->p_result);
 			    data->p_result = NULL;
 			}
-			FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+			FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
 				   __FUNCTION__);
 		    }
 		    
@@ -1539,7 +1539,7 @@ u_int32_t ClassificationPopulateDatabase(DatabaseData  *data,cacheClassification
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -1553,7 +1553,7 @@ u_int32_t ClassificationPopulateDatabase(DatabaseData  *data,cacheClassification
 	    
 	    if( (snort_escape_string_STATIC(cacheHead->obj.sig_class_name,CLASS_NAME_LEN,data)))
 	    {
-		FatalError("ERROR database: [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+		FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
 			   "[%s], Exiting. \n",
 			   __FUNCTION__,
 			   &cacheHead->obj.sig_class_name);
@@ -1709,7 +1709,7 @@ u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cache
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -1730,7 +1730,7 @@ u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cache
 	{
 	    if( (snort_escape_string_STATIC(cacheHead->obj.message,SIG_MSG_LEN,data)))
 	    {
-		FatalError("ERROR database: [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+		FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
 			   "[%s], Exiting. \n",
 			   __FUNCTION__,
 			   &cacheHead->obj.message);
@@ -1910,7 +1910,7 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
     if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                        SQL_SELECT_ALL_SIGNATURE)!=  SNORT_SNPRINTF_SUCCESS))
     {
-        FatalError("ERROR database: [%s()], Unable to allocate memory for query, bailing ...\n",
+        FatalError("database [%s()], Unable to allocate memory for query, bailing ...\n",
 		   __FUNCTION__);
     }
     
@@ -1924,7 +1924,7 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -1962,7 +1962,7 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
 		    {
 			mysql_free_result(data->m_result);
 			data->m_result = NULL;
-			FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+			FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
 				   __FUNCTION__);
 		    }
 		}
@@ -2011,7 +2011,7 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
 			    *iArrayPtr = NULL;
                             mysql_free_result(data->m_result);
                             data->m_result = NULL;
-                            FatalError("ERROR database: [%s()], mysql_fetch_lengths() call failed .. \n",
+                            FatalError("database [%s()], mysql_fetch_lengths() call failed .. \n",
                                        __FUNCTION__);
                         }
 						
@@ -2126,7 +2126,7 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
 			PQclear(data->p_result);
 			data->p_result = NULL;
 		    }
-		    FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+		    FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
 			       __FUNCTION__);
 		}
 
@@ -2373,7 +2373,7 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
     if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                        SQL_SELECT_ALL_REF) !=  SNORT_SNPRINTF_SUCCESS))
     {
-        FatalError("ERROR database: [%s()], Unable to allocate memory for query, bailing ...\n",
+        FatalError("database [%s()], Unable to allocate memory for query, bailing ...\n",
                    __FUNCTION__);
     }
 
@@ -2387,7 +2387,7 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -2423,7 +2423,7 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
                     {
                         mysql_free_result(data->m_result);
                         data->m_result = NULL;
-                        FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+                        FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
                                    __FUNCTION__);
                     }
                 }
@@ -2472,7 +2472,7 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
                             *iArrayPtr = NULL;
                             mysql_free_result(data->m_result);
                             data->m_result = NULL;
-                            FatalError("ERROR database: [%s()], mysql_fetch_lengths() call failed .. \n",
+                            FatalError("database [%s()], mysql_fetch_lengths() call failed .. \n",
                                        __FUNCTION__);
                         }
 			
@@ -2575,7 +2575,7 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
 			data->p_result = NULL;
 		    }
 
-		    FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+		    FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
 			       __FUNCTION__);
 		}
 
@@ -2727,7 +2727,7 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
     if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                        SQL_SELECT_ALL_REFERENCE_SYSTEM) !=  SNORT_SNPRINTF_SUCCESS))
     {
-        FatalError("ERROR database: [%s()], Unable to allocate memory for query, bailing ...\n",
+        FatalError("database [%s()], Unable to allocate memory for query, bailing ...\n",
                    __FUNCTION__);
     }
     
@@ -2741,7 +2741,7 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -2778,7 +2778,7 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
                     {
                         mysql_free_result(data->m_result);
                         data->m_result = NULL;
-                        FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+                        FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
                                    __FUNCTION__);
                     }
                 }
@@ -2827,7 +2827,7 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
                             *iArrayPtr = NULL;
                             mysql_free_result(data->m_result);
                             data->m_result = NULL;
-                            FatalError("ERROR database: [%s()], mysql_fetch_lengths() call failed .. \n",
+                            FatalError("database [%s()], mysql_fetch_lengths() call failed .. \n",
                                        __FUNCTION__);
                         }
 			
@@ -2925,7 +2925,7 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
 			data->p_result = NULL;
 		    }
 
-		    FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+		    FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
 			       __FUNCTION__);
 		}
 
@@ -3182,7 +3182,7 @@ u_int32_t ReferencePopulateDatabase(DatabaseData  *data,cacheReferenceObj *cache
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -3195,7 +3195,7 @@ u_int32_t ReferencePopulateDatabase(DatabaseData  *data,cacheReferenceObj *cache
         {
 	    if( (snort_escape_string_STATIC(cacheHead->obj.ref_tag,REF_TAG_LEN,data)))
             {
-                FatalError("ERROR database: [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+                FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
                            "[%s], Exiting. \n",
                            __FUNCTION__,
                            &cacheHead->obj.ref_tag);
@@ -3292,7 +3292,7 @@ u_int32_t SystemPopulateDatabase(DatabaseData  *data,cacheSystemObj *cacheHead)
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -3305,7 +3305,7 @@ u_int32_t SystemPopulateDatabase(DatabaseData  *data,cacheSystemObj *cacheHead)
         {
 	    if( (snort_escape_string_STATIC(cacheHead->obj.ref_system_name,SYSTEM_NAME_LEN,data)))
             {
-                FatalError("ERROR database: [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+                FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
                            "[%s], Exiting. \n",
                            __FUNCTION__,
                            &cacheHead->obj.ref_system_name);
@@ -3624,7 +3624,7 @@ u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferen
     if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                        SQL_SELECT_ALL_SIGREF) !=  SNORT_SNPRINTF_SUCCESS))
     {
-        FatalError("ERROR database: [%s()], Unable to allocate memory for query, bailing ...\n",
+        FatalError("database [%s()], Unable to allocate memory for query, bailing ...\n",
                    __FUNCTION__);
     }
     
@@ -3638,7 +3638,7 @@ u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferen
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -3674,7 +3674,7 @@ u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferen
                     {
                         mysql_free_result(data->m_result);
                         data->m_result = NULL;
-                        FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+                        FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
                                    __FUNCTION__);
                     }
                 }
@@ -3722,7 +3722,7 @@ u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferen
                             *iArrayPtr = NULL;
                             mysql_free_result(data->m_result);
                             data->m_result = NULL;
-                            FatalError("ERROR database: [%s()], mysql_fetch_lengths() call failed .. \n",
+                            FatalError("database [%s()], mysql_fetch_lengths() call failed .. \n",
                                        __FUNCTION__);
                         }
 			
@@ -3818,7 +3818,7 @@ u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferen
 			data->p_result = NULL;
 		    }
 
-		    FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+		    FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
 			       __FUNCTION__);
 		}
 
@@ -4143,7 +4143,7 @@ u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureRe
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -4323,7 +4323,7 @@ u_int32_t ConvertDefaultCache(Barnyard2Config *bc,DatabaseData *data)
        (data == NULL))
     {
 	/* XXX */
-	FatalError("ERROR database: [%s()], received a NULL argument : Barnyard2Config [0x%x] or DatabaseData [0x%x]  \n",
+	FatalError("database [%s()], received a NULL argument : Barnyard2Config [0x%x] or DatabaseData [0x%x]  \n",
 		   __FUNCTION__,
 		   bc,
 		   data);

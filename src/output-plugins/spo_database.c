@@ -300,7 +300,7 @@ u_int32_t SynchronizeEventId(DatabaseData *data)
     
     if( UpdateLastCid(data, data->sid, data->cid) < 0 )
     {
-	FatalError("ERROR database: Unable to construct query - output error or truncation\n");
+	FatalError("database Unable to construct query - output error or truncation\n");
     }
     
     if( GetLastCid(data, data->sid,(u_int32_t *)&c_cid))
@@ -311,7 +311,7 @@ u_int32_t SynchronizeEventId(DatabaseData *data)
 
     if(c_cid != data->cid)
     {
-	FatalError("ERROR database: [%s()]: Something is wrong with the sensor table, you "
+	FatalError("database [%s()]: Something is wrong with the sensor table, you "
 		   "might have two process updating it...check this out \n",
 		   __FUNCTION__);
     }
@@ -502,13 +502,13 @@ void DatabaseInit(char *args)
     case DB_MSSQL:
     case DB_ORACLE:
     case DB_ODBC:
-	FatalError("ERROR database: The database family you want to use is currently not supported by this build \n");
+	FatalError("database The database family you want to use is currently not supported by this build \n");
 	break;
 #endif 	/* ENABLE MSSQL */
 #endif 	/* ENABLE ORACLE */
 #endif 	/* ENABLE ODBC */
     default:
-	FatalError("ERROR database: Unknown database type defined: [%lu] \n",data->dbtype_id);
+	FatalError("database Unknown database type defined: [%lu] \n",data->dbtype_id);
 	break;
     }
     
@@ -536,14 +536,14 @@ void DatabaseInit(char *args)
     if( (data->SQL_INSERT = malloc(data->SQL_INSERT_SIZE)) == NULL)
     {
 	/* XXX */
-	FatalError("ERROR database: [%s()], unable to allocate SQL_INSERT memory, bailing \n",
+	FatalError("database [%s()], unable to allocate SQL_INSERT memory, bailing \n",
 		   __FUNCTION__);
     }
     
     if ( (data->SQL_SELECT = malloc(data->SQL_SELECT_SIZE)) == NULL)
     {
 	/* XXX */
-	FatalError("ERROR database: [%s()], unable to allocate SQL_SELECT memory, bailing \n",
+	FatalError("database [%s()], unable to allocate SQL_SELECT memory, bailing \n",
 		   __FUNCTION__);
 	
     }
@@ -554,7 +554,7 @@ void DatabaseInit(char *args)
     if( (ConvertDefaultCache(barnyard2_conf,data)))
     {
 	/* XXX */
-	FatalError("ERROR database: [%s()], ConvertDefaultCache() Failed \n",
+	FatalError("database [%s()], ConvertDefaultCache() Failed \n",
 	    __FUNCTION__);
     }
     
@@ -740,13 +740,13 @@ u_int32_t DatabasePluginInitializeSensor(DatabaseData *data)
 	if(Insert(data->SQL_INSERT,data))
 	{
 	    /* XXX */
-	    FatalError("ERROR database: Error inserting [%s] \n",data->SQL_INSERT);
+	    FatalError("database Error inserting [%s] \n",data->SQL_INSERT);
 	}
 	
 	if( Select(data->SQL_SELECT,data,(u_int32_t *)&data->sid))
 	{
 	    /* XXX */
-	    FatalError("ERROR database: Error Executing [%s] \n",data->SQL_SELECT);
+	    FatalError("database Error Executing [%s] \n",data->SQL_SELECT);
 	}
 	
 	if(data->sid == 0)
@@ -787,7 +787,7 @@ void DatabaseInitFinalize(int unused, void *arg)
     
     if ((data == NULL))
     {
-        FatalError("ERROR database: data uninitialized\n");
+        FatalError("database data uninitialized\n");
     }
     
     Connect(data);
@@ -796,24 +796,24 @@ void DatabaseInitFinalize(int unused, void *arg)
     if( (CheckDBVersion(data)))
     {
 	/* XXX */
-	FatalError("ERROR database: problems with schema version, bailing...\n");
+	FatalError("database problems with schema version, bailing...\n");
     }
     
     if( (DatabasePluginInitializeSensor(data)))
     {
-	FatalError("ERROR database: Unable to initialize sensor \n");
+	FatalError("database Unable to initialize sensor \n");
     }
     
     
     if(SynchronizeEventId(data))
     {
-	FatalError("ERROR database: Encountered an error while trying to synchronize event_id, this is serious and we can't go any further, please investigate \n");
+	FatalError("database Encountered an error while trying to synchronize event_id, this is serious and we can't go any further, please investigate \n");
     }
     
     if(CacheSynchronize(data))
     {
 	/* XXX */
-	FatalError("ERROR database: [%s()]: CacheSynchronize() call failed ...\n",
+	FatalError("database [%s()]: CacheSynchronize() call failed ...\n",
 		   __FUNCTION__);
 	return;
     }
@@ -952,7 +952,7 @@ void ParseDatabaseArgs(DatabaseData *data)
         }
         else
         {
-           FatalError("ERROR database: '%s' is an unknown database type.  The supported\n"
+           FatalError("database '%s' is an unknown database type.  The supported\n"
                       "          databases include: MySQL (mysql), PostgreSQL (postgresql),\n"
                       "          ODBC (odbc), Oracle (oracle), and Microsoft SQL Server (mssql)\n",
                       type);
@@ -1004,7 +1004,7 @@ void ParseDatabaseArgs(DatabaseData *data)
             }
             else
             {
-                FatalError("ERROR database: unknown  (%s)", a1);
+                FatalError("database unknown  (%s)", a1);
             }
         }
         if(!strncasecmp(dbarg,KEYWORD_DETAIL,strlen(KEYWORD_DETAIL)))
@@ -1019,7 +1019,7 @@ void ParseDatabaseArgs(DatabaseData *data)
             }
             else
             {
-                FatalError("ERROR database: unknown detail level (%s)", a1);
+                FatalError("database unknown detail level (%s)", a1);
             }
         }
         if(!strncasecmp(dbarg,KEYWORD_IGNOREBPF,strlen(KEYWORD_IGNOREBPF)))
@@ -1036,7 +1036,7 @@ void ParseDatabaseArgs(DatabaseData *data)
             }
             else
             {
-                FatalError("ERROR database: unknown ignore_bpf argument (%s)", a1);
+                FatalError("database unknown ignore_bpf argument (%s)", a1);
             }
 
         }
@@ -1356,10 +1356,12 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
     }
     
     /* The signature was not found we will have to insert it */
-    LogMessage("[%s()]: WARNING: Event [%u] with gid[%u] sid[%u] revision [%u] classification [%u] priority [%u], was not found in cache, thus not present in the database, inserting...\n"
-	       "\t This could lead to errors/inconsistency (in some cases), make sure your sid-msg.map and gen-msg.map file are up to date with your rules. \n"
-	       "\t The inserted signature will not have insertion in the sig_reference table so be sure this does not affect you \n"
-	       "\t Also note that the message inserted in the signature table will be snort default message (make sure to update it manualy if you want it to resolve correctly) \n\n",
+    LogMessage("WARNING [%s()]: Event [%u] with gid[%u] sid[%u] revision [%u] classification [%u] priority [%u]\n"
+	       "\t Was not found in barnyard2 signature cache, this could lead to display inconsistency.\n"
+	       "\t To prevent this warning, make sure your sid-msg.map and gen-msg.map file are up to date with the snort process logging to the unified2 file.\n"
+	       "\t The inserted signature will not have its information present in the sig_reference table. \n"
+	       "\t Note that the message inserted in the signature table will be snort default message \"Snort Alert [gid:sid:revision]\" \n"
+	       "\t You can allways update the message via a SQL query if you want it to be displayed correctly by your favorite interface\n",
 	       __FUNCTION__,
 	       ntohl(((Unified2EventCommon *)event)->event_id),
 	       gid,
@@ -2128,7 +2130,7 @@ void Database(Packet *p, void *event, uint32_t event_type, void *arg)
     
     if(data == NULL)
     {
-	FatalError("ERROR database: [%s()]: Called with a NULL DatabaseData Argument, can't process \n",
+	FatalError("database [%s()]: Called with a NULL DatabaseData Argument, can't process \n",
 		   __FUNCTION__);
     }
     
@@ -2141,7 +2143,6 @@ void Database(Packet *p, void *event, uint32_t event_type, void *arg)
 		   p);
 	return;
     }
-
     
 /*
   This has been refactored to simplify the workflow of the function 
@@ -2156,7 +2157,7 @@ TransacRollback:
 	if(RollbackTransaction(data))
 	{
 	    /* XXX */
-	    FatalError("ERROR database: Unable to rollback transaction in [%s()]\n",
+	    FatalError("database Unable to rollback transaction in [%s()]\n",
 		       __FUNCTION__);
 	}
 	
@@ -2166,7 +2167,7 @@ TransacRollback:
     if( BeginTransaction(data) )
     {
 	/* XXX */
-	FatalError("ERROR database: [%s()]: Failed to Initialize transaction, bailing ... \n",
+	FatalError("database [%s()]: Failed to Initialize transaction, bailing ... \n",
 		   __FUNCTION__);
     }
     
@@ -2244,7 +2245,7 @@ bad_query:
             if( (CurrentQuery = SQL_GetQueryByPos(data,itr)) == NULL)
             {
                 /* XXX */
-		FatalError("ERROR database: [%s()]: Failed to execute SQL_GetQueryByPos() in bad_query state, exiting \n",
+		FatalError("database [%s()]: Failed to execute SQL_GetQueryByPos() in bad_query state, exiting \n",
 			   __FUNCTION__);
             }
 	    
@@ -2446,7 +2447,7 @@ u_int32_t snort_escape_string_STATIC(char *from, u_int32_t buffer_max_len ,Datab
 	(buffer_max_len == 0))
     {
 	/* XXX */
-	FatalError("ERROR database: [%s()]: Edit source code and change the value of the #define  DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN in spo_database.h to something greater than [%u] \n",
+	FatalError("database [%s()]: Edit source code and change the value of the #define  DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN in spo_database.h to something greater than [%u] \n",
 		   __FUNCTION__,
 		   buffer_max_len);
     }
@@ -2784,7 +2785,7 @@ int CheckDBVersion(DatabaseData * data)
    
    
    if (data->DBschema_version == -1)
-       FatalError("ERROR database: Unable to construct query - output error or truncation\n");
+       FatalError("database Unable to construct query - output error or truncation\n");
    
    if ( data->DBschema_version == 0 )
    {
@@ -2810,7 +2811,7 @@ u_int32_t BeginTransaction(DatabaseData * data)
     if(data == NULL)
     {
 	/* XXX */
-	FatalError("ERROR database: [%s()], Invoked with NULL DatabaseData \n",
+	FatalError("database [%s()], Invoked with NULL DatabaseData \n",
 		   __FUNCTION__);
     }
 
@@ -2883,7 +2884,7 @@ u_int32_t  CommitTransaction(DatabaseData * data)
     if(data == NULL)
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Invoked with NULL DatabaseData \n",
+        FatalError("database [%s()], Invoked with NULL DatabaseData \n",
                    __FUNCTION__);
     }
     
@@ -2980,7 +2981,7 @@ u_int32_t RollbackTransaction(DatabaseData * data)
     if(data == NULL)
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Invoked with NULL DatabaseData \n",
+        FatalError("database [%s()], Invoked with NULL DatabaseData \n",
                    __FUNCTION__);
     }
 
@@ -3150,7 +3151,7 @@ int Insert(char * query, DatabaseData * data)
 	    if( (mysql_errno(data->m_sock)))
 	    {
 		
-		FatalError("ERROR database: mysql_error: %s\nSQL=[%s]\n",
+		FatalError("database mysql_error: %s\nSQL=[%s]\n",
 			   mysql_error(data->m_sock),query);
 		
 	    }
@@ -3318,7 +3319,7 @@ int Select(char * query, DatabaseData * data,u_int32_t *rval)
 	(rval == NULL))
     {
 	/* XXX */
-	FatalError("ERROR database: [%s()] Invoked with a NULL argument Query [0x%x] Data [0x%x] rval [0x%x] \n",
+	FatalError("database [%s()] Invoked with a NULL argument Query [0x%x] Data [0x%x] rval [0x%x] \n",
 		   __FUNCTION__,
 		   query,
 		   data,
@@ -3338,7 +3339,7 @@ Select_reconnect:
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
 	/* XXX */
-	FatalError("ERROR database: Select Query[%s] failed check to dbConnectionStatus()\n",query);
+	FatalError("database Select Query[%s] failed check to dbConnectionStatus()\n",query);
     }
     
     switch(data->dbtype_id)
@@ -3558,7 +3559,7 @@ Select_reconnect:
 #endif
 	
     default:
-	FatalError("ERROR database: [%s()]: Invoked with unknown database type [%u] \n",
+	FatalError("database [%s()]: Invoked with unknown database type [%u] \n",
 		   __FUNCTION__,
 		   data->dbtype_id);
     }
@@ -3579,7 +3580,7 @@ void Connect(DatabaseData * data)
     if(data == NULL)
     {
 	/* XXX */
-	FatalError("ERROR database: [%s()] Invoked with NULL DatabaseData argument \n",
+	FatalError("database [%s()]: Invoked with NULL DatabaseData argument \n",
 		   __FUNCTION__);
     }
     
@@ -3616,7 +3617,7 @@ void Connect(DatabaseData * data)
         if(PQstatus(data->p_connection) == CONNECTION_BAD)
         {
             PQfinish(data->p_connection);
-            FatalError("ERROR database: Connection to database '%s' failed\n", data->dbname);
+            FatalError("database Connection to database '%s' failed\n", data->dbname);
         }
 	break;
 #endif
@@ -3627,7 +3628,7 @@ void Connect(DatabaseData * data)
         data->m_sock = mysql_init(NULL);
         if(data->m_sock == NULL)
         {
-            FatalError("ERROR database: Connection to database '%s' failed\n", data->dbname);
+            FatalError("database Connection to database '%s' failed\n", data->dbname);
         }
 	
         /* check if we want to connect with ssl options */
@@ -3649,15 +3650,15 @@ void Connect(DatabaseData * data)
                               data->port == NULL ? 0 : atoi(data->port), NULL, 0) == NULL)
         {
             if(mysql_errno(data->m_sock))
-                FatalError("ERROR database: mysql_error: %s\n", mysql_error(data->m_sock));
+                FatalError("database mysql_error: %s\n", mysql_error(data->m_sock));
 
-            FatalError("ERROR database: Failed to logon to database '%s'\n", data->dbname);
+            FatalError("database Failed to logon to database '%s'\n", data->dbname);
         }
 	
 	if(mysql_autocommit(data->m_sock,0))
 	{
 	    /* XXX */
-	    LogMessage("WARNING database: unable to unset  autocommit\n");
+	    LogMessage("WARNING database: unable to unset autocommit\n");
 	    return ;
 	}
 
@@ -3676,11 +3677,11 @@ void Connect(DatabaseData * data)
 
         if(!(SQLAllocEnv(&data->u_handle) == SQL_SUCCESS))
         {
-            FatalError("ERROR database: unable to allocate ODBC environment\n");
+            FatalError("database unable to allocate ODBC environment\n");
         }
         if(!(SQLAllocConnect(data->u_handle, &data->u_connection) == SQL_SUCCESS))
         {
-            FatalError("ERROR database: unable to allocate ODBC connection handle\n");
+            FatalError("database unable to allocate ODBC connection handle\n");
         }
 
         /* The SQL Server ODBC driver always returns SQL_SUCCESS_WITH_INFO
@@ -3742,7 +3743,7 @@ void Connect(DatabaseData * data)
             }
             if( encounteredFailure )
             {
-                FatalError("ERROR database: ODBC unable to connect.  %s\n", odbcError);
+                FatalError("database ODBC unable to connect.  %s\n", odbcError);
             }
         }
 	break;
@@ -3757,7 +3758,7 @@ void Connect(DatabaseData * data)
          OCIErrorGet(data->o_error, 1, NULL, &data->o_errorcode, \
                      data->o_errormsg, sizeof(data->o_errormsg), OCI_HTYPE_ERROR); \
          ErrorMessage("ERROR database: Oracle_error: %s\n", data->o_errormsg); \
-         FatalError("ERROR database:  %s : Connection to database '%s' failed\n", \
+         FatalError("database  %s : Connection to database '%s' failed\n", \
                     func_name, data->dbRH[data->dbtype_id]->dbname); \
      }
     
@@ -3799,7 +3800,7 @@ void Connect(DatabaseData * data)
          ErrorMessage("ERROR database: Checklist: check database is listed in tnsnames.ora\n");
          ErrorMessage("ERROR database:            check tnsnames.ora readable\n");
          ErrorMessage("ERROR database:            check database accessible with sqlplus\n");
-         FatalError("ERROR database: OCILogon : Connection to database '%s' failed\n", data->dbRH[data->dbtype_id]->dbname);
+         FatalError("database OCILogon : Connection to database '%s' failed\n", data->dbRH[data->dbtype_id]->dbname);
       }
 
       if (OCIHandleAlloc(data->o_environment, (dvoid **)&data->o_statement, OCI_HTYPE_STMT, 0, NULL))
@@ -3820,7 +3821,7 @@ void Connect(DatabaseData * data)
             data->ms_login = dblogin();
             if( data->ms_login == NULL )
             {
-                FatalError("ERROR database: Failed to allocate login structure\n");
+                FatalError("database Failed to allocate login structure\n");
             }
             /* Set up some informational values which are stored with the connection */
             DBSETLUSER (data->ms_login, data->user);
@@ -3830,26 +3831,26 @@ void Connect(DatabaseData * data)
             data->ms_dbproc = dbopen(data->ms_login, data->host);
             if( data->ms_dbproc == NULL )
             {
-                FatalError("ERROR database: Failed to logon to host '%s'\n", data->host);
+                FatalError("database Failed to logon to host '%s'\n", data->host);
             }
             else
             {
                 if( dbuse( data->ms_dbproc, data->dbRH[data->dbtype_id]->dbname ) != SUCCEED )
                 {
-                    FatalError("ERROR database: Unable to change context to database '%s'\n", data->dbRH[data->dbtype_id]->dbname);
+                    FatalError("database Unable to change context to database '%s'\n", data->dbRH[data->dbtype_id]->dbname);
                 }
             }
         }
         else
         {
-            FatalError("ERROR database: Connection to database '%s' failed\n", data->dbRH[data->dbtype_id]->dbname);
+            FatalError("database Connection to database '%s' failed\n", data->dbRH[data->dbtype_id]->dbname);
         }
         CLEARSTATEMENT();
 	break;
 #endif
 	
     default:
-	FatalError("ERROR database: [%s()]: Invoked with unknown database type [%u] \n",
+	FatalError("database [%s()]: Invoked with unknown database type [%u] \n",
 		   __FUNCTION__,
 		   data->dbtype_id);
 	
@@ -3875,7 +3876,7 @@ void Disconnect(DatabaseData * data)
 
     if(data == NULL)
     {
-	FatalError("ERROR database: [%s()]: Invoked with NULL data \n",
+	FatalError("database [%s()]: Invoked with NULL data \n",
 		   __FUNCTION__);
     }
     
@@ -3888,6 +3889,12 @@ void Disconnect(DatabaseData * data)
     {
 #ifdef ENABLE_POSTGRESQL
     case DB_POSTGRESQL:
+	
+	if(data->p_result)
+	{
+	    PQclear(data->p_result);
+	}
+	
 	if(data->p_connection)
 	{
 	    PQfinish(data->p_connection);
@@ -3962,7 +3969,7 @@ void Disconnect(DatabaseData * data)
 #endif
 	    
     default:
-	FatalError("ERROR database: [%s()]: Invoked with unknown database type [%u] \n",
+	FatalError("database [%s()]: Invoked with unknown database type [%u] \n",
                    __FUNCTION__,
                    data->dbtype_id);
 	break;
@@ -4162,7 +4169,7 @@ void resetTransactionState(dbReliabilityHandle *pdbRH)
     if(pdbRH == NULL)
     {
         /* XXX */
-        FatalError("ERROR database: [%s()] called with a null dbReliabilityHandle",__FUNCTION__);
+        FatalError("database [%s()] called with a null dbReliabilityHandle",__FUNCTION__);
     }
     
     pdbRH->checkTransaction = 0;
@@ -4177,7 +4184,7 @@ void setTransactionState(dbReliabilityHandle *pdbRH)
     if(pdbRH == NULL)
     {
         /* XXX */
-        FatalError("ERROR database: [%s()] called with a null dbReliabilityHandle",__FUNCTION__);
+        FatalError("database [%s()] called with a null dbReliabilityHandle",__FUNCTION__);
     }
     
     pdbRH->checkTransaction = 1;
@@ -4190,7 +4197,7 @@ void setTransactionCallFail(dbReliabilityHandle *pdbRH)
     if(pdbRH == NULL)
     {
         /* XXX */
-        FatalError("ERROR database: [%s()] called with a null dbReliabilityHandle",__FUNCTION__);
+        FatalError("database [%s()] called with a null dbReliabilityHandle",__FUNCTION__);
     }
     
     if(pdbRH->checkTransaction)
@@ -4208,7 +4215,7 @@ u_int32_t getReconnectState(dbReliabilityHandle *pdbRH)
     if(pdbRH == NULL)
     {
         /* XXX */
-        FatalError("ERROR database: [%s()] called with a null dbReliabilityHandle",__FUNCTION__);
+        FatalError("database [%s()] called with a null dbReliabilityHandle",__FUNCTION__);
     }
     
     return  pdbRH->dbReconnectedInTransaction;
@@ -4220,7 +4227,7 @@ void setReconnectState(dbReliabilityHandle *pdbRH,u_int32_t reconnection_state)
     if(pdbRH == NULL)
     {
         /* XXX */
-	FatalError("ERROR database: [%s()] called with a null dbReliabilityHandle",__FUNCTION__);
+	FatalError("database [%s()] called with a null dbReliabilityHandle",__FUNCTION__);
     }
     
     pdbRH->dbReconnectedInTransaction = reconnection_state;
@@ -4233,7 +4240,7 @@ u_int32_t checkTransactionState(dbReliabilityHandle *pdbRH)
     if(pdbRH == NULL)
     {
         /* XXX */
-        FatalError("ERROR database: [%s()] called with a null dbReliabilityHandle",__FUNCTION__);
+        FatalError("database [%s()] called with a null dbReliabilityHandle",__FUNCTION__);
     }
     
     return pdbRH->checkTransaction;
@@ -4245,7 +4252,7 @@ u_int32_t checkTransactionCall(dbReliabilityHandle *pdbRH)
     if(pdbRH == NULL)
     {
         /* XXX */
-        FatalError("ERROR database: [%s()] called with a null dbReliabilityHandle",__FUNCTION__);
+        FatalError("database [%s()] called with a null dbReliabilityHandle",__FUNCTION__);
     }
     
     if(checkTransactionState(pdbRH))
@@ -4280,15 +4287,8 @@ u_int32_t  dbReconnectSetCounters(dbReliabilityHandle *pdbRH)
 	}
 	return 0;
     }
-    else
-    {
-	/* We will check here */
-	return 1;
-    }
-    
-    /* XXX */
-    /* We shound never reach this */
-    return 255;
+
+    return 1;
 }
 
 #ifdef ENABLE_MYSQL
@@ -4310,7 +4310,7 @@ u_int32_t MYSQL_ManualConnect(DatabaseData *dbdata)
     
     if(dbdata->m_sock == NULL)
     {
-	FatalError("ERROR database: Connection to database '%s' failed\n", 
+	FatalError("database Connection to database '%s' failed\n", 
 		   dbdata->dbname);
     }
     
@@ -4474,7 +4474,7 @@ MYSQL_RetryConnection:
 	    if( dbReconnectSetCounters(pdbRH))
 	    {
 		/* XXX */
-		FatalError("ERROR database: [%s()]: Call failed, the process will need to be restarted \n",__FUNCTION__);
+		FatalError("database [%s()]: Call failed, the process will need to be restarted \n",__FUNCTION__);
 	    }
 	    
 	    goto MYSQL_RetryConnection;
@@ -4491,7 +4491,7 @@ MYSQL_RetryConnection:
 	case 0 :
 	    if( aThreadID != pdbRH->pThreadID)
 	    {
-		FatalError("ERROR database: We are in {MYSQL} \"manual reconnect\" mode and a call to mysql_ping() changed the mysql_thread_id, this shouldn't happen the process will terminate \n");
+		FatalError("database We are in {MYSQL} \"manual reconnect\" mode and a call to mysql_ping() changed the mysql_thread_id, this shouldn't happen the process will terminate \n");
 	    }
 	    
 	    return 0;
@@ -4508,7 +4508,7 @@ MYSQL_RetryConnection:
 		if(dbReconnectSetCounters(pdbRH))
 		{
 		    /* XXX */
-		    FatalError("ERROR database: [%s()]: Call failed, the process will need to be restarted \n",__FUNCTION__);
+		    FatalError("database [%s()]: Call failed, the process will need to be restarted \n",__FUNCTION__);
 		}
 		
 		if((MYSQL_ManualConnect(pdbRH->dbdata)))
@@ -4526,7 +4526,7 @@ MYSQL_RetryConnection:
 		if(dbReconnectSetCounters(pdbRH))
 		{
 		    /* XXX */
-		    FatalError("ERROR database: [%s()]: Call failed, the process will need to be restarted \n",__FUNCTION__);
+		    FatalError("database [%s()]: Call failed, the process will need to be restarted \n",__FUNCTION__);
 		}
 	    
 		if((MYSQL_ManualConnect(pdbRH->dbdata)))
@@ -4553,11 +4553,8 @@ MYSQL_RetryConnection:
 #ifdef ENABLE_POSTGRESQL
 u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH)
 {
-
     DatabaseData *data = NULL;
-
-    int conStatus = 0;
-
+    
     if( (pdbRH == NULL) ||
         (pdbRH->dbdata == NULL))
     {
@@ -4567,12 +4564,10 @@ u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH)
     
     data = pdbRH->dbdata;
     
-conn_retry:
+conn_test:
     if(data->p_connection != NULL)
     {
-	conStatus = PQstatus(data->p_connection);
-
-	switch(conStatus)
+	switch(PQstatus(data->p_connection))
 	{
 	case CONNECTION_OK:
 	    return 0;
@@ -4589,14 +4584,46 @@ conn_retry:
 		setTransactionState(pdbRH);
 	    }
 	    
+	failed_pqcon:	    
 	    if(dbReconnectSetCounters(pdbRH))
 	    {
 		/* XXX */
-		FatalError("ERROR database: [%s()]: Call failed, the process will need to be restarted \n",__FUNCTION__);
+		FatalError("database [%s()]: Call failed, the process will need to be restarted \n",__FUNCTION__);
 	    }
-	    
-	    PQreset(data->p_connection);
-	    goto conn_retry;
+
+	    /* Changed PQreset by call to PQfinish and PQdbLogin */
+	    PQfinish(data->p_connection);
+
+	    if (data->use_ssl == 1)
+	    {
+		if( (data->p_connection =
+		     PQsetdbLogin(data->host,
+				  data->port,
+				  data->dbRH[data->dbtype_id].ssl_mode,
+				  NULL,
+				  data->dbname,
+				  data->user,
+				  data->password)) == NULL)
+		{
+		    goto failed_pqcon;
+		}
+	    }
+	    else
+	    {
+		if( (data->p_connection =
+		     PQsetdbLogin(data->host,
+				  data->port,
+				  NULL,
+				  NULL,
+				  data->dbname,
+				  data->user,
+				  data->password)) == NULL)
+		{
+		    goto failed_pqcon;
+		}
+	    }
+	
+	    goto conn_test;
 	    break;
 	}
 	
@@ -4604,9 +4631,11 @@ conn_retry:
     else
     {
 	/* XXX */
+	setTransactionCallFail(pdbRH);
+	setTransactionState(pdbRH);
 	return 1;
     }
-
+    
     return 0;
 }
 #endif

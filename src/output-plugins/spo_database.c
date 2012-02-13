@@ -1157,14 +1157,7 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
 	return 1;
     }
     
-    if( BeginTransaction(data) )
-    {
-	    /* XXX */
-	FatalError("ERROR database: [%s()]: Failed to Initialize transaction, bailing ... \n",
-		   __FUNCTION__);
-    }
-	
-    
+        
     DatabaseCleanSelect(data);
     DatabaseCleanInsert(data);
 
@@ -1179,11 +1172,9 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
 		      iUpdateSig->obj.message))
     {
 	/* XXX */
-	if(RollbackTransaction(data))
-        {
-            /* XXX */
-            FatalError("ERROR database: Unable to rollback transaction\n");
-        }
+	LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_SELECT in [%s()] \n",
+		   __FUNCTION__);
+
 	return 1;
     }
     
@@ -1196,11 +1187,9 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
 		      iUpdateSig->obj.db_id))
     {
 	/* XXX */
-	if(RollbackTransaction(data))
-        {
-            /* XXX */
-            FatalError("ERROR database: Unable to rollback transaction\n");
-        }
+	LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_INSERT in [%s()] \n",
+		   __FUNCTION__);
+
 	return 1;
     }
     
@@ -1208,11 +1197,9 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
     if(Insert(data->SQL_INSERT,data))
     {
 	/* XXX */
-        if(RollbackTransaction(data))
-        {
-            /* XXX */
-            FatalError("ERROR database: Unable to rollback transaction\n");
-        }
+	LogMessage("ERROR database: calling Insert() in [%s()] \n",
+		   __FUNCTION__);
+	
         return 1;
     }
     
@@ -1220,11 +1207,9 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
     if(Select(data->SQL_SELECT,data,(u_int32_t *)&db_sig_id))
     {
 	/* XXX */
-        if(RollbackTransaction(data))
-        {
-            /* XXX */
-            FatalError("ERROR database: Unable to rollback transaction\n");
-        }
+	LogMessage("ERROR database: calling Select() in [%s()] \n",
+		   __FUNCTION__);
+	
         return 1;
     }
     
@@ -1232,32 +1217,13 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
     if(db_sig_id != iUpdateSig->obj.db_id)
     {
 	/* XXX */
-        if(RollbackTransaction(data))
-        {
-            /* XXX */
-            FatalError("ERROR database: Unable to rollback transaction\n");
-        }
+	LogMessage("ERROR database: Returned signature_id [%u] is not equal to updated signature_id [%u] in [%s()] \n",
+		   db_sig_id,
+		   iUpdateSig->obj.db_id,
+		   __FUNCTION__);
+	
         return 1;
     }
-
-
-    if(CommitTransaction(data))
-    {
-	/* XXX */
-	ErrorMessage("ERROR database: [%s()]: Error commiting transaction \n",
-		     __FUNCTION__);
-	
-	setTransactionCallFail(&data->dbRH[data->dbtype_id]);
-	
-	
-	    if(RollbackTransaction(data))
-	    {
-		/* XXX */
-		FatalError("ERROR database: Unable to rollback transaction\n");
-	    }
-	    return 1;
-    }
-    
     
     return 0;
     
@@ -1405,7 +1371,7 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
     sigInsertObj.sid = sid;
     sigInsertObj.gid = gid;
     sigInsertObj.rev = revision;
-    sigInsertObj.class_id = db_classification_id; /* :) */
+    sigInsertObj.class_id = db_classification_id; 
     sigInsertObj.priority_id = priority;
     
     if( SnortSnprintf(sigInsertObj.message,SIG_MSG_LEN,"Snort Alert [%u:%u:%u]",
@@ -1431,7 +1397,7 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
        complete in just a few more jiffies, also its better his way
        than to query the database everytime isin't.
     */    
-    if(SignaturePopulateDatabase(data,data->mc.cacheSignatureHead))
+    if(SignaturePopulateDatabase(data,data->mc.cacheSignatureHead,1))
     {
 	/* XXX */
 	LogMessage("[%s()]: ERROR inserting new signature \n",
@@ -2175,6 +2141,7 @@ void Database(Packet *p, void *event, uint32_t event_type, void *arg)
 		   p);
 	return;
     }
+
     
 /*
   This has been refactored to simplify the workflow of the function 
@@ -2186,11 +2153,11 @@ TransacRollback:
     if(checkTransactionState(&data->dbRH[data->dbtype_id]) && 
        checkTransactionCall(&data->dbRH[data->dbtype_id]))
     {
-	
 	if(RollbackTransaction(data))
 	{
 	    /* XXX */
-	    FatalError("ERROR database: Unable to rollback transaction\n");
+	    FatalError("ERROR database: Unable to rollback transaction in [%s()]\n",
+		       __FUNCTION__);
 	}
 	
 	resetTransactionState(&data->dbRH[data->dbtype_id]);
@@ -4199,7 +4166,7 @@ void resetTransactionState(dbReliabilityHandle *pdbRH)
     }
     
     pdbRH->checkTransaction = 0;
-    pdbRH->transactionCallFail=0;
+    pdbRH->transactionCallFail = 0;
     pdbRH->transactionErrorCount = 0;
 
     return;
@@ -4214,7 +4181,7 @@ void setTransactionState(dbReliabilityHandle *pdbRH)
     }
     
     pdbRH->checkTransaction = 1;
-    
+
     return;
 }
 

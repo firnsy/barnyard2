@@ -666,7 +666,7 @@ u_int32_t cacheEventSignatureLookup(cacheSignatureObj *iHead,
                                     u_int32_t gid,
                                     u_int32_t sid);
 u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache *iMasterCache);
-u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead);
+u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead,int inTransac);
 void MasterCacheFlush(DatabaseData *data);
 
 u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH);

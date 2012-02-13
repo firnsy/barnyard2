@@ -69,7 +69,7 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
 /* CLASSIFICATION FUNCTIONS */
 
 /* SIGNATURE FUNCTIONS */
-u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead);
+u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead,int inTransac);
 u_int32_t SignatureCacheUpdateDBid(dbSignatureObj *iDBList,u_int32_t array_length,cacheSignatureObj **cacheHead);
 u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,u_int32_t *array_length);
 u_int32_t SignatureCacheSynchronize(DatabaseData *data,cacheSignatureObj **cacheHead);
@@ -1529,7 +1529,6 @@ u_int32_t ClassificationPopulateDatabase(DatabaseData  *data,cacheClassification
 	return 1;
     }
 	
-
     if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
     {
         /* A This shouldn't happen since we are in failed transaction state */
@@ -1545,7 +1544,7 @@ u_int32_t ClassificationPopulateDatabase(DatabaseData  *data,cacheClassification
                    data->SQL_SELECT);
     }
 
-	    BeginTransaction(data);
+    BeginTransaction(data);
     
     while(cacheHead != NULL)
     {
@@ -1689,7 +1688,7 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
  * 0 OK
  * 1 ERROR
  */
-u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead)
+u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead,int inTransac)
 {
     u_int32_t db_sig_id;
 
@@ -1715,14 +1714,15 @@ u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cache
                    data->SQL_SELECT);
     }
     
-    if( (BeginTransaction(data)))
+    if(inTransac == 0)
     {
-	/* XXX */
-	return 1;
+	if( (BeginTransaction(data)))
+	{
+	    /* XXX */
+	    return 1;
+	}
     }
-    
-
-    
+        
     while(cacheHead != NULL)
     {
 
@@ -1788,18 +1788,23 @@ u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cache
     }
     
     
-
-    if(CommitTransaction(data))
+    if(inTransac == 0)
     {
-	/* XXX */
-	return 1;
+	if(CommitTransaction(data))
+	{
+	    /* XXX */
+	    return 1;
+	}
     }
 
 	    
     return 0;
     
 TransactionFail:
-    RollbackTransaction(data);
+    if( inTransac == 0)
+    {
+	RollbackTransaction(data);
+    }
 
     return 1;    
 }
@@ -2297,7 +2302,7 @@ u_int32_t SignatureCacheSynchronize(DatabaseData *data,cacheSignatureObj **cache
     }
     
     
-    if(SignaturePopulateDatabase(data,*cacheHead))
+    if(SignaturePopulateDatabase(data,*cacheHead,0))
     {
         LogMessage("[%s()], Call to SignaturePopulateDatabase() failed \n",
                    __FUNCTION__);
@@ -3277,7 +3282,6 @@ u_int32_t SystemPopulateDatabase(DatabaseData  *data,cacheSystemObj *cacheHead)
 	return 0;
     }
     
-
     if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
     {
         /* A This shouldn't happen since we are in failed transaction state */
@@ -4129,8 +4133,6 @@ u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureRe
 	return 0;
     }
     
-
-
     if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
     {
         /* A This shouldn't happen since we are in failed transaction state */

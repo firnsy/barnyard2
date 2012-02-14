@@ -30,10 +30,14 @@
  *  documentation or the snortdb web site for configuration
  *  information
  *
+ *    Special thanks to: Rusell Fuleton <russell.fulton@gmail.com> for helping us stress test 
+ *                       this in production produce the required fix for bugs experienced.
+ *
  */
 
-#include "output-plugins/spo_database.h"
 
+
+#include "output-plugins/spo_database.h"
 
 void DatabaseCleanSelect(DatabaseData *data)
 {
@@ -284,13 +288,13 @@ u_int32_t SynchronizeEventId(DatabaseData *data)
 	
 	if(c_cid > data->cid)
 	{
-	    LogMessage("database: Table [%s] had a more rescent cid [%u] using it. \n",
+	    LogMessage("INFO database: Table [%s] had a more rescent cid [%u] using it. \n",
 		       table_array[itr],
 		       c_cid);
-		
-	    LogMessage("\t Recovering by rolling forward the cid from [%u] to [%u]\n",
-		       data->cid,
-		       c_cid);
+	    
+	    LogMessage("\t Using cid [%u] instead of [%u]\n",
+		       c_cid,
+		       data->cid);
 	    
 	    data->cid = c_cid;
 	}
@@ -312,7 +316,7 @@ u_int32_t SynchronizeEventId(DatabaseData *data)
     if(c_cid != data->cid)
     {
 	FatalError("database [%s()]: Something is wrong with the sensor table, you "
-		   "might have two process updating it...check this out \n",
+		   "might have two process updating it...bailing\n",
 		   __FUNCTION__);
     }
     
@@ -551,12 +555,7 @@ void DatabaseInit(char *args)
     DatabaseCleanSelect(data);
     DatabaseCleanInsert(data);
     
-    if( (ConvertDefaultCache(barnyard2_conf,data)))
-    {
-	/* XXX */
-	FatalError("database [%s()], ConvertDefaultCache() Failed \n",
-	    __FUNCTION__);
-    }
+
     
     return;
 }
@@ -726,23 +725,40 @@ u_int32_t DatabasePluginInitializeSensor(DatabaseData *data)
     }
     
         
-    if( (Select(data->SQL_SELECT,data,(u_int32_t *)&data->sid)))
-    {
-	/* XXX */
-	LogMessage("Error database: Problem querying the sensor table with [%s] failing initialization \n",
-	    data->SQL_SELECT);
-	
-	goto exit_funct;
-    }
+    /* No check here */
+    Select(data->SQL_SELECT,data,(u_int32_t *)&data->sid)
     
     if(data->sid == 0)
     {
-	if(Insert(data->SQL_INSERT,data))
+         if( BeginTransaction(data) )
+         {
+	       /* XXX */
+	       FatalError("database [%s()]: Failed to Initialize transaction, bailing ... \n",
+		   __FUNCTION__);
+         }
+
+
+	if(Insert(data->SQL_INSERT,data,1))
 	{
-	    /* XXX */
-	    FatalError("database Error inserting [%s] \n",data->SQL_INSERT);
+	       /* XXX */
+	       FatalError("database Error inserting [%s] \n",data->SQL_INSERT);
 	}
 	
+         if(CommitTransaction(data))
+         {
+	     /* XXX */
+	     ErrorMessage("ERROR database: [%s()]: Error commiting transaction \n",
+		     __FUNCTION__);
+	
+	     setTransactionCallFail(&data->dbRH[data->dbtype_id]);
+	    goto bad_query; 
+         }
+         else
+         {
+	    resetTransactionState(&data->dbRH[data->dbtype_id]);
+         }
+
+
 	if( Select(data->SQL_SELECT,data,(u_int32_t *)&data->sid))
 	{
 	    /* XXX */
@@ -792,6 +808,15 @@ void DatabaseInitFinalize(int unused, void *arg)
     
     Connect(data);
     
+
+    if( (ConvertDefaultCache(barnyard2_conf,data)))
+    {
+	/* XXX */
+	FatalError("database [%s()], ConvertDefaultCache() Failed \n",
+		   __FUNCTION__);
+    }
+    
+    
     /* Get the versioning information for the DB schema */
     if( (CheckDBVersion(data)))
     {
@@ -810,6 +835,7 @@ void DatabaseInitFinalize(int unused, void *arg)
 	FatalError("database Encountered an error while trying to synchronize event_id, this is serious and we can't go any further, please investigate \n");
     }
     
+
     if(CacheSynchronize(data))
     {
 	/* XXX */
@@ -817,7 +843,7 @@ void DatabaseInitFinalize(int unused, void *arg)
 		   __FUNCTION__);
 	return;
     }
-    
+
     DatabasePluginPrintData(data);
     
     SQL_Initialize(data);
@@ -1127,7 +1153,7 @@ void ParseDatabaseArgs(DatabaseData *data)
     
     if(data->dbRH[data->dbtype_id].dbConnectionLimit == 0)
     {
-	LogMessage("WARNING database: Defaulting Connection limit to 10 \n");
+	LogMessage("WARNING database: Defaulting Reconnect/Transaction Error limit to 10 \n");
 	data->dbRH[data->dbtype_id].dbConnectionLimit = 10;
 	
 	/* Might make a different option for it but for now lets consider
@@ -1157,25 +1183,49 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
 	return 1;
     }
     
-        
+    
     DatabaseCleanSelect(data);
     DatabaseCleanInsert(data);
-
-
-    if( SnortSnprintf(data->SQL_SELECT,data->SQL_SELECT_SIZE,
-		      SQL_SELECT_SPECIFIC_SIGNATURE,
-		      iUpdateSig->obj.sid,
-		      iUpdateSig->obj.gid,
-		      iUpdateSig->obj.rev,
-		      iUpdateSig->obj.class_id,
-		      iUpdateSig->obj.priority_id,
-		      iUpdateSig->obj.message))
+    
+    
+    switch(data->dbtype_id)
     {
-	/* XXX */
-	LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_SELECT in [%s()] \n",
-		   __FUNCTION__);
-
-	return 1;
+#if defined(ENABLE_POSTGRESQL)
+    case DB_POSTGRESQL:
+	if( SnortSnprintf(data->SQL_SELECT,data->SQL_SELECT_SIZE,
+			  PGSQL_SQL_SELECT_SPECIFIC_SIGNATURE,
+			  iUpdateSig->obj.sid,
+			  iUpdateSig->obj.gid,
+			  iUpdateSig->obj.rev,
+			  iUpdateSig->obj.class_id,
+			  iUpdateSig->obj.priority_id,
+			  iUpdateSig->obj.message))
+	{
+	    /* XXX */
+	    LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_SELECT in [%s()] \n",
+		       __FUNCTION__);
+		    
+	    return 1;
+	}
+	break;
+#endif
+    default:
+	if( SnortSnprintf(data->SQL_SELECT,data->SQL_SELECT_SIZE,
+			  SQL_SELECT_SPECIFIC_SIGNATURE,
+			  iUpdateSig->obj.sid,
+			  iUpdateSig->obj.gid,
+			  iUpdateSig->obj.rev,
+			  iUpdateSig->obj.class_id,
+			  iUpdateSig->obj.priority_id,
+			  iUpdateSig->obj.message))
+	{
+	    /* XXX */
+	    LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_SELECT in [%s()] \n",
+		       __FUNCTION__);
+	    
+	    return 1;
+	}
+	break;
     }
     
     
@@ -1193,8 +1243,15 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
 	return 1;
     }
     
+    
+#if DEBUG
+    DEBUG_WRAP(DebugMessage(DB_DEBUG,"[%s()] Issuing signature update [%s]\n",
+			    __FUNCTION__,
+			    data->SQL_INSERT));
+#endif
 
-    if(Insert(data->SQL_INSERT,data))
+
+    if(Insert(data->SQL_INSERT,data,1))
     {
 	/* XXX */
 	LogMessage("ERROR database: calling Insert() in [%s()] \n",
@@ -1235,6 +1292,8 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 
     cacheSignatureObj *unInitSig = NULL;
     dbSignatureObj sigInsertObj= {0};
+
+    
     
     u_int32_t db_classification_id = 0;
     
@@ -1268,6 +1327,15 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
        For sanity purpose the sig_class table SHOULD have internal classification id to prevent possible 
        miss classification tagging ... but this is not happening with the old schema.
     */
+
+   
+    
+#if DEBUG
+    DEBUG_WRAP(DebugMessage(DB_DEBUG,"[%s()], Classification cachelookup [class_id: %u]\n",
+			    __FUNCTION__,
+			    classification));
+#endif
+    
     db_classification_id = cacheEventClassificationLookup(data->mc.cacheClassificationHead,classification);
     
     
@@ -1277,6 +1345,14 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
        from there if its traversed and compared with revision and priority and classification 
        if one or both differs its reported and inserted ....
     */
+    
+#if DEBUG
+    DEBUG_WRAP(DebugMessage(DB_DEBUG,"[%s()], Signature cachelookup [gid: %u] [sid: %u]\n",
+			    __FUNCTION__,
+			    gid,
+			    sid));
+#endif
+    
     if( (sigMatchCount = cacheEventSignatureLookup(data->mc.cacheSignatureHead,
 						   data->mc.plgSigCompare,
 						   gid,sid)) > 0 )
@@ -1304,6 +1380,12 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 		if( (dbSignatureInformationUpdate(data,data->mc.plgSigCompare[0].cacheSigObj)))
 		{
 		    /* XXX */
+		    LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for [gid :%u ] [sid: %u] [rev: %u] \n",
+			       __FUNCTION__,
+			       __LINE__,
+			       gid,
+			       sid,
+			       revision);
 		    return 1;
 		}
 		
@@ -1330,9 +1412,21 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 		    return 0;
 		}
 	    }
-	    
+	
 	    if(unInitSig != NULL)
 	    {
+		
+#if DEBUG
+		DEBUG_WRAP(DebugMessage(DB_DEBUG,"[%s()], [%u] signatures where found in cache for [gid: %u] [sid: %u] but non matched\n" 
+					"updating database [db_sig_id: %u] with [rev: 0] to [rev: %u] \n",
+					__FUNCTION__,
+					sigMatchCount,
+					gid,
+					sid,
+					unInitSig->obj.db_id,
+					revision));
+#endif
+		
 		unInitSig->obj.rev = revision;
 		unInitSig->obj.class_id = db_classification_id;
 		unInitSig->obj.priority_id = priority;
@@ -1341,76 +1435,97 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
                 if( (dbSignatureInformationUpdate(data,unInitSig)))
                 {
                     /* XXX */
+		    LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for [gid :%u ] [sid: %u] [rev: %u] \n",
+			       __FUNCTION__,
+			       __LINE__,
+			       gid,
+			       sid,
+			       revision);
                     return 1;
                 }
 		
                 *psig_id = unInitSig->obj.db_id;
                 return 0;
 	    }
-	    else
-	    {
-		/* XXX */
-		return 1;
-	    }
 	}
     }
     
-    /* The signature was not found we will have to insert it */
-    LogMessage("WARNING [%s()]: Event [%u] with gid[%u] sid[%u] revision [%u] classification [%u] priority [%u]\n"
-	       "\t Was not found in barnyard2 signature cache, this could lead to display inconsistency.\n"
-	       "\t To prevent this warning, make sure your sid-msg.map and gen-msg.map file are up to date with the snort process logging to the unified2 file.\n"
-	       "\t The inserted signature will not have its information present in the sig_reference table. \n"
-	       "\t Note that the message inserted in the signature table will be snort default message \"Snort Alert [gid:sid:revision]\" \n"
-	       "\t You can allways update the message via a SQL query if you want it to be displayed correctly by your favorite interface\n",
-	       __FUNCTION__,
-	       ntohl(((Unified2EventCommon *)event)->event_id),
-	       gid,
-	       sid,
-	       revision,
-	       db_classification_id,
-	       priority);
+    
+    /* To avoid possible collision with an older barnyard process or avoid signature insertion race condition
+       we will look in the database if the signature exist, if it does, we will insert it in 
+       cache else we will insert in db and cache */
     
     sigInsertObj.sid = sid;
     sigInsertObj.gid = gid;
     sigInsertObj.rev = revision;
-    sigInsertObj.class_id = db_classification_id; 
+    sigInsertObj.class_id = db_classification_id;
     sigInsertObj.priority_id = priority;
     
-    if( SnortSnprintf(sigInsertObj.message,SIG_MSG_LEN,"Snort Alert [%u:%u:%u]",
-		      gid,sid,revision))
+    if( SignatureLookupDatabase(data,&sigInsertObj))
     {
-	/* XXX */
+	/* The signature was not found we will have to insert it */
+	LogMessage("WARNING [%s()]: [Event: %u] with [gid: %u] [sid: %u] [rev: %u] [classification: %u] [priority: %u]\n"
+		   "\t Was not found in barnyard2 signature cache, this could lead to display inconsistency.\n"
+		   "\t To prevent this warning, make sure your sid-msg.map and gen-msg.map file are up to date with the snort process logging to the unified2 file.\n"
+		   "\t The inserted signature will not have its information present in the sig_reference table. \n"
+		   "\t Note that the message inserted in the signature table will be snort default message \"Snort Alert [gid:sid:revision]\" \n"
+		   "\t You can allways update the message via a SQL query if you want it to be displayed correctly by your favorite interface\n",
+		   __FUNCTION__,
+		   ntohl(((Unified2EventCommon *)event)->event_id),
+		   gid,
+		   sid,
+		   revision,
+		   db_classification_id,
+		   priority);
+	
+	if( SnortSnprintf(sigInsertObj.message,SIG_MSG_LEN,"Snort Alert [%u:%u:%u]",
+			  gid,sid,revision))
+	{
+	    /* XXX */
 	return 1;
+	}
+	
+	
+	if( (SignatureCacheInsertObj(&sigInsertObj,&data->mc,0)))
+	{
+	    /* XXX */
+	    LogMessage("[%s()]: ERROR inserting object in the cache list .... \n",
+		       __FUNCTION__);
+	    goto func_err;
+	}
+
+	
+	/* 
+	   There is some little overhead traversing the list once 
+	   the insertion is done on the HEAD so
+	   unless you run 1M rules and still there it should 
+	   complete in just a few more jiffies, also its better his way
+	   than to query the database everytime isin't.
+	*/    
+	if(SignaturePopulateDatabase(data,data->mc.cacheSignatureHead,1))
+	{
+	    /* XXX */
+	    LogMessage("[%s()]: ERROR inserting new signature \n",
+		       __FUNCTION__);
+	    goto func_err;
+	}
+	
     }
-    
-    if( (SignatureCacheInsertObj(&sigInsertObj,&data->mc)))
+    else
     {
-	/* XXX */
-	LogMessage("[%s()]: ERROR inserting object in the cache list .... \n",
-		   __FUNCTION__);
-	goto func_err;
+	if( (SignatureCacheInsertObj(&sigInsertObj,&data->mc,1)))
+        {
+            /* XXX */
+            LogMessage("[%s()]: ERROR inserting object in the cache list .... \n",
+                       __FUNCTION__);
+            goto func_err;
+        }
+	
     }
-    
-    
-    /* 
-       There is some little overhead traversing the list once 
-       the insertion is done on the HEAD so
-       unless you run 1M rules and still there it should 
-       complete in just a few more jiffies, also its better his way
-       than to query the database everytime isin't.
-    */    
-    if(SignaturePopulateDatabase(data,data->mc.cacheSignatureHead,1))
-    {
-	/* XXX */
-	LogMessage("[%s()]: ERROR inserting new signature \n",
-		   __FUNCTION__);
-	goto func_err;
-   }
-    
     
     *psig_id = data->mc.cacheSignatureHead->obj.db_id;
     return 0;
-
+    
     
 func_err:
     return 1;
@@ -2199,7 +2314,7 @@ TransacRollback:
 		goto bad_query;
 	    }
 		    
-	    if (Insert(CurrentQuery,data))
+	    if (Insert(CurrentQuery,data,1))
 	    {
 		setTransactionCallFail(&data->dbRH[data->dbtype_id]);
 		goto bad_query;
@@ -2219,8 +2334,7 @@ TransacRollback:
     }
     else
     {
-	data->dbRH[data->dbtype_id].checkTransaction = 0;
-	data->dbRH[data->dbtype_id].transactionCallFail = 0;
+	resetTransactionState(&data->dbRH[data->dbtype_id]);
     }
     
     
@@ -2230,6 +2344,7 @@ TransacRollback:
     /* Increment the cid*/
     data->cid++;    
     /* Normal Exit Path */
+
     return;
     
 bad_query:
@@ -2262,8 +2377,10 @@ bad_query:
     
     
     if( checkTransactionCall(&data->dbRH[data->dbtype_id]))
+    {
 	goto TransacRollback;
-    
+    }
+
     return;
 }
 
@@ -2652,20 +2769,42 @@ int UpdateLastCid(DatabaseData *data, int sid, int cid)
 {
     
     DatabaseCleanInsert(data);
+
+    if( BeginTransaction(data) )
+    {
+        /* XXX */
+        FatalError("database [%s()]: Failed to Initialize transaction, bailing ... \n",
+                   __FUNCTION__);
+    }
     
     if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
 		       "UPDATE sensor "
-		       "   SET last_cid = %u "
-		       " WHERE sid = %u",
+		       "SET last_cid = %u "
+		       "WHERE sid = %u;",
 		       cid, sid)) != SNORT_SNPRINTF_SUCCESS)
-    {
-	return 1;
-    }
-    
-    if(Insert(data->SQL_INSERT, data))
     {
 	/* XXX */
 	return 1;
+    }
+    
+    if(Insert(data->SQL_INSERT, data,0))
+    {
+	/* XXX */
+	return 1;
+    }
+    
+    if(CommitTransaction(data))
+    {
+        /* XXX */
+        ErrorMessage("ERROR database: [%s()]: Error commiting transaction \n",
+                     __FUNCTION__);
+	
+        setTransactionCallFail(&data->dbRH[data->dbtype_id]);
+	return 1;
+    }
+    else
+    {
+	resetTransactionState(&data->dbRH[data->dbtype_id]);
     }
     
     return 0;
@@ -2837,7 +2976,7 @@ u_int32_t BeginTransaction(DatabaseData * data)
 #ifdef ENABLE_MSSQL
     case DB_MSSQL:
 	setTransactionState(&data->dbRH[data->dbtype_id]);
-	if( Insert("BEGIN TRANSACTION", data))
+	if( Insert("BEGIN TRANSACTION", data,0))
 	{
 	    /*XXX */ 
 	    return 1;
@@ -2857,7 +2996,7 @@ u_int32_t BeginTransaction(DatabaseData * data)
 #endif
     default:
 	setTransactionState(&data->dbRH[data->dbtype_id]);
-	if( Insert("BEGIN;", data))
+	if( Insert("BEGIN;", data,0))
 	{
 	    /*XXX */
 	    return 1;
@@ -2932,7 +3071,7 @@ u_int32_t  CommitTransaction(DatabaseData * data)
 
     case DB_MSSQL:
     
-	if( Insert("COMMIT TRANSACTION", data))
+	if( Insert("COMMIT TRANSACTION", data,1))
 	{
 	    /* XXX */ 
 	    return 1;
@@ -2944,12 +3083,12 @@ u_int32_t  CommitTransaction(DatabaseData * data)
 #ifdef ENABLE_ORACLE
     case DB_ORACLE:
 	
-	return Insert("COMMIT WORK", data);
+	return Insert("COMMIT WORK", data,1);
 	break;
 #endif
     default:
 	
-	if( Insert("COMMIT;", data))
+	if( Insert("COMMIT;", data,1))
 	{
 	    /*XXX */
 	    return 1;
@@ -2985,7 +3124,7 @@ u_int32_t RollbackTransaction(DatabaseData * data)
                    __FUNCTION__);
     }
 
-    if(data->dbRH[data->dbtype_id].transactionErrorCount >= data->dbRH[data->dbtype_id].transactionErrorThreshold)
+    if(data->dbRH[data->dbtype_id].transactionErrorCount > data->dbRH[data->dbtype_id].transactionErrorThreshold)
     {
 	/* XXX */
 	LogMessage("[%s(): Call failed, we reached the maximum number of transaction error [%u] \n",
@@ -3005,7 +3144,7 @@ u_int32_t RollbackTransaction(DatabaseData * data)
     if((checkTransactionState(&data->dbRH[data->dbtype_id])) == 0)
     {
 	/* We reached a rollback when not in transaction state announce it */
-	LogMessage("[%s()] Rollback called while not in transaction \n",
+	LogMessage("[%s()] : called while not in transaction \n",
 		   __FUNCTION__);
 	return 1;
     }
@@ -3054,17 +3193,17 @@ u_int32_t RollbackTransaction(DatabaseData * data)
 #endif
 #ifdef ENABLE_MSSQL
     case DB_MSSQL:
-	return 	Insert("ROLLBACK TRANSACTION;", data);
+	return 	Insert("ROLLBACK TRANSACTION;", data,0);
 	break;
 #endif
 #ifdef ENABLE_ORACLE
 	
     case DB_ORACLE:
-	return Insert("ROLLBACK WORK;", data);
+	return Insert("ROLLBACK WORK;", data,0);
 	break;
 #endif
     default:
-	return Insert("ROLLBACK;", data);
+	return Insert("ROLLBACK;", data,0);
     }
     
     /* XXX */
@@ -3082,7 +3221,7 @@ u_int32_t RollbackTransaction(DatabaseData * data)
  * 0 OK
  * 1 Error
  ******************************************************************************/
-int Insert(char * query, DatabaseData * data)
+int Insert(char * query, DatabaseData * data,u_int32_t inTransac)
 {
     int result = 0;
     
@@ -3094,11 +3233,15 @@ int Insert(char * query, DatabaseData * data)
 	return 1;
     }
     
-    if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
+    /* This mainly has been set for Rollback */
+    if(inTransac == 1)
     {
-	/* A This shouldn't happen since we are in failed transaction state */
-	/* XXX */
-	return 1;
+	if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
+	{
+	    /* A This shouldn't happen since we are in failed transaction state */
+	    /* XXX */
+	    return 1;
+	}
     }
     
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
@@ -3122,9 +3265,11 @@ int Insert(char * query, DatabaseData * data)
             {
                 ErrorMessage("ERROR database: database: postgresql_error: %s\n",
                              PQerrorMessage(data->p_connection));
+		return 1;
             }
         }
         PQclear(data->p_result);
+	data->p_result = NULL;
 	return 0;
     }
 #endif
@@ -3151,7 +3296,7 @@ int Insert(char * query, DatabaseData * data)
 	    if( (mysql_errno(data->m_sock)))
 	    {
 		
-		FatalError("database mysql_error: %s\nSQL=[%s]\n",
+		FatalError("database mysql_error: %s\n\tSQL=[%s]\n",
 			   mysql_error(data->m_sock),query);
 		
 	    }
@@ -3161,11 +3306,6 @@ int Insert(char * query, DatabaseData * data)
 		return 1;
 	    }
 	    break;
-	    
-	
-	
-	    break;
-	    
 	}
 	
     }
@@ -3333,9 +3473,7 @@ int Select(char * query, DatabaseData * data,u_int32_t *rval)
         return 1;
     }
 
-#ifdef ENABLE_MYSQL    
 Select_reconnect:
-#endif
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
 	/* XXX */
@@ -3355,7 +3493,7 @@ Select_reconnect:
             {
                 if((PQntuples(data->p_result)) > 1)
                 {
-                    ErrorMessage("ERROR database: warning (%s) returned more than one result\n",
+                    ErrorMessage("ERROR database: Query [%s] returned more than one result\n",
                                  query);
                     result = 0;
 		    return 1;
@@ -3366,6 +3504,7 @@ Select_reconnect:
                 }
             }
         }
+
         if(!result)
         {
             if(PQerrorMessage(data->p_connection)[0] != '\0')
@@ -3375,8 +3514,9 @@ Select_reconnect:
 		return 1;
             }
         }
+
         PQclear(data->p_result);
-	
+	data->p_result = NULL;
 	break;
 #endif
 	
@@ -3384,7 +3524,7 @@ Select_reconnect:
     case DB_MYSQL:
 	
 	result = mysql_query(data->m_sock,query);
-        
+	
 	switch(result)
 	{
 	case 0:
@@ -3434,14 +3574,15 @@ Select_reconnect:
 	    
 	    if(checkTransactionState(data->dbRH))
 	    {
-		LogMessage("[%s()]: Failed executing with error [%s], in transaction will Abort. \n Failed QUERY: [%s] \n",
+		LogMessage("[%s()]: Failed executing with error [%s], in transaction will Abort. \n"
+			   "\t Failed QUERY: [%s] \n",
 			   __FUNCTION__,
 			   mysql_error(data->m_sock),
 			   query);
 		return 1;
 	    }
 	    
-	    LogMessage("[%s()]: Failed exeuting query [%s] , will retry \n",
+	    LogMessage("[%s()]: Failed to execute  query [%s] , will retry \n",
                        __FUNCTION__,
 		       query);
 	    
@@ -3470,7 +3611,7 @@ Select_reconnect:
                         {
                             if(data->u_rows > 1)
                             {
-                                ErrorMessage("ERROR database: warning (%s) returned more than one result\n", query);
+                                ErrorMessage("ERROR database: Query [%s] returned more than one result\n", query);
                                 result = 0;
                             }
                             else
@@ -3893,6 +4034,7 @@ void Disconnect(DatabaseData * data)
 	if(data->p_result)
 	{
 	    PQclear(data->p_result);
+	    data->p_result = NULL;
 	}
 	
 	if(data->p_connection)
@@ -4034,48 +4176,64 @@ void SpoDatabaseCleanExitFunction(int signal, void *arg)
 {
     DatabaseData *data = (DatabaseData *)arg;
     
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"database(debug): entered SpoDatabaseCleanExitFunction\n"););
+    DEBUG_WRAP(DebugMessage(DB_DEBUG,"database(debug): entered SpoDatabaseCleanExitFunction\n"););
     
     if(data != NULL)
     {
+	if(checkTransactionState(&data->dbRH[data->dbtype_id]))
+	{
+	    if( RollbackTransaction(data))
+	    {
+		DEBUG_WRAP(DebugMessage(DB_DEBUG,"database: RollbackTransaction failed in [%s()] \n",
+					__FUNCTION__));
+	    }
+	    
+	}
+    	
+	resetTransactionState(&data->dbRH[data->dbtype_id]);
+	
 	MasterCacheFlush(data);    
-
+	
 	SQL_Finalize(data);
 	
 	UpdateLastCid(data, data->sid, ((data->cid)-1));
 	
 	Disconnect(data);
-	
-	if(data->SQL_INSERT != NULL)
-	{
-	    free(data->SQL_INSERT);
-	    data->SQL_INSERT = NULL;
-	}
-	
-	if(data->SQL_SELECT != NULL)
-	{
-	    free(data->SQL_SELECT);
-	    data->SQL_SELECT = NULL;
-	}
-	
-	free(data->args);
-	free(data);
-	data = NULL;
     }
+	
+    if(data->SQL_INSERT != NULL)
+    {
+	free(data->SQL_INSERT);
+	    data->SQL_INSERT = NULL;
+    }
+    
+    if(data->SQL_SELECT != NULL)
+    {
+	free(data->SQL_SELECT);
+	data->SQL_SELECT = NULL;
+    }
+    
+    free(data->args);
+    free(data);
+	data = NULL;
+    
 
-
+    return;
 }
+
 
 /* CHECKME: -elz This function is not complete ...alot of leaks could happen here! */
 void SpoDatabaseRestartFunction(int signal, void *arg)
 {
     DatabaseData *data = (DatabaseData *)arg;
 
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"database(debug): entered SpoDatabaseRestartFunction\n"););
+    DEBUG_WRAP(DebugMessage(DB_DEBUG,"database(debug): entered SpoDatabaseRestartFunction\n"););
 
     if(data != NULL)
     {
 	MasterCacheFlush(data);
+	
+	resetTransactionState(&data->dbRH[data->dbtype_id]);
 	
 	UpdateLastCid(data,
 		      data->sid, 
@@ -4174,7 +4332,9 @@ void resetTransactionState(dbReliabilityHandle *pdbRH)
     
     pdbRH->checkTransaction = 0;
     pdbRH->transactionCallFail = 0;
-    pdbRH->transactionErrorCount = 0;
+
+    /* seem'ed to cause loop */
+    //pdbRH->transactionErrorCount = 0;
 
     return;
 }
@@ -4272,6 +4432,7 @@ u_int32_t  dbReconnectSetCounters(dbReliabilityHandle *pdbRH)
 	/* XXX */
 	return 1;
     }
+
     if( pdbRH->dbConnectionCount < pdbRH->dbConnectionLimit)
     {
 	pdbRH->dbConnectionCount++; /* Database Reconnected it seem... */

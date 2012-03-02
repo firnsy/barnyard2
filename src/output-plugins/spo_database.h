@@ -18,7 +18,13 @@
 ** You should have received a copy of the GNU General Public License
 ** along with this program; if not, write to the Free Software
 ** Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+
+*    Special thanks to: Rusell Fuleton <russell.fulton@gmail.com> for helping us stress test
+*                       this in production produce the required fix for bugs experienced.
+
 */
+
+
 
 /* NOTE: -elz this file is a mess and need some cleanup */
 /* $Id$ */
@@ -49,11 +55,7 @@
 #include "output-plugins/spo_database_cache.h"
 
 
-/*
- * If you want extra debugging information for solving database
- * configuration problems, uncomment the following line.
- */
-/* #define DEBUG */
+#define DB_DEBUG 0x80000000
 
 
 #ifdef ENABLE_POSTGRESQL
@@ -414,6 +416,7 @@ typedef struct _DatabaseData
     u_int32_t SQL_INSERT_SIZE;
     /* Used for generic queries if you need consequtives queries uses SQLQueryList*/
 
+
     SQLQueryList SQL; 
     MasterCache mc;
     
@@ -630,7 +633,7 @@ void InitDatabase();
 void Connect(DatabaseData *);
 void DatabasePrintUsage();
 
-int Insert(char *, DatabaseData *);
+int Insert(char *, DatabaseData *,u_int32_t);
 int Select(char *, DatabaseData *,u_int32_t *);
 int UpdateLastCid(DatabaseData *, int, int);
 int GetLastCid(DatabaseData *, int,u_int32_t *);
@@ -665,8 +668,9 @@ u_int32_t cacheEventSignatureLookup(cacheSignatureObj *iHead,
                                     plgSignatureObj *sigContainer,
                                     u_int32_t gid,
                                     u_int32_t sid);
-u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache *iMasterCache);
-u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead);
+u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache *iMasterCache,u_int32_t from);
+u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead,int inTransac);
+u_int32_t SignatureLookupDatabase(DatabaseData *data,dbSignatureObj *sObj);
 void MasterCacheFlush(DatabaseData *data);
 
 u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH);

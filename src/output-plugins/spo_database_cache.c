@@ -23,22 +23,19 @@
  *    Note that the default schema compatibility is kept intact
  *    Maintainers : The Barnyard2 Team <firnsy@gmail.com> <beenph@gmail.com> - 2011
  *
+ *    Special thanks to: Rusell Fuleton <russell.fulton@gmail.com> for helping us stress test
+ *                       this in production produce the required fix for bugs experienced.
+ *
  */
 
-/* TODO */
+/*-- TODO */
 /* 
-   11/12/11 - elz:
-   Cleanup some of the code so its more readable, 
-   add some comments, mainly esthetics and verbosity 
-   for debugging.
-*/
-
-/* Standardize datbase DB API to work with abstract structure form
+   Standardize datbase DB API to work with abstract structure form
    so that it is easyer to work with a standard row fetching mechanism
    for example (less code dup's and easyer to make transforms. 
    ++ This will be present in the next version of the schema database plugin.
 */
-/* TODO */
+/*-- TODO */
 #include "output-plugins/spo_database.h"
 #include "output-plugins/spo_database_cache.h"
 
@@ -69,7 +66,7 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
 /* CLASSIFICATION FUNCTIONS */
 
 /* SIGNATURE FUNCTIONS */
-u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead);
+u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead,int inTransac);
 u_int32_t SignatureCacheUpdateDBid(dbSignatureObj *iDBList,u_int32_t array_length,cacheSignatureObj **cacheHead);
 u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,u_int32_t *array_length);
 u_int32_t SignatureCacheSynchronize(DatabaseData *data,cacheSignatureObj **cacheHead);
@@ -104,20 +101,42 @@ u_int32_t SigRefSynchronize(DatabaseData *data,cacheSignatureReferenceObj **cach
 /* Init FUNCTIONS */
 u_int32_t ConvertDefaultCache(Barnyard2Config *bc,DatabaseData *data);
 u_int32_t GenerateSigRef(cacheSignatureReferenceObj **iHead,cacheSignatureObj *sigHead);
-u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,cacheSignatureObj *cSobj);
-u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache);
-u_int32_t ConvertClassificationCache(ClassType **iHead, MasterCache *iMasterCache);
+u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,cacheSignatureObj *cSobj,DatabaseData *data);
+u_int32_t ConvertClassificationCache(ClassType **iHead, MasterCache *iMasterCache,DatabaseData *data);
+u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache,DatabaseData *data);
 u_int32_t CacheSynchronize(DatabaseData *data);
 /* Init FUNCTIONS */
 
 
-/* Destruction functions */
+/* Destructor */
 void MasterCacheFlush(DatabaseData *data);
-/* Destruction functions */
+/* Destructor */
 
 
 
 extern SigNode *sigTypes;
+
+
+#if DEBUG
+u_int32_t file_reference_object_count = 0;
+u_int32_t file_system_object_count = 0;
+u_int32_t file_signature_object_count = 0;
+u_int32_t file_classification_object_count = 0;
+u_int32_t file_sigref_object_count = 0;
+
+u_int32_t db_reference_object_count = 0;
+u_int32_t db_system_object_count = 0;
+u_int32_t db_signature_object_count = 0;
+u_int32_t db_classification_object_count = 0;
+u_int32_t db_sigref_object_count = 0;
+
+u_int32_t inserted_reference_object_count = 0;
+u_int32_t inserted_system_object_count = 0;
+u_int32_t inserted_signature_object_count = 0;
+u_int32_t inserted_classification_object_count = 0;
+u_int32_t inserted_sigref_object_count = 0;
+#endif
+
 
 
 /** 
@@ -138,7 +157,7 @@ u_int32_t cacheSignatureReferenceLookup(dbSignatureReferenceObj *iLookup,cacheSi
     if( (iLookup == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbReferenceSignatureObj[0x%x] cacheSignatureReferenceObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbReferenceSignatureObj[0x%x] cacheSignatureReferenceObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -216,7 +235,7 @@ u_int32_t cacheSignatureLookup(dbSignatureObj *iLookup,cacheSignatureObj *iHead)
     if( (iLookup == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbSignatureObj[0x%x] cacheSignatureObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbSignatureObj[0x%x] cacheSignatureObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -258,7 +277,7 @@ cacheSignatureObj * cacheSignatureGetObject(dbSignatureObj *iLookup,cacheSignatu
     if( (iLookup == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbSignatureObj[0x%x] cacheSignatureObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbSignatureObj[0x%x] cacheSignatureObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -317,7 +336,7 @@ u_int32_t cacheClassificationLookup(dbClassificationObj *iLookup,cacheClassifica
     if( (iLookup == NULL))
     {
 	/* XXX */
-        FatalError("ERROR database: [%s()], Called with dbClassiciationObj[0x%x] cacheClassificationObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbClassiciationObj[0x%x] cacheClassificationObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -360,7 +379,7 @@ u_int32_t cacheSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead,cacheSyst
 	(rcacheSystemObj == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbReferenceObj[0x%x] cacheReferenceObj[0x%x] **rcacheSystemObj[0x%x]\n",
+        FatalError("database [%s()], Called with dbReferenceObj[0x%x] cacheReferenceObj[0x%x] **rcacheSystemObj[0x%x]\n",
                    __FUNCTION__,
                    iLookup,
                    iHead,
@@ -401,7 +420,7 @@ u_int32_t cacheReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead,
 	(retRefLookupNode == NULL))
     {
 	/* XXX */
-	FatalError("ERROR database: [%s()], Called with dbReferenceObj[0x%x] cacheReferenceObj[0x%x] \n",
+	FatalError("database [%s()], Called with dbReferenceObj[0x%x] cacheReferenceObj[0x%x] \n",
 		   __FUNCTION__,
 		   iLookup,
 		   iHead);
@@ -444,7 +463,7 @@ u_int32_t dbSignatureReferenceLookup(dbSignatureReferenceObj *iLookup,cacheSigna
 	 (retSigRef == NULL))
      {
 	 /* XXX */
-	 FatalError("ERROR database: [%s()], Called with dbReferenceSignatureObj[0x%x] cacheSignatureReferenceObj [0x%x] \n",
+	 FatalError("database [%s()], Called with dbReferenceSignatureObj[0x%x] cacheSignatureReferenceObj [0x%x] \n",
                    __FUNCTION__,
 		    iLookup,
 		    iHead);
@@ -457,7 +476,8 @@ u_int32_t dbSignatureReferenceLookup(dbSignatureReferenceObj *iLookup,cacheSigna
 	    SHOULD BUT WE DO NOT.
 	    There is a little issue where definition in file for signature reference order could 
 	    be different than the one defined in the database and mabey for some reason the revision
-	    wouldn't have changed and mabey not the rule body, thus we define this as a fatal error
+	    wouldn't have changed as with the rule body, 
+	    thus we define this as a fatal error
 	    to prevent wrongly inserted data.
 	    if( memcmp(&iHead->obj,iLookup,sizeof(dbSignatureReferenceObj)) == 0)
 	 */
@@ -504,7 +524,7 @@ u_int32_t dbReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead)
     if( (iLookup == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbReferenceObj[0x%x] cacheReferenceObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbReferenceObj[0x%x] cacheReferenceObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -554,7 +574,7 @@ u_int32_t dbSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead)
     if( (iLookup == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbSystemObj[0x%x] cacheSystemObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbSystemObj[0x%x] cacheSystemObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -606,7 +626,7 @@ u_int32_t dbSignatureLookup(dbSignatureObj *iLookup,cacheSignatureObj *iHead)
     if( (iLookup == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbSignatureObj[0x%x] cacheSignatureObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbSignatureObj[0x%x] cacheSignatureObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -693,7 +713,7 @@ u_int32_t dbClassificationLookup(dbClassificationObj *iLookup,cacheClassificatio
     if( (iLookup == NULL))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Called with dbReferenceObj[0x%x] cacheClassificationObj [0x%x] \n",
+        FatalError("database [%s()], Called with dbReferenceObj[0x%x] cacheClassificationObj [0x%x] \n",
                    __FUNCTION__,
                    iLookup,
                    iHead);
@@ -750,7 +770,7 @@ u_int32_t dbClassificationLookup(dbClassificationObj *iLookup,cacheClassificatio
  * 0 OK
  * 1 ERROR
  */
-u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,cacheSignatureObj *cSobj)
+u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,cacheSignatureObj *cSobj,DatabaseData *data)
 {
     
     ReferenceNode *cNode = NULL;
@@ -764,6 +784,7 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
     u_int32_t tItr = 0;
     u_int32_t refFound = 0;
     
+
     
     if( (iMasterCache == NULL) || 
 	(cSobj == NULL))
@@ -788,12 +809,30 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
 	{
 	    strncpy(sys_LobjNode.ref_system_name,cNode->system->name,SYSTEM_NAME_LEN);
 	    sys_LobjNode.ref_system_name[SYSTEM_NAME_LEN-1] = '\0'; //safety
+
+	    if( (snort_escape_string_STATIC(sys_LobjNode.ref_system_name,SYSTEM_NAME_LEN,data)))
+	    {
+		FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+			   "[%s], Exiting. \n",
+			   __FUNCTION__,
+			   sys_LobjNode.ref_system_name);
+	    }
+
+
 	}
 	
 	if(cNode->system->url != NULL)
 	{
 	    strncpy(sys_LobjNode.ref_system_url,cNode->system->url,SYSTEM_URL_LEN);
 	    sys_LobjNode.ref_system_url[SYSTEM_URL_LEN-1] = '\0'; //safety
+
+	    if( (snort_escape_string_STATIC(sys_LobjNode.ref_system_url,SYSTEM_URL_LEN,data)))
+            {
+                FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+                           "[%s], Exiting. \n",
+                           __FUNCTION__,
+                           sys_LobjNode.ref_system_url);
+            }
 	}
 	
 	sysRetCacheNode = NULL;
@@ -804,7 +843,10 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
 		/* XXX */
 		return 1;
 	    }
-	    
+
+#if DEBUG
+            file_system_object_count++;
+#endif
 	    memcpy(&sys_TobjNode->obj,&sys_LobjNode,sizeof(dbSystemObj));
 	    
 	    sys_TobjNode->flag = CACHE_INTERNAL_ONLY;
@@ -831,6 +873,10 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
 		    /* XXX */
 		    return 1;
 		}
+
+#if DEBUG
+		file_reference_object_count++;
+#endif
 		
 		memcpy(&ref_TobjNode->obj,&ref_LobjNode,sizeof(dbReferenceObj));	    
 		
@@ -881,6 +927,7 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
 	cNode = cNode->next;
     }
 
+
     return 0;
 }
 /* 
@@ -892,7 +939,7 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
 */
 
 
-u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache *iMasterCache)
+u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache *iMasterCache,u_int32_t from)
 {
     cacheSignatureObj *TobjNode = NULL;
     
@@ -910,14 +957,23 @@ u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache *iMasterCa
     }
     
     memcpy(&TobjNode->obj,iSigObj,sizeof(dbSignatureObj));
-    
-    TobjNode->flag ^= CACHE_INTERNAL_ONLY;
-    
+
+    if( from == 0)
+    {
+	TobjNode->flag ^= CACHE_INTERNAL_ONLY;
+    }
+    else
+    {
+	TobjNode->flag ^= CACHE_BOTH;
+    }
+
     TobjNode->next = iMasterCache->cacheSignatureHead;
     iMasterCache->cacheSignatureHead = TobjNode;
     
     return 0;
 }
+
+
 
 /** 
  * This function will convert the signature cache.
@@ -929,14 +985,15 @@ u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache *iMasterCa
  * 0 OK
  * 1 ERROR
  */
-u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache)
+u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache,DatabaseData *data)
 {
     SigNode *cNode = NULL;
     cacheSignatureObj *TobjNode = NULL;    
     dbSignatureObj lookupNode = {0};    
-    
+
     if( (iHead == NULL) ||
-	(iMasterCache == NULL))
+	(iMasterCache == NULL) || 
+	(data == NULL))
     {
 	/* XXX */
 	return 1;
@@ -950,6 +1007,7 @@ u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache)
     
     while(cNode != NULL)
     {
+
 	memset(&lookupNode,'\0',sizeof(dbSignatureObj));
 	
 	lookupNode.gid  = cNode->generator;
@@ -962,6 +1020,15 @@ u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache)
 	{
 	    strncpy(lookupNode.message,cNode->msg,SIG_MSG_LEN);
 	    lookupNode.message[SIG_MSG_LEN-1] = '\0'; //safety
+	    
+	    //Safety escape value.
+	    if( (snort_escape_string_STATIC(lookupNode.message,SIG_MSG_LEN,data)))
+	    {
+		FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+			   "[%s], Exiting. \n",
+			   __FUNCTION__,
+			   lookupNode.message);
+	    }
 	    
 	}
 	else
@@ -991,12 +1058,16 @@ u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache)
 	
 	    if(cNode->refs != NULL)
 	    {
-		if( (ConvertReferenceCache(cNode->refs,iMasterCache,TobjNode)))
+		if( (ConvertReferenceCache(cNode->refs,iMasterCache,TobjNode,data)))
 		{
 		    /* XXX */
 		    return 1;
 		}
 	    }
+#if DEBUG	
+	    file_signature_object_count++;
+#endif 
+	    
 	}
 	else
 	{
@@ -1009,7 +1080,8 @@ u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache)
 		       lookupNode.class_id,
 		       lookupNode.message);
 	}
-	
+
+
 	cNode = cNode->next;
     }
     
@@ -1027,16 +1099,16 @@ u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache)
  * 0 OK
  * 1 ERROR
  */
-u_int32_t ConvertClassificationCache(ClassType **iHead, MasterCache *iMasterCache)
+u_int32_t ConvertClassificationCache(ClassType **iHead, MasterCache *iMasterCache,DatabaseData *data)
 {
     ClassType *cNode = NULL;
     cacheClassificationObj *TobjNode = NULL;
     cacheClassificationObj LobjNode;
     
-    
     if( (iHead == NULL) ||
 	(iMasterCache == NULL) ||
-	(iMasterCache->cacheClassificationHead != NULL))
+	(iMasterCache->cacheClassificationHead != NULL) ||
+	(data == NULL))
     {
 	/* XXX */
 	return 1;
@@ -1054,10 +1126,30 @@ u_int32_t ConvertClassificationCache(ClassType **iHead, MasterCache *iMasterCach
 	memset(&LobjNode,'\0',sizeof(cacheClassificationObj));
 	
 	LobjNode.obj.sig_class_id = cNode->id;
-	if(cNode->name != NULL)
+
+	/* 
+	   -- config classification:shortname,short description,priority
+
+	   NOTE: -elz i wongly assumed , short description was logged, while it 
+	   was actually shortname that should have been logged, this is why
+	   this part of the code is now commented :)
+	  
+	   so using cNode->type instead of cNode->name
+	*/
+
+	if(cNode->type != NULL)
 	{
-	    strncpy(LobjNode.obj.sig_class_name,cNode->name,CLASS_NAME_LEN);
+	    strncpy(LobjNode.obj.sig_class_name,cNode->type,CLASS_NAME_LEN);
 	    LobjNode.obj.sig_class_name[CLASS_NAME_LEN-1] = '\0'; //safety.
+	    
+	    if( (snort_escape_string_STATIC(LobjNode.obj.sig_class_name,CLASS_NAME_LEN,data)))
+	    {
+		FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+			   "[%s], Exiting. \n",
+			   __FUNCTION__,
+			   LobjNode.obj.sig_class_name);
+	    }
+	    
 	}
 	else
 	{
@@ -1066,7 +1158,9 @@ u_int32_t ConvertClassificationCache(ClassType **iHead, MasterCache *iMasterCach
 		     "UNKNOWN SNORT CLASSIFICATION",
 		     LobjNode.obj.sig_class_id);
 	}
-	
+
+
+
 	if( (cacheClassificationLookup(&LobjNode.obj,iMasterCache->cacheClassificationHead) == 0))
 	{
 	    if( (TobjNode = SnortAlloc(sizeof(cacheClassificationObj))) == NULL)
@@ -1084,6 +1178,9 @@ u_int32_t ConvertClassificationCache(ClassType **iHead, MasterCache *iMasterCach
 	    iMasterCache->cacheClassificationHead = TobjNode;
 	    
 	    cNode = cNode->next;
+#if DEBUG
+	    file_classification_object_count++;
+#endif
 	}
     }
     
@@ -1138,7 +1235,7 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
     if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                        SQL_SELECT_ALL_CLASSIFICATION)!=  SNORT_SNPRINTF_SUCCESS))
     {
-        FatalError("ERROR database: [%s()], Unable to allocate memory for query, bailing ...\n",
+        FatalError("database [%s()], Unable to allocate memory for query, bailing ...\n",
 		   __FUNCTION__);
     }
     
@@ -1152,7 +1249,7 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -1190,7 +1287,7 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
 		    {
 			mysql_free_result(data->m_result);
 			data->m_result = NULL;
-			FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+			FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
 				   __FUNCTION__);
 		    }
 		}
@@ -1243,7 +1340,7 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
 			    *iArrayPtr = NULL;
                             mysql_free_result(data->m_result);
                             data->m_result = NULL;
-                            FatalError("ERROR database: [%s()], mysql_fetch_lengths() call failed .. \n",
+                            FatalError("database [%s()], mysql_fetch_lengths() call failed .. \n",
                                        __FUNCTION__);
                         }
 			
@@ -1258,6 +1355,16 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
                             case 1:
                                 strncpy(cPtr->sig_class_name,row[i],CLASS_NAME_LEN);
 				cPtr->sig_class_name[CLASS_NAME_LEN-1] = '\0'; //safety
+
+				if( (snort_escape_string_STATIC(cPtr->sig_class_name,CLASS_NAME_LEN,data)))
+				{
+				    FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+					       "[%s], Exiting. \n",
+					       __FUNCTION__,
+					       cPtr->sig_class_name);
+				}
+
+
                                 break;
 				
                             default:
@@ -1340,7 +1447,7 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
 			    PQclear(data->p_result);
 			    data->p_result = NULL;
 			}
-			FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+			FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
 				   __FUNCTION__);
 		    }
 		    
@@ -1368,6 +1475,16 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
 			    case 1:
 				strncpy(cPtr->sig_class_name,pg_val,CLASS_NAME_LEN);
 				cPtr->sig_class_name[CLASS_NAME_LEN-1] = '\0'; //safety
+
+				if( (snort_escape_string_STATIC(cPtr->sig_class_name,CLASS_NAME_LEN,data)))
+                                {
+                                    FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+                                               "[%s], Exiting. \n",
+                                               __FUNCTION__,
+                                               cPtr->sig_class_name);
+                                }
+
+
 				break;
 			    default:
 				/* We should bail here*/
@@ -1529,7 +1646,6 @@ u_int32_t ClassificationPopulateDatabase(DatabaseData  *data,cacheClassification
 	return 1;
     }
 	
-
     if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
     {
         /* A This shouldn't happen since we are in failed transaction state */
@@ -1540,45 +1656,84 @@ u_int32_t ClassificationPopulateDatabase(DatabaseData  *data,cacheClassification
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
 
-	    BeginTransaction(data);
+    BeginTransaction(data);
     
     while(cacheHead != NULL)
     {
 	if(cacheHead->flag & CACHE_INTERNAL_ONLY)
 	{
-	    
-	    if( (snort_escape_string_STATIC(cacheHead->obj.sig_class_name,CLASS_NAME_LEN,data)))
-	    {
-		FatalError("ERROR database: [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-			   "[%s], Exiting. \n",
-			   __FUNCTION__,
-			   &cacheHead->obj.sig_class_name);
-	    }
 
+#if DEBUG
+            inserted_classification_object_count++;
+#endif
+
+	    /* DONE at object insertion
+	      if( (snort_escape_string_STATIC(cacheHead->obj.sig_class_name,CLASS_NAME_LEN,data)))
+	      {
+	      FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+	      "[%s], Exiting. \n",
+	      __FUNCTION__,
+	      cacheHead->obj.sig_class_name);
+	      }
+	    */
+	    
 	    DatabaseCleanInsert(data);
-	    if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-			       SQL_INSERT_CLASSIFICATION,
-			       cacheHead->obj.sig_class_name)) !=  SNORT_SNPRINTF_SUCCESS)
-	    {
-		/* XXX */
-		goto TransactionFail;
+
+	    switch(data->dbtype_id)
+            {
+#if defined(ENABLE_POSTGRESQL)
+            case DB_POSTGRESQL:
+		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+				   PGSQL_SQL_INSERT_CLASSIFICATION,
+				   cacheHead->obj.sig_class_name)) !=  SNORT_SNPRINTF_SUCCESS)
+		{
+		    /* XXX */
+		    goto TransactionFail;
+		}
+		break;
+#endif
+	    default:
+		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+				   SQL_INSERT_CLASSIFICATION,
+				   cacheHead->obj.sig_class_name)) !=  SNORT_SNPRINTF_SUCCESS)
+		{
+		    /* XXX */
+		    goto TransactionFail;
+		}
+		break;
 	    }
 	    
 	    DatabaseCleanSelect(data);
-	    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-			       SQL_SELECT_SPECIFIC_CLASSIFICATION,
-			       cacheHead->obj.sig_class_name)) !=  SNORT_SNPRINTF_SUCCESS)
-	    {
-		/* XXX */
-		goto TransactionFail;
+	    switch(data->dbtype_id)
+            {
+#if defined(ENABLE_POSTGRESQL)
+            case DB_POSTGRESQL:
+		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
+				   PGSQL_SQL_SELECT_SPECIFIC_CLASSIFICATION,
+				   cacheHead->obj.sig_class_name)) !=  SNORT_SNPRINTF_SUCCESS)
+		{
+		    /* XXX */
+		    goto TransactionFail;
+		}
+		break;
+#endif
+	    default:
+		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
+				   SQL_SELECT_SPECIFIC_CLASSIFICATION,
+				   cacheHead->obj.sig_class_name)) !=  SNORT_SNPRINTF_SUCCESS)
+		{
+		    /* XXX */
+		    goto TransactionFail;
+		}
+		break;
 	    }
 	
-	    if(Insert(data->SQL_INSERT,data))
+	    if(Insert(data->SQL_INSERT,data,1))
 	    {
 		/* XXX */
 		goto TransactionFail;
@@ -1600,8 +1755,8 @@ u_int32_t ClassificationPopulateDatabase(DatabaseData  *data,cacheClassification
 
     }
 
-	    CommitTransaction(data);
-
+    CommitTransaction(data);
+    
     return 0;
     
 TransactionFail:
@@ -1637,7 +1792,12 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
 	/* XXX */
 	return 1;
     }
-    
+
+#if DEBUG
+    db_classification_object_count=array_length;
+#endif
+
+
     if( array_length > 0 )
     {
 	if( (ClassificationCacheUpdateDBid(dbClassArray,array_length,cacheHead)) )
@@ -1679,6 +1839,87 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
 
 /***********************************************************************************************SIGNATURE API*/
 
+
+
+/** 
+ * Lookup the database for a specific signature, without looking for signature message.
+ * 
+ * @param data 
+ * @param sObj 
+ * 
+ * @return 
+ * 0 OK (Found)
+ * 1 ERROR (Not Found)
+ */
+u_int32_t SignatureLookupDatabase(DatabaseData *data,dbSignatureObj *sObj)
+{
+
+    u_int32_t db_sig_id = 0;
+
+    if( (data == NULL) ||
+	(sObj == NULL))
+    {
+	/* XXX */
+	return 1;
+    }
+
+    if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
+    {
+        /* A This shouldn't happen since we are in failed transaction state */
+        /* XXX */
+        return 1;
+    }
+
+    if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
+    {
+        /* XXX */
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+                   __FUNCTION__,
+                   data->SQL_SELECT);
+    }
+    
+    DatabaseCleanSelect(data);
+    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
+		       SQL_SELECT_SPECIFIC_SIGNATURE_WITHOUT_MESSAGE,
+		       sObj->sid,
+		       sObj->gid,
+		       sObj->rev,
+		       sObj->class_id,
+		       sObj->priority_id)) !=  SNORT_SNPRINTF_SUCCESS)
+    {
+	/* XXX */
+	return 1;
+    }
+    
+#if DEBUG
+    DEBUG_WRAP(DebugMessage(DB_DEBUG,"[%s()] Signature was not found in cache, looking for existance in the database:\n"
+			    "\t if this message occur to offent, make sure your sid-msg.map and gen-msg.map file are up to date.\n"
+			    "\t Executing [%s]\n",
+			    __FUNCTION__,
+			    data->SQL_SELECT));
+#endif
+    
+    /* 
+       This usleep is mainly to prevent uncontrolable collision, since this code could be executed in parallel
+       pretty fast to create the race condition anyways, there is a chance adding a small delay that someone will win the race
+    */
+    usleep(400);
+    /* 
+       This usleep is mainly to prevent uncontrolable collision, since this code could be executed in parallel
+       pretty fast to create the race condition anyways, there is a chance adding a small delay that someone will win the race
+    */	
+
+    if(Select(data->SQL_SELECT,data,&db_sig_id))
+    {
+	/* XXX */
+	return 1;
+    }
+    
+    /* Found */
+    sObj->db_id = db_sig_id;
+    return 0;
+}
+
 /** 
  *  Populate the signature table with record that are not present in the database.
  * 
@@ -1689,9 +1930,10 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
  * 0 OK
  * 1 ERROR
  */
-u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead)
+u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead,int inTransac)
 {
-    u_int32_t db_sig_id;
+    u_int32_t db_sig_id = 0;
+
 
     if( (data == NULL) ||
 	(cacheHead == NULL))
@@ -1710,61 +1952,111 @@ u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cache
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
     
-    if( (BeginTransaction(data)))
+    if(inTransac == 0)
     {
-	/* XXX */
-	return 1;
+	if( (BeginTransaction(data)))
+	{
+	    /* XXX */
+	    return 1;
+	}
     }
-    
-
-    
+        
     while(cacheHead != NULL)
     {
 
 	if(cacheHead->flag & CACHE_INTERNAL_ONLY)
 	{
-	    if( (snort_escape_string_STATIC(cacheHead->obj.message,SIG_MSG_LEN,data)))
-	    {
-		FatalError("ERROR database: [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-			   "[%s], Exiting. \n",
-			   __FUNCTION__,
-			   &cacheHead->obj.message);
-	    }
+
+#if DEBUG
+	    inserted_signature_object_count++;
+#endif 
+	    /* DONE at object Insertion
+	      if( (snort_escape_string_STATIC(cacheHead->obj.message,SIG_MSG_LEN,data)))
+	      {
+	      FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+	      "[%s], Exiting. \n",
+	      __FUNCTION__,
+	      cacheHead->obj.message);
+	      }
+	    */
 
 	    DatabaseCleanInsert(data);
-	    if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-			       SQL_INSERT_SIGNATURE,
-			       cacheHead->obj.sid,
-			       cacheHead->obj.gid,
-			       cacheHead->obj.rev,
-			       cacheHead->obj.class_id,
-			       cacheHead->obj.priority_id,
-			       cacheHead->obj.message)) !=  SNORT_SNPRINTF_SUCCESS)
-	    {
-		/* XXX */
-		goto TransactionFail;
+	    switch(data->dbtype_id)
+            {
+#if defined(ENABLE_POSTGRESQL)
+            case DB_POSTGRESQL:
+		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+				   PGSQL_SQL_INSERT_SIGNATURE,
+				   cacheHead->obj.sid,
+				   cacheHead->obj.gid,
+				   cacheHead->obj.rev,
+				   cacheHead->obj.class_id,
+				   cacheHead->obj.priority_id,
+				   cacheHead->obj.message)) !=  SNORT_SNPRINTF_SUCCESS)
+		{
+		    /* XXX */
+		    goto TransactionFail;
+		}
+		break;
+#endif
+	    default:
+		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+				   SQL_INSERT_SIGNATURE,
+				   cacheHead->obj.sid,
+				   cacheHead->obj.gid,
+				   cacheHead->obj.rev,
+				   cacheHead->obj.class_id,
+				   cacheHead->obj.priority_id,
+				   cacheHead->obj.message)) !=  SNORT_SNPRINTF_SUCCESS)
+		{
+		    /* XXX */
+		    goto TransactionFail;
+		}
+		break;
 	    }
 	    
 	    DatabaseCleanSelect(data);
-	    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-			       SQL_SELECT_SPECIFIC_SIGNATURE,
-			       cacheHead->obj.sid,
-                               cacheHead->obj.gid,
-                               cacheHead->obj.rev,
-                               cacheHead->obj.class_id,
-                               cacheHead->obj.priority_id,
-                               cacheHead->obj.message)) !=  SNORT_SNPRINTF_SUCCESS)
-	    {
-		/* XXX */
-		goto TransactionFail;
+
+	    switch(data->dbtype_id)
+            {
+#if defined(ENABLE_POSTGRESQL)		
+            case DB_POSTGRESQL:
+		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
+				   PGSQL_SQL_SELECT_SPECIFIC_SIGNATURE,
+				   cacheHead->obj.sid,
+				   cacheHead->obj.gid,
+				   cacheHead->obj.rev,
+				   cacheHead->obj.class_id,
+				   cacheHead->obj.priority_id,
+				   cacheHead->obj.message)) !=  SNORT_SNPRINTF_SUCCESS)
+		{
+		    /* XXX */
+		    goto TransactionFail;
+		}
+		break;
+#endif		
+	    default:
+		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
+				   SQL_SELECT_SPECIFIC_SIGNATURE,
+				   cacheHead->obj.sid,
+				   cacheHead->obj.gid,
+				   cacheHead->obj.rev,
+				   cacheHead->obj.class_id,
+				   cacheHead->obj.priority_id,
+				   cacheHead->obj.message)) !=  SNORT_SNPRINTF_SUCCESS)
+		{
+		    /* XXX */
+		    goto TransactionFail;
+		}
+		break;
 	    }
-	
-	    if(Insert(data->SQL_INSERT,data))
+		
+	    if(Insert(data->SQL_INSERT,data,1))
 	    {
 		/* XXX */
 		goto TransactionFail;
@@ -1788,18 +2080,22 @@ u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cache
     }
     
     
-
-    if(CommitTransaction(data))
+    if(inTransac == 0)
     {
-	/* XXX */
-	return 1;
+	if(CommitTransaction(data))
+	{
+	    /* XXX */
+	    return 1;
+	}
     }
-
-	    
+    
     return 0;
     
 TransactionFail:
-    RollbackTransaction(data);
+    if( inTransac == 0)
+    {
+	RollbackTransaction(data);
+    }
 
     return 1;    
 }
@@ -1905,7 +2201,7 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
     if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                        SQL_SELECT_ALL_SIGNATURE)!=  SNORT_SNPRINTF_SUCCESS))
     {
-        FatalError("ERROR database: [%s()], Unable to allocate memory for query, bailing ...\n",
+        FatalError("database [%s()], Unable to allocate memory for query, bailing ...\n",
 		   __FUNCTION__);
     }
     
@@ -1919,7 +2215,7 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -1957,7 +2253,7 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
 		    {
 			mysql_free_result(data->m_result);
 			data->m_result = NULL;
-			FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+			FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
 				   __FUNCTION__);
 		    }
 		}
@@ -2006,7 +2302,7 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
 			    *iArrayPtr = NULL;
                             mysql_free_result(data->m_result);
                             data->m_result = NULL;
-                            FatalError("ERROR database: [%s()], mysql_fetch_lengths() call failed .. \n",
+                            FatalError("database [%s()], mysql_fetch_lengths() call failed .. \n",
                                        __FUNCTION__);
                         }
 						
@@ -2042,6 +2338,15 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
 			    case 6:
 				strncpy(cPtr->message,row[i],SIG_MSG_LEN);
 				cPtr->message[SIG_MSG_LEN-1] = '\0'; //safety
+				
+                                //Safety escape value.
+				if( (snort_escape_string_STATIC(cPtr->message,SIG_MSG_LEN,data)))
+				{
+				    FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+					       "[%s], Exiting. \n",
+					       __FUNCTION__,
+					       cPtr->message);
+				}
 				break;
 				
                             default:
@@ -2121,7 +2426,7 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
 			PQclear(data->p_result);
 			data->p_result = NULL;
 		    }
-		    FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+		    FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
 			       __FUNCTION__);
 		}
 
@@ -2169,7 +2474,17 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
 			case 6:
 			    strncpy(cPtr->message,pg_val,SIG_MSG_LEN);
 			    cPtr->message[SIG_MSG_LEN-1] = '\0'; //safety
+
+			    //Safety escape value.
+			    if( (snort_escape_string_STATIC(cPtr->message,SIG_MSG_LEN,data)))
+			    {
+				FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+					   "[%s], Exiting. \n",
+					   __FUNCTION__,
+					   cPtr->message);
+			    }
 			    break;
+
 			default:
 			    /* We should bail here*/
 			    break;
@@ -2271,6 +2586,10 @@ u_int32_t SignatureCacheSynchronize(DatabaseData *data,cacheSignatureObj **cache
         return 1;
     }
 
+#if DEBUG
+    db_signature_object_count=array_length;
+#endif
+
     if( array_length > 0 )
     {
         if( (SignatureCacheUpdateDBid(dbSigArray,array_length,cacheHead)) )
@@ -2297,7 +2616,7 @@ u_int32_t SignatureCacheSynchronize(DatabaseData *data,cacheSignatureObj **cache
     }
     
     
-    if(SignaturePopulateDatabase(data,*cacheHead))
+    if(SignaturePopulateDatabase(data,*cacheHead,0))
     {
         LogMessage("[%s()], Call to SignaturePopulateDatabase() failed \n",
                    __FUNCTION__);
@@ -2368,7 +2687,7 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
     if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                        SQL_SELECT_ALL_REF) !=  SNORT_SNPRINTF_SUCCESS))
     {
-        FatalError("ERROR database: [%s()], Unable to allocate memory for query, bailing ...\n",
+        FatalError("database [%s()], Unable to allocate memory for query, bailing ...\n",
                    __FUNCTION__);
     }
 
@@ -2382,7 +2701,7 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -2418,7 +2737,7 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
                     {
                         mysql_free_result(data->m_result);
                         data->m_result = NULL;
-                        FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+                        FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
                                    __FUNCTION__);
                     }
                 }
@@ -2467,7 +2786,7 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
                             *iArrayPtr = NULL;
                             mysql_free_result(data->m_result);
                             data->m_result = NULL;
-                            FatalError("ERROR database: [%s()], mysql_fetch_lengths() call failed .. \n",
+                            FatalError("database [%s()], mysql_fetch_lengths() call failed .. \n",
                                        __FUNCTION__);
                         }
 			
@@ -2488,6 +2807,17 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
 			    case 2:
 				strncpy(cPtr->ref_tag,row[i],REF_TAG_LEN);
 				cPtr->ref_tag[REF_TAG_LEN-1] = '\0'; //toasty.
+
+				//Safety escape value.
+                                if( (snort_escape_string_STATIC(cPtr->ref_tag,REF_TAG_LEN,data)))
+                                {
+                                    FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+                                               "[%s], Exiting. \n",
+                                               __FUNCTION__,
+                                               cPtr->ref_tag);
+                                }
+
+
 				break;
 
                             default:
@@ -2570,7 +2900,7 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
 			data->p_result = NULL;
 		    }
 
-		    FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+		    FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
 			       __FUNCTION__);
 		}
 
@@ -2603,6 +2933,17 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
 			case 2:
 			    strncpy(cPtr->ref_tag,pg_val,REF_TAG_LEN);
 			    cPtr->ref_tag[REF_TAG_LEN-1] = '\0'; //toasty.
+
+			    //Safety escape value.
+			    if( (snort_escape_string_STATIC(cPtr->ref_tag,REF_TAG_LEN,data)))
+			    {
+				FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+					   "[%s], Exiting. \n",
+					   __FUNCTION__,
+					   cPtr->ref_tag);
+			    }
+
+
 			    break;
 
 			default:
@@ -2722,7 +3063,7 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
     if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                        SQL_SELECT_ALL_REFERENCE_SYSTEM) !=  SNORT_SNPRINTF_SUCCESS))
     {
-        FatalError("ERROR database: [%s()], Unable to allocate memory for query, bailing ...\n",
+        FatalError("database [%s()], Unable to allocate memory for query, bailing ...\n",
                    __FUNCTION__);
     }
     
@@ -2736,7 +3077,7 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -2773,7 +3114,7 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
                     {
                         mysql_free_result(data->m_result);
                         data->m_result = NULL;
-                        FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+                        FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
                                    __FUNCTION__);
                     }
                 }
@@ -2822,7 +3163,7 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
                             *iArrayPtr = NULL;
                             mysql_free_result(data->m_result);
                             data->m_result = NULL;
-                            FatalError("ERROR database: [%s()], mysql_fetch_lengths() call failed .. \n",
+                            FatalError("database [%s()], mysql_fetch_lengths() call failed .. \n",
                                        __FUNCTION__);
                         }
 			
@@ -2838,6 +3179,17 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
                             case 1:
                                 strncpy(cPtr->ref_system_name,row[i],SYSTEM_NAME_LEN);
 				cPtr->ref_system_name[SYSTEM_NAME_LEN-1] = '\0'; //toasty.
+
+				//Safety escape value.
+                                if( (snort_escape_string_STATIC(cPtr->ref_system_name,SYSTEM_NAME_LEN,data)))
+                                {
+                                    FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+                                               "[%s], Exiting. \n",
+                                               __FUNCTION__,
+                                               cPtr->ref_system_name);
+                                }
+
+
                                 break;
 				
                             default:
@@ -2920,7 +3272,7 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
 			data->p_result = NULL;
 		    }
 
-		    FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+		    FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
 			       __FUNCTION__);
 		}
 
@@ -2950,6 +3302,17 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
 			case 1:
 			    strncpy(cPtr->ref_system_name,pg_val,SYSTEM_NAME_LEN);
 			    cPtr->ref_system_name[SYSTEM_NAME_LEN-1] = '\0'; //toasty.
+
+			    //Safety escape value.
+			    if( (snort_escape_string_STATIC(cPtr->ref_system_name,SYSTEM_NAME_LEN,data)))
+			    {
+				FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+					   "[%s], Exiting. \n",
+					   __FUNCTION__,
+					   &cPtr->ref_system_name);
+			    }
+
+
 			    break;
 
 			default:
@@ -3159,6 +3522,7 @@ u_int32_t ReferenceCacheUpdateDBid(dbReferenceObj *iDBList,u_int32_t array_lengt
 u_int32_t ReferencePopulateDatabase(DatabaseData  *data,cacheReferenceObj *cacheHead)
 {
     u_int32_t db_ref_id;
+
     
     if( (data == NULL) ||
 	(cacheHead == NULL))
@@ -3177,7 +3541,7 @@ u_int32_t ReferencePopulateDatabase(DatabaseData  *data,cacheReferenceObj *cache
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -3188,36 +3552,77 @@ u_int32_t ReferencePopulateDatabase(DatabaseData  *data,cacheReferenceObj *cache
     {
 	if(cacheHead->flag & CACHE_INTERNAL_ONLY)
         {
+
+#if DEBUG
+            inserted_reference_object_count++;
+#endif
+
 	    if( (snort_escape_string_STATIC(cacheHead->obj.ref_tag,REF_TAG_LEN,data)))
             {
-                FatalError("ERROR database: [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+                FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
                            "[%s], Exiting. \n",
                            __FUNCTION__,
                            &cacheHead->obj.ref_tag);
             }
 	    
 	    DatabaseCleanInsert(data);
-            if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-                               SQL_INSERT_SPECIFIC_REF,
-			       cacheHead->obj.parent->obj.db_ref_system_id,
-                               cacheHead->obj.ref_tag)) !=  SNORT_SNPRINTF_SUCCESS)
-            {
-                /* XXX */
-                goto TransactionFail;
-            }
 
+	    switch(data->dbtype_id)
+            {
+#if defined(ENABLE_POSTGRESQL)
+            case DB_POSTGRESQL:
+		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+				   PGSQL_SQL_INSERT_SPECIFIC_REF,
+				   cacheHead->obj.parent->obj.db_ref_system_id,
+				   cacheHead->obj.ref_tag)) !=  SNORT_SNPRINTF_SUCCESS)
+		{
+		    /* XXX */
+		    goto TransactionFail;
+		}
+		break;
+#endif
+	    default:
+		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+				   SQL_INSERT_SPECIFIC_REF,
+				   cacheHead->obj.parent->obj.db_ref_system_id,
+				   cacheHead->obj.ref_tag)) !=  SNORT_SNPRINTF_SUCCESS)
+		{
+		    /* XXX */
+		    goto TransactionFail;
+		}
+		break;
+	    }
+	    
 	    DatabaseCleanSelect(data);
-            if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-                               SQL_SELECT_SPECIFIC_REF,
-			       cacheHead->obj.parent->obj.db_ref_system_id,
-                               cacheHead->obj.ref_tag)) !=  SNORT_SNPRINTF_SUCCESS)
+
+	    switch(data->dbtype_id)
             {
-                /* XXX */
-                goto TransactionFail;
-            }
+#if defined(ENABLE_POSTGRESQL)
+            case DB_POSTGRESQL:
+		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
+				   PGSQL_SQL_SELECT_SPECIFIC_REF,
+				   cacheHead->obj.parent->obj.db_ref_system_id,
+				   cacheHead->obj.ref_tag)) !=  SNORT_SNPRINTF_SUCCESS)
+		{
+		    /* XXX */
+		    goto TransactionFail;
+		}
+		break;
+#endif
+	    default:
+		
+		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
+				   SQL_SELECT_SPECIFIC_REF,
+				   cacheHead->obj.parent->obj.db_ref_system_id,
+				   cacheHead->obj.ref_tag)) !=  SNORT_SNPRINTF_SUCCESS)
+		{
+		    /* XXX */
+		    goto TransactionFail;
+		}
+		break;
+	    }
 
-
-            if(Insert(data->SQL_INSERT,data))
+            if(Insert(data->SQL_INSERT,data,1))
             {
                 /* XXX */
                 goto TransactionFail;
@@ -3264,7 +3669,7 @@ TransactionFail:
 u_int32_t SystemPopulateDatabase(DatabaseData  *data,cacheSystemObj *cacheHead)
 {
     u_int32_t db_system_id = 0;
-    
+
     if (data == NULL)
     {
         /* XXX */
@@ -3277,7 +3682,6 @@ u_int32_t SystemPopulateDatabase(DatabaseData  *data,cacheSystemObj *cacheHead)
 	return 0;
     }
     
-
     if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
     {
         /* A This shouldn't happen since we are in failed transaction state */
@@ -3288,7 +3692,7 @@ u_int32_t SystemPopulateDatabase(DatabaseData  *data,cacheSystemObj *cacheHead)
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -3299,33 +3703,73 @@ u_int32_t SystemPopulateDatabase(DatabaseData  *data,cacheSystemObj *cacheHead)
     {
         if(cacheHead->flag & CACHE_INTERNAL_ONLY)
         {
+#if DEBUG
+            inserted_system_object_count++;
+#endif
+
+
 	    if( (snort_escape_string_STATIC(cacheHead->obj.ref_system_name,SYSTEM_NAME_LEN,data)))
             {
-                FatalError("ERROR database: [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+                FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
                            "[%s], Exiting. \n",
                            __FUNCTION__,
-                           &cacheHead->obj.ref_system_name);
+                           cacheHead->obj.ref_system_name);
             }
 	    
             DatabaseCleanInsert(data);
-            if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-                               SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM,
-                               cacheHead->obj.ref_system_name)) !=  SNORT_SNPRINTF_SUCCESS)
-            {
-                /* XXX */
-                goto TransactionFail;
-            }
+	    
+	    switch(data->dbtype_id)
+	    {
+#if defined(ENABLE_POSTGRESQL)
+	    case DB_POSTGRESQL:
+		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+                                   PGSQL_SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM,
+                                   cacheHead->obj.ref_system_name)) !=  SNORT_SNPRINTF_SUCCESS)
+                {
+                    /* XXX */
+                    goto TransactionFail;
+                }
+		break;
+#endif
+	    default:
+		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+				   SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM,
+				   cacheHead->obj.ref_system_name)) !=  SNORT_SNPRINTF_SUCCESS)
+		{
+		    /* XXX */
+		    goto TransactionFail;
+		}
+		break;
+	    }
 	    
 	    DatabaseCleanSelect(data);
-            if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-			       SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM,
-                               cacheHead->obj.ref_system_name)) !=  SNORT_SNPRINTF_SUCCESS)
-            {
-                /* XXX */
-                goto TransactionFail;
-            }
 
-            if(Insert(data->SQL_INSERT,data))
+	    switch(data->dbtype_id)
+            {
+#if defined(ENABLE_POSTGRESQL)
+            case DB_POSTGRESQL:
+		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
+                                   PGSQL_SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM,
+                                   cacheHead->obj.ref_system_name)) !=  SNORT_SNPRINTF_SUCCESS)
+                {
+                    /* XXX */
+                    goto TransactionFail;
+                }
+
+		break;
+#endif
+	    default:
+		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
+				   SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM,
+				   cacheHead->obj.ref_system_name)) !=  SNORT_SNPRINTF_SUCCESS)
+		{
+		    /* XXX */
+		    goto TransactionFail;
+		}
+		break;
+	    }
+
+            if(Insert(data->SQL_INSERT,data,1))
             {
                 /* XXX */
                 goto TransactionFail;
@@ -3399,6 +3843,11 @@ u_int32_t SystemCacheSynchronize(DatabaseData *data,cacheSystemObj **cacheHead)
         return 1;
     }
     
+#if DEBUG
+    db_system_object_count=array_length;
+#endif
+
+
     //If system is not populated correctly, we probably do not have ref's
     //and if so using the schema logic they probably are wrong, thus
     // we will insert them by our self afterward.
@@ -3424,6 +3873,11 @@ u_int32_t SystemCacheSynchronize(DatabaseData *data,cacheSystemObj **cacheHead)
 	goto func_fail;
     }	
     
+#if DEBUG
+    db_reference_object_count=array_length;
+#endif
+
+
     if(array_length > 0)
     {
 	if( (ReferenceCacheUpdateDBid(dbRefArray,array_length,cacheHead)))
@@ -3538,13 +3992,6 @@ u_int32_t GenerateSigRef(cacheSignatureReferenceObj **iHead,cacheSignatureObj *s
 	    lookupNode.db_sig_id = sigHead->obj.db_id;
 	    lookupNode.ref_seq = (node_count + 1);
 	    
-	    /* DEBUG
-	       LogMessage("looking up for ref_id[%u] sig_id[%u] ref_seq[%u] \n",
-	       lookupNode.db_ref_id,		       
-	       lookupNode.db_sig_id,
-	       lookupNode.ref_seq);
-	    */
-	    
 	    if( (cacheSignatureReferenceLookup(&lookupNode,*iHead)) == 0 )
 	    {
 		if( (newNode = SnortAlloc(sizeof(cacheSignatureReferenceObj))) == NULL)
@@ -3558,13 +4005,10 @@ u_int32_t GenerateSigRef(cacheSignatureReferenceObj **iHead,cacheSignatureObj *s
 		
 		newNode->next = *iHead;
 		*iHead = newNode;
+#if DEBUG
+		file_sigref_object_count++;
+#endif
 	    }
-	    //else
-	    //{
-	    /* XXX */
-	    /* Element shouldn't already be in cache .. */
-	    //return 1;
-	    //}
 	}
         sigHead = sigHead->next;	
     }
@@ -3620,7 +4064,7 @@ u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferen
     if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                        SQL_SELECT_ALL_SIGREF) !=  SNORT_SNPRINTF_SUCCESS))
     {
-        FatalError("ERROR database: [%s()], Unable to allocate memory for query, bailing ...\n",
+        FatalError("database [%s()], Unable to allocate memory for query, bailing ...\n",
                    __FUNCTION__);
     }
     
@@ -3634,7 +4078,7 @@ u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferen
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -3670,7 +4114,7 @@ u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferen
                     {
                         mysql_free_result(data->m_result);
                         data->m_result = NULL;
-                        FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+                        FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
                                    __FUNCTION__);
                     }
                 }
@@ -3718,7 +4162,7 @@ u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferen
                             *iArrayPtr = NULL;
                             mysql_free_result(data->m_result);
                             data->m_result = NULL;
-                            FatalError("ERROR database: [%s()], mysql_fetch_lengths() call failed .. \n",
+                            FatalError("database [%s()], mysql_fetch_lengths() call failed .. \n",
                                        __FUNCTION__);
                         }
 			
@@ -3814,7 +4258,7 @@ u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferen
 			data->p_result = NULL;
 		    }
 
-		    FatalError("ERROR database: [%s()]: Failed call to sigCacheRawAlloc() \n",
+		    FatalError("database [%s()]: Failed call to sigCacheRawAlloc() \n",
 			       __FUNCTION__);
 		}
 
@@ -4116,7 +4560,7 @@ u_int32_t SignatureReferenceCacheUpdateDBid(dbSignatureReferenceObj *iDBList,
 u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureReferenceObj *cacheHead)
 {
     u_int32_t row_validate;
-    
+
     if( (data == NULL))
     {
         /* XXX */
@@ -4129,8 +4573,6 @@ u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureRe
 	return 0;
     }
     
-
-
     if(checkTransactionCall(&data->dbRH[data->dbtype_id]))
     {
         /* A This shouldn't happen since we are in failed transaction state */
@@ -4141,7 +4583,7 @@ u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureRe
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
-        FatalError("ERROR database: [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
+        FatalError("database [%s()], Select Query[%s] failed check to dbConnectionStatus()\n",
                    __FUNCTION__,
                    data->SQL_SELECT);
     }
@@ -4152,6 +4594,11 @@ u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureRe
     {
         if(cacheHead->flag & CACHE_INTERNAL_ONLY)
         {
+
+#if DEBUG
+            inserted_sigref_object_count++;
+#endif
+
 	    DatabaseCleanInsert(data);
             if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
                                SQL_INSERT_SIGREF,
@@ -4176,7 +4623,7 @@ u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureRe
                 goto TransactionFail;
             }
 	    
-	    if(Insert(data->SQL_INSERT,data))
+	    if(Insert(data->SQL_INSERT,data,1))
             {
                 /* XXX */
                 goto TransactionFail;
@@ -4212,7 +4659,7 @@ u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureRe
     }
     
     CommitTransaction(data);
-	    
+
     return 0;
     
 TransactionFail:
@@ -4263,6 +4710,10 @@ u_int32_t SigRefSynchronize(DatabaseData *data,cacheSignatureReferenceObj **cach
         LogMessage("SignatureReferencePullDataStore failed \n");
 	return 1;
     }
+
+#if DEBUG
+    db_sigref_object_count=array_length;
+#endif
     
     if( array_length > 0 )
     {
@@ -4321,19 +4772,19 @@ u_int32_t ConvertDefaultCache(Barnyard2Config *bc,DatabaseData *data)
        (data == NULL))
     {
 	/* XXX */
-	FatalError("ERROR database: [%s()], received a NULL argument : Barnyard2Config [0x%x] or DatabaseData [0x%x]  \n",
+	FatalError("database [%s()], received a NULL argument : Barnyard2Config [0x%x] or DatabaseData [0x%x]  \n",
 		   __FUNCTION__,
 		   bc,
 		   data);
     }
     
-    if( (ConvertClassificationCache(&bc->classifications,&data->mc)))
+    if( (ConvertClassificationCache(&bc->classifications,&data->mc,data)))
     {
 	/* XXX */
 	return 1;
     }
     
-    if( (ConvertSignatureCache(&sigTypes,&data->mc)))
+    if( (ConvertSignatureCache(&sigTypes,&data->mc,data)))
     {
 	/* XXX */
 	return 1;
@@ -4467,7 +4918,7 @@ u_int32_t CacheSynchronize(DatabaseData *data)
     if( (ClassificationCacheSynchronize(data,&data->mc.cacheClassificationHead)))
     {
 	/* XXX */
-	LogMessage("[%s(), ClassificationCacheSynchronize() call failed. \n",
+	LogMessage("[%s()], ClassificationCacheSynchronize() call failed. \n",
 		   __FUNCTION__);
 	return 1;
     }
@@ -4476,7 +4927,7 @@ u_int32_t CacheSynchronize(DatabaseData *data)
     if( (SignatureCacheSynchronize(data,&data->mc.cacheSignatureHead)))
     {
 	/* XXX */
-	LogMessage("[%s(), SignatureCacheSynchronize() call failed. \n",
+	LogMessage("[%s()]:, SignatureCacheSynchronize() call failed. \n",
 		   __FUNCTION__);
 	return 1;
     }
@@ -4486,7 +4937,7 @@ u_int32_t CacheSynchronize(DatabaseData *data)
     if( (SystemCacheSynchronize(data,&data->mc.cacheSystemHead)))
     {
 	/* XXX */
-	LogMessage("[%s(), SystemCacheSyncronize() call failed. \n",
+	LogMessage("[%s()]:, SystemCacheSyncronize() call failed. \n",
 		   __FUNCTION__);
 	return 1;
     }
@@ -4499,6 +4950,47 @@ u_int32_t CacheSynchronize(DatabaseData *data)
 		   __FUNCTION__);
 	return 1;
     }
+
+#if DEBUG
+
+    DEBUG_WRAP(DebugMessage(DB_DEBUG,"================================================"
+			    "===============================\n"));
+    DEBUG_WRAP(DebugMessage(DB_DEBUG,"[%s()], sleeping 5 second so you can look at cache statistics \n",
+			    __FUNCTION__));
+    DEBUG_WRAP(DebugMessage(DB_DEBUG,"================================================"
+			    "===============================\n"));
+
+
+    DEBUG_WRAP(DebugMessage(DB_DEBUG,"[Signature]: [file : %u] [db: %u] [new database insertion: %u] \n",
+			    file_signature_object_count,
+			    db_signature_object_count,
+			    inserted_signature_object_count));
+    
+    DEBUG_WRAP(DebugMessage(DB_DEBUG,"[Classification]: [file : %u] [db: %u] [new database insertion: %u] \n",
+			    file_classification_object_count,
+			    db_classification_object_count,
+			    inserted_classification_object_count));
+
+    DEBUG_WRAP(DebugMessage(DB_DEBUG,"[System]: [file : %u] [db: %u] [new database insertion: %u] \n",
+			    file_system_object_count,
+			    db_system_object_count,
+			    inserted_system_object_count));
+    
+    DEBUG_WRAP(DebugMessage(DB_DEBUG,"[Reference]: [file : %u] [db: %u] [new database insertion: %u] \n",
+			    file_reference_object_count,
+			    db_reference_object_count,
+			    inserted_reference_object_count));
+    
+    DEBUG_WRAP(DebugMessage(DB_DEBUG,"[Signature Reference]: [file : %u] [db: %u] [new database insertion: %u] \n",
+			    file_sigref_object_count,
+			    db_sigref_object_count,
+			    inserted_sigref_object_count));
+
+    DEBUG_WRAP(DebugMessage(DB_DEBUG,"================================================"
+			    "===============================\n\n"));
+    sleep(5);
+
+#endif
     
     return 0;
 }

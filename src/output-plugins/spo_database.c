@@ -726,10 +726,10 @@ u_int32_t DatabasePluginInitializeSensor(DatabaseData *data)
     
         
     /* No check here */
-    Select(data->SQL_SELECT,data,(u_int32_t *)&data->sid)
+    Select(data->SQL_SELECT,data,(u_int32_t *)&data->sid);
     
     if(data->sid == 0)
-    {
+      {
          if( BeginTransaction(data) )
          {
 	       /* XXX */
@@ -749,9 +749,10 @@ u_int32_t DatabasePluginInitializeSensor(DatabaseData *data)
 	     /* XXX */
 	     ErrorMessage("ERROR database: [%s()]: Error commiting transaction \n",
 		     __FUNCTION__);
-	
+	     
 	     setTransactionCallFail(&data->dbRH[data->dbtype_id]);
-	    goto bad_query; 
+	     retval = 1;
+	     goto exit_funct;
          }
          else
          {

@@ -104,7 +104,7 @@
     
 #endif 
 
-#if defined(ENABLE_MYSQL) || defined (ENABLE_ODBC) || defined (ENABLE_ORACLE) || defined (ENABLE_MSSQL)    
+//#if defined(ENABLE_MYSQL) || defined (ENABLE_ODBC) || defined (ENABLE_ORACLE) || defined (ENABLE_MSSQL)    
 
 #define SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM "INSERT INTO reference_system (ref_system_name) VALUES ('%s');"
 #define SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM "SELECT ref_system_id FROM reference_system WHERE ref_system_name = '%s';"
@@ -121,7 +121,7 @@
     "(sig_priority = '%u') AND "					\
     "(sig_name = '%s'); "						\
 
-#endif
+//#endif
 
 
 /* Used for backward compatibility with older barnyard process */

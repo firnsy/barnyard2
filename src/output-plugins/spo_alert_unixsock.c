@@ -51,6 +51,7 @@
 #include "debug.h"
 #include "util.h"
 #include "map.h"
+#include "mstring.h"
 #include "unified2.h"
 #include "spo_alert_unixsock.h"
 #include "barnyard2.h"
@@ -72,11 +73,11 @@
 typedef struct _SpoAlertUnixSockData
 {
     char *filename;
+    int alertsd;
 
 } SpoAlertUnixSockData;
 
 
-static int alertsd;
 #ifndef WIN32
 struct sockaddr_un alertaddr;
 #else
@@ -85,11 +86,11 @@ struct sockaddr_in alertaddr;
 
 void AlertUnixSockInit(char *);
 void AlertUnixSock(Packet *, void *, uint32_t, void *);
-void ParseAlertUnixSockArgs(char *);
+SpoAlertUnixSockData *ParseAlertUnixSockArgs(char *);
 void AlertUnixSockCleanExit(int, void *);
 void AlertUnixSockRestart(int, void *);
-void OpenAlertSock(void);
-void CloseAlertSock(void);
+void OpenAlertSock(SpoAlertUnixSockData *);
+void CloseAlertSock(SpoAlertUnixSockData *);
 
 /*
  * Function: SetupAlertUnixSock()
@@ -125,38 +126,81 @@ void AlertUnixSockSetup(void)
  */
 void AlertUnixSockInit(char *args)
 {
+    SpoAlertUnixSockData *data;
+
     DEBUG_WRAP(DebugMessage(DEBUG_INIT,"Output: AlertUnixSock Initialized\n"););
 
     /* parse the argument list from the rules file */
-    ParseAlertUnixSockArgs(args);
+    data = ParseAlertUnixSockArgs(args);
+
+    OpenAlertSock(data);
 
     DEBUG_WRAP(DebugMessage(DEBUG_INIT,"Linking UnixSockAlert functions to call lists...\n"););
 
     /* Set the preprocessor function into the function list */
-    AddFuncToOutputList(AlertUnixSock, OUTPUT_TYPE__ALERT, NULL);
+    AddFuncToOutputList(AlertUnixSock, OUTPUT_TYPE__ALERT, data);
 
-    AddFuncToCleanExitList(AlertUnixSockCleanExit, NULL);
-    AddFuncToRestartList(AlertUnixSockRestart, NULL);
+    AddFuncToCleanExitList(AlertUnixSockCleanExit, data);
+    AddFuncToRestartList(AlertUnixSockRestart, data);
 }
 
 
 /*
  * Function: ParseAlertUnixSockArgs(char *)
  *
- * Purpose: Process the preprocessor arguements from the rules file and 
- *          initialize the preprocessor's data struct.  This function doesn't
- *          have to exist if it makes sense to parse the args in the init 
- *          function.
+ * Purpose: Process positional args, if any.  Syntax is:
+ * output alert_unixsock: [path]
+ * path ::= <path of filesystem relative to log dir>
  *
  * Arguments: args => argument list
  *
- * Returns: void function
+ * Returns: pointer to SpoAlertUnixSockData
  */
-void ParseAlertUnixSockArgs(char *args)
+SpoAlertUnixSockData *ParseAlertUnixSockArgs(char *args)
 {
+    SpoAlertUnixSockData *data;
+    char **toks;
+    int num_toks, i;
+    const char *filename = NULL;
+
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"ParseAlertUnixSockArgs: %s\n", args););
-    /* eventually we may support more than one socket */
-    OpenAlertSock();
+    data = (SpoAlertUnixSockData *)SnortAlloc(sizeof(SpoAlertUnixSockData));
+    if ( !data )
+    {
+        FatalError("alert_unixsock: unable to allocate memory!\n");
+    }
+
+    if ( !args ) args = "";
+    toks = mSplit((char *)args, " \t", 0, &num_toks, '\\');
+
+    for (i = 0; i < num_toks; i++)
+    {
+        const char* tok = toks[i];
+
+        switch (i)
+        {
+            case 0:
+                filename = tok;
+                break;
+
+            case 1:
+                FatalError("alert_unixsock: error in %s(%i): %s\n",
+                    file_name, file_line, tok);
+                break;
+        }
+    }
+    if ( !filename ) filename = UNSOCK_FILE;
+
+    data->filename = ProcessFileOption(barnyard2_conf_for_parsing, filename);
+
+    mSplitFree(&toks, num_toks);
+
+    DEBUG_WRAP(DebugMessage(
+        DEBUG_INIT, "alert_unixsock: '%s'\n",
+            data->filename
+    ););
+
+    return data;
 }
 
 /****************************************************************************
@@ -173,6 +217,12 @@ void AlertUnixSock(Packet *p, void *event, uint32_t event_type, void *arg)
 {
     static Alertpkt		alertpkt;
 	SigNode				*sn;
+    SpoAlertUnixSockData *data;
+
+    if( p == NULL || event == NULL || arg == NULL )
+        return;
+
+    data = (SpoAlertUnixSockData *)arg;
 
     DEBUG_WRAP(DebugMessage(DEBUG_LOG, "Logging Alert data!\n"););
 
@@ -250,7 +300,7 @@ void AlertUnixSock(Packet *p, void *event, uint32_t event_type, void *arg)
     }
 
 
-    if(sendto(alertsd,(const void *)&alertpkt,sizeof(Alertpkt),
+    if(sendto(data->alertsd,(const void *)&alertpkt,sizeof(Alertpkt),
               0,(struct sockaddr *)&alertaddr,sizeof(alertaddr))==-1)
     {
         /* whatever we do to sign that some alerts could be missed */
@@ -270,29 +320,22 @@ void AlertUnixSock(Packet *p, void *event, uint32_t event_type, void *arg)
  *
  * Returns: void function
  */
-void OpenAlertSock(void)
+void OpenAlertSock(SpoAlertUnixSockData *data)
 {
-    char srv[STD_BUF];
-
-    /* srv is our filename workspace. Set it to file UNSOCK_FILE inside the log directory. */
-    SnortSnprintf(srv, STD_BUF, "%s%s/%s",
-                  barnyard2_conf->chroot_dir == NULL ? "" : barnyard2_conf->chroot_dir,
-                  barnyard2_conf->log_dir, UNSOCK_FILE);
-
-    if(access(srv, W_OK))
+    if(access(data->filename, W_OK))
     {
        ErrorMessage("%s file doesn't exist or isn't writable!\n",
-            srv);
+            data->filename);
     }
 
     bzero((char *) &alertaddr, sizeof(alertaddr));
     
     /* 108 is the size of sun_path */
-    strncpy(alertaddr.sun_path, srv, 108);
+    strncpy(alertaddr.sun_path, data->filename, 108);
 
     alertaddr.sun_family = AF_UNIX;
 
-    if((alertsd = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0)
+    if((data->alertsd = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0)
     {
         FatalError("socket() call failed: %s", strerror(errno));
     }
@@ -300,20 +343,23 @@ void OpenAlertSock(void)
 
 void AlertUnixSockCleanExit(int signal, void *arg) 
 {
+    SpoAlertUnixSockData *data = (SpoAlertUnixSockData *)arg;
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"AlertUnixSockCleanExitFunc\n"););
-    CloseAlertSock();
+    CloseAlertSock(data);
 }
 
 void AlertUnixSockRestart(int signal, void *arg) 
 {
+    SpoAlertUnixSockData *data = (SpoAlertUnixSockData *)arg;
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"AlertUnixSockRestartFunc\n"););
-    CloseAlertSock();
+    CloseAlertSock(data);
 }
 
-void CloseAlertSock(void)
+void CloseAlertSock(SpoAlertUnixSockData *data)
 {
-    if(alertsd >= 0) {
-        close(alertsd);
+    if(data->alertsd >= 0) {
+        close(data->alertsd);
+        data->alertsd = -1;
     }
 }
 

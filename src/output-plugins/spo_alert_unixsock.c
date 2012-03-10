@@ -327,7 +327,7 @@ void OpenAlertSock(SpoAlertUnixSockData *data)
 
     if(access(data->filename, W_OK))
     {
-       ErrorMessage("%s file doesn't exist or isn't writable!\n",
+       ErrorMessage("alert_unixsock: %s file doesn't exist or isn't writable!\n",
             data->filename);
     }
 
@@ -340,13 +340,13 @@ void OpenAlertSock(SpoAlertUnixSockData *data)
 
     if((data->alertsd = socket(AF_UNIX, data->sync?SOCK_STREAM:SOCK_DGRAM, 0)) < 0)
     {
-        FatalError("socket() call failed: %s", strerror(errno));
+        FatalError("alert_unixsock: socket() call failed: %s\n", strerror(errno));
     }
 
     /* Connect to the target */
     if( connect(data->alertsd, (struct sockaddr *)&alertaddr, sizeof(alertaddr)) < 0)
     {
-        FatalError("connect() to '%s' failed: %s", data->filename, strerror(errno));
+        FatalError("alert_unixsock: connect() to '%s' failed: %s\n", data->filename, strerror(errno));
     }
 }
 

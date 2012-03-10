@@ -78,12 +78,6 @@ typedef struct _SpoAlertUnixSockData
 } SpoAlertUnixSockData;
 
 
-#ifndef WIN32
-struct sockaddr_un alertaddr;
-#else
-struct sockaddr_in alertaddr;
-#endif
-
 void AlertUnixSockInit(char *);
 void AlertUnixSock(Packet *, void *, uint32_t, void *);
 SpoAlertUnixSockData *ParseAlertUnixSockArgs(char *);
@@ -300,8 +294,7 @@ void AlertUnixSock(Packet *p, void *event, uint32_t event_type, void *arg)
     }
 
 
-    if(sendto(data->alertsd,(const void *)&alertpkt,sizeof(Alertpkt),
-              0,(struct sockaddr *)&alertaddr,sizeof(alertaddr))==-1)
+    if(send(data->alertsd,(const void *)&alertpkt,sizeof(Alertpkt),0)==-1)
     {
         /* whatever we do to sign that some alerts could be missed */
     }
@@ -322,6 +315,12 @@ void AlertUnixSock(Packet *p, void *event, uint32_t event_type, void *arg)
  */
 void OpenAlertSock(SpoAlertUnixSockData *data)
 {
+#ifndef WIN32
+    struct sockaddr_un alertaddr;
+#else
+    struct sockaddr_in alertaddr;
+#endif
+
     if(access(data->filename, W_OK))
     {
        ErrorMessage("%s file doesn't exist or isn't writable!\n",
@@ -335,9 +334,15 @@ void OpenAlertSock(SpoAlertUnixSockData *data)
 
     alertaddr.sun_family = AF_UNIX;
 
-    if((data->alertsd = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0)
+    if((data->alertsd = socket(AF_UNIX, data->sync?SOCK_STREAM:SOCK_DGRAM, 0)) < 0)
     {
         FatalError("socket() call failed: %s", strerror(errno));
+    }
+
+    /* Connect to the target */
+    if( connect(data->alertsd, (struct sockaddr *)&alertaddr, sizeof(alertaddr)) < 0)
+    {
+        FatalError("connect() to '%s' failed: %s", data->filename, strerror(errno));
     }
 }
 

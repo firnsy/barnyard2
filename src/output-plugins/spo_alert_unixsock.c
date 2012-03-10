@@ -74,6 +74,7 @@ typedef struct _SpoAlertUnixSockData
 {
     char *filename;
     int alertsd;
+    int sync;
 
 } SpoAlertUnixSockData;
 
@@ -143,8 +144,9 @@ void AlertUnixSockInit(char *args)
  * Function: ParseAlertUnixSockArgs(char *)
  *
  * Purpose: Process positional args, if any.  Syntax is:
- * output alert_unixsock: [path]
+ * output alert_unixsock: [path ["sync"]]
  * path ::= <path of filesystem relative to log dir>
+ * "sync" ::= specify that communication must be synchronous
  *
  * Arguments: args => argument list
  *
@@ -163,6 +165,7 @@ SpoAlertUnixSockData *ParseAlertUnixSockArgs(char *args)
     {
         FatalError("alert_unixsock: unable to allocate memory!\n");
     }
+    data->sync = 0;
 
     if ( !args ) args = "";
     toks = mSplit((char *)args, " \t", 0, &num_toks, '\\');
@@ -178,6 +181,13 @@ SpoAlertUnixSockData *ParseAlertUnixSockArgs(char *args)
                 break;
 
             case 1:
+                if ( !strcasecmp(tok, "sync") )
+                {
+                    data->sync = 1;
+                    continue;
+                }
+                /* Otherwise fall through to error */
+            case 2:
                 FatalError("alert_unixsock: error in %s(%i): %s\n",
                     file_name, file_line, tok);
                 break;
@@ -212,6 +222,8 @@ void AlertUnixSock(Packet *p, void *event, uint32_t event_type, void *arg)
     static Alertpkt		alertpkt;
 	SigNode				*sn;
     SpoAlertUnixSockData *data;
+    char buf[1];
+    int err;
 
     if( p == NULL || event == NULL || arg == NULL )
         return;
@@ -298,12 +310,20 @@ void AlertUnixSock(Packet *p, void *event, uint32_t event_type, void *arg)
     }
 
 
-    if(send(data->alertsd,(const void *)&alertpkt,sizeof(Alertpkt),0)==-1)
-    {
-        /* whatever we do to sign that some alerts could be missed */
-    }
+    err = send(data->alertsd,(const void *)&alertpkt,sizeof(Alertpkt),0);
 
+    if( !data->sync )
+        /* For backward compatability, in non-sync mode errors are ignored */
+        return;
 
+    if( err < 0 )
+        FatalError("alert_unixsock: error writing alert to '%s': %s!\n", data->filename, strerror(errno));
+
+    /* Wait for a message which indicates remote end has processed alerts */
+    err = read(data->alertsd, buf, 1);
+
+    if( err < 0 )
+        FatalError("alert_unixsock: error reading response from '%s': %s!\n", data->filename, strerror(errno));
 }
 
 
@@ -338,7 +358,7 @@ void OpenAlertSock(SpoAlertUnixSockData *data)
 
     alertaddr.sun_family = AF_UNIX;
 
-    if((data->alertsd = socket(AF_UNIX, data->sync?SOCK_STREAM:SOCK_DGRAM, 0)) < 0)
+    if((data->alertsd = socket(AF_UNIX, data->sync?SOCK_SEQPACKET:SOCK_DGRAM, 0)) < 0)
     {
         FatalError("alert_unixsock: socket() call failed: %s\n", strerror(errno));
     }

@@ -569,23 +569,24 @@ void CallOutputPlugins(OutputType out_type, Packet *packet, void *event, uint32_
     }
     else
     {
-        switch(out_type)
+	//All those sub "Log" type will go away in the future..
+	//Iterate Log and Alert.
+	idx = LogList;
+	
+        while (idx != NULL)
         {
-            case OUTPUT_TYPE__ALERT:
-                idx = AlertList;
-                break;
-            case OUTPUT_TYPE__LOG:
-                idx = LogList;
-                break;
-            default:
-                break;
+            idx->func(packet, event, event_type, idx->arg);
+            idx = idx->next;
         }
+	
+	idx = AlertList;
 
         while (idx != NULL)
         {
             idx->func(packet, event, event_type, idx->arg);
             idx = idx->next;
         }
+	
     }
 }
 

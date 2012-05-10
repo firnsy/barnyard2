@@ -4558,44 +4558,42 @@ MYSQL_RetryConnection:
 		   we need to check if we are in a transaction
 		   and if we are we bail, since the resulting issued commands would obviously fail
 		*/
+		if( dbReconnectSetCounters(pdbRH))
+		{
+		    /* XXX */
+		    FatalError("database [%s()]: Call failed, the process will need to be restarted \n",__FUNCTION__);
+		}
+		
 		if(checkTransactionState(pdbRH))
 		{
-		    /* Calling rollback if we reconnected will bring us in a dead loop */
-		    //if( RollbackTransaction(pdbRH->dbdata))
-		    //{
-		    //FatalError("[%s()]: Failed in a transaction, the process need to be restarted \n",
-		    //		   __FUNCTION__);
-		    //}
-		    
 		    /* ResetState for the caller */
 		    setReconnectState(pdbRH,1);
 		    setTransactionCallFail(pdbRH);
 		    setTransactionState(pdbRH);
 		}
-		else
+		
+		pdbRH->pThreadID = aThreadID;
+		
+		/* make sure are are off auto_commit */
+		if(mysql_autocommit(pdbRH->dbdata->m_sock,0))
 		{
-		    pdbRH->pThreadID = aThreadID;
-		    
-		    /* make sure are are off auto_commit */
-		    if(mysql_autocommit(pdbRH->dbdata->m_sock,0))
-		    {
-			/* XXX */
-			LogMessage("database Can't set autocommit off \n");
-			return 1;
-		    }
-		    
-		    /* make shure we keep the option on ..*/
-    		    if (mysql_options(dbdata->m_sock, 
-				      MYSQL_OPT_RECONNECT, 
-				      &pdbRH->mysql_reconnect) != 0)
-		    {
-			LogMessage("database: Failed to set reconnect option: %s\n", mysql_error(dbdata->m_sock));
-			return 1;
-		    }
-		    
-		    LogMessage("Warning: {MYSQL} The database connection has reconnected it self to the database server, via a call to mysql_ping() new thread id is [%u] \n",
-			       pdbRH->pThreadID);
+		    /* XXX */
+		    LogMessage("database Can't set autocommit off \n");
+		    return 1;
 		}
+		
+		/* make shure we keep the option on ..*/
+		if (mysql_options(dbdata->m_sock, 
+				  MYSQL_OPT_RECONNECT, 
+				  &pdbRH->mysql_reconnect) != 0)
+		{
+		    LogMessage("database: Failed to set reconnect option: %s\n", mysql_error(dbdata->m_sock));
+		    return 1;
+		}
+		
+		LogMessage("Warning: {MYSQL} The database connection has reconnected it self to the database server, via a call to mysql_ping() new thread id is [%u] \n",
+			   pdbRH->pThreadID);
+		return 0;
 	    }
 	    else
 	    {
@@ -4623,15 +4621,22 @@ MYSQL_RetryConnection:
 		    LogMessage("database: Failed to set reconnect option: %s\n", mysql_error(dbdata->m_sock));
 		    return 1;
 		}
+		return 0;
 	    }
-	    return 0;
-	    
 	    break;
 	    
 	case CR_COMMANDS_OUT_OF_SYNC:	    
 	case CR_SERVER_GONE_ERROR:
 	case CR_UNKNOWN_ERROR:	    
 	default:
+	    
+	    if(checkTransactionState(pdbRH))
+	    {
+		/* ResetState for the caller */
+		setReconnectState(pdbRH,1);
+		setTransactionCallFail(pdbRH);
+		setTransactionState(pdbRH);
+	    }
 	    
 	    if( dbReconnectSetCounters(pdbRH))
 	    {
@@ -4646,7 +4651,6 @@ MYSQL_RetryConnection:
     }
     else     /* Manual Reconnect mode */
     {	
-
 	switch(ping_ret)
 	{
 	    
@@ -4655,11 +4659,10 @@ MYSQL_RetryConnection:
 	    {
 		FatalError("database We are in {MYSQL} \"manual reconnect\" mode and a call to mysql_ping() changed the mysql_thread_id, this shouldn't happen the process will terminate \n");
 	    }
-	    
 	    return 0;
 	    
 	    break;
-
+	    
 	case CR_COMMANDS_OUT_OF_SYNC:
 	case CR_SERVER_GONE_ERROR:
 	case CR_UNKNOWN_ERROR:	    
@@ -4667,41 +4670,24 @@ MYSQL_RetryConnection:
 	    
 	    if(checkTransactionState(pdbRH))
             {
-		if(dbReconnectSetCounters(pdbRH))
-		{
-		    /* XXX */
-		    FatalError("database [%s()]: Call failed, the process will need to be restarted \n",__FUNCTION__);
-		}
-		
-		if((MYSQL_ManualConnect(pdbRH->dbdata)))
-		{
-		    goto MYSQL_RetryConnection;
-		}
-						
 		/* ResetState for the caller */
 		setReconnectState(pdbRH,1);
 		setTransactionCallFail(pdbRH);
 		setTransactionState(pdbRH);
 	    }
-	    else
-	    {
-		if(dbReconnectSetCounters(pdbRH))
-		{
-		    /* XXX */
-		    FatalError("database [%s()]: Call failed, the process will need to be restarted \n",__FUNCTION__);
-		}
 	    
-		if((MYSQL_ManualConnect(pdbRH->dbdata)))
-		{
-		    goto MYSQL_RetryConnection;
-		}
-		else
-		{	
-		    return 0;
-		}
-		break;
+	    if(dbReconnectSetCounters(pdbRH))
+	    {
+		/* XXX */
+		FatalError("database [%s()]: Call failed, the process will need to be restarted \n",__FUNCTION__);
+	    }
+	    
+	    if((MYSQL_ManualConnect(pdbRH->dbdata)))
+	    {
+		goto MYSQL_RetryConnection;
 	    }
 	}
+	return 0; 
     }
     
     /* XXX */

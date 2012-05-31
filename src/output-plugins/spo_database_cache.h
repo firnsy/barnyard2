@@ -140,7 +140,7 @@
 #define SQL_SELECT_ALL_REFERENCE_SYSTEM  "SELECT ref_system_id, ref_system_name FROM reference_system;"
 #define SQL_SELECT_ALL_REF "SELECT ref_id, ref_system_id, ref_tag FROM reference; "
 #define SQL_SELECT_ALL_CLASSIFICATION "SELECT sig_class_id, sig_class_name FROM sig_class; "
-#define SQL_SELECT_ALL_SIGNATURE "SELECT sig_id, sig_sid, sig_gid, sig_rev, sig_class_id, sig_priority, sig_name FROM signature;"
+#define SQL_SELECT_ALL_SIGNATURE "SELECT sig_id, sig_sid, sig_gid,sig_rev, sig_class_id, sig_priority, sig_name FROM signature;"
 #define SQL_UPDATE_SPECIFIC_SIGNATURE "UPDATE signature SET "		\
     "sig_class_id = '%u',"						\
     "sig_priority = '%u',"						\

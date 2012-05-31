@@ -123,7 +123,7 @@ enum db_types_en
     DB_MSSQL      = 3,
     DB_ORACLE     = 4,
     DB_ODBC       = 5,
-    DB_ENUM_MAX_VAL = DB_ODBC /* This value has to be updated if a new dbms is inserted in the enum 
+    DB_ENUM_MAX_VAL = DB_ODBC+1 /* This value has to be updated if a new dbms is inserted in the enum 
 			         This is used for different function pointers used by the module depending on operation mode
 			      */
 };
@@ -674,6 +674,11 @@ u_int32_t SignatureLookupDatabase(DatabaseData *data,dbSignatureObj *sObj);
 void MasterCacheFlush(DatabaseData *data);
 
 u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH);
+u_int32_t dbConnectionStatusODBC(dbReliabilityHandle *pdbRH);
+u_int32_t dbConnectionStatusMYSQL(dbReliabilityHandle *pdbRH);
 
 
+#ifdef ENABLE_ODBC
+void ODBCPrintError(DatabaseData *data,SQLSMALLINT iSTMT_type);
+#endif
 #endif  /* __SPO_DATABASE_H__ */

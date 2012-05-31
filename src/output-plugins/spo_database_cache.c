@@ -623,6 +623,7 @@ u_int32_t dbSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead)
  */
 u_int32_t dbSignatureLookup(dbSignatureObj *iLookup,cacheSignatureObj *iHead)
 {
+
     if( (iLookup == NULL))
     {
         /* XXX */
@@ -644,7 +645,7 @@ u_int32_t dbSignatureLookup(dbSignatureObj *iLookup,cacheSignatureObj *iHead)
 	    (iLookup->gid == iHead->obj.gid))
         {
 	    /* Found */
-	    
+   
 	    /* 
 	       If the object in current list has a revision of 0, 
 	       and that a match is found for gid/sid (we are probably being called from the initialization 
@@ -1203,9 +1204,19 @@ u_int32_t ConvertClassificationCache(ClassType **iHead, MasterCache *iMasterCach
  */
 u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **iArrayPtr,u_int32_t *array_length)
 {
-    u_int32_t queryColCount =0;
-    u_int32_t curr_row = 0;
 
+    u_int32_t curr_row = 0;
+    
+#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL))    
+    u_int32_t queryColCount =0;
+#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)) */
+
+
+#ifdef ENABLE_ODBC
+    dbClassificationObj tClassObj = {0};
+    SQLSMALLINT col_count = 0;
+#endif /* ENABLE_ODBC */
+    
 #ifdef ENABLE_MYSQL
     int result = 0;
 #endif
@@ -1415,7 +1426,6 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
 #ifdef ENABLE_POSTGRESQL
     case DB_POSTGRESQL:
 	
-	
 	data->p_result = PQexec(data->p_connection,data->SQL_SELECT);
 	
 	pgStatus = PQresultStatus(data->p_result);
@@ -1523,26 +1533,156 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
 	    
 #endif /* ENABLE_POSTGRESQL */
 	    
-#ifdef ENABLE_ORACLE
-	case DB_ORACLE:
-	    LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-		       __FUNCTION__);
-	    
-	    break;
-#endif /* ENABLE_ORACLE */
 	    
 #ifdef ENABLE_ODBC
 	case DB_ODBC:
-	    LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
+
+	    if(SQLAllocHandle(SQL_HANDLE_STMT,data->u_connection, &data->u_statement) == SQL_SUCCESS)
+	    {
+		if(SQLExecDirect(data->u_statement,(ODBC_SQLCHAR *)data->SQL_SELECT, SQL_NTS) == SQL_SUCCESS)
+		{
+		    if( SQLNumResultCols(data->u_statement,&col_count) == SQL_SUCCESS)
+		    {
+			if(col_count == NUM_ROW_CLASSIFICATION)
+			{
+			    if(SQLRowCount(data->u_statement, &data->u_rows) != SQL_SUCCESS)
+			    {
+				ODBCPrintError(data,SQL_HANDLE_STMT);
+				FatalError("[%s()]: SQLRowCount() call failed \n",
+					   __FUNCTION__);
+			    }
+			    
+				if(data->u_rows)
+				{
+				    if( (*iArrayPtr = SnortAlloc( (sizeof(dbClassificationObj) * data->u_rows))) == NULL)
+				    {
+					goto ODBCError;
+				    }
+				    
+				    *array_length = data->u_rows;
+
+				}
+				else
+				{
+				    /* We have no records */
+				    *array_length = 0;
+				    return 0;
+				}
+				
+			    }
+			    else
+			    {
+				FatalError("[%s()]: The number of column returned does not match [%u] \n",
+					   __FUNCTION__,
+					   NUM_ROW_CLASSIFICATION);
+			    }
+		    }
+		    else
+		    {
+			LogMessage("[%s()]: SQLNumResultCols() call failed \n",
+				   __FUNCTION__);
+			ODBCPrintError(data,SQL_HANDLE_STMT);
+			goto ODBCError;
+		    }
+		    
+		}
+		else
+		{
+		    LogMessage("[%s()]: SQLExecDirect() call failed \n",
+			       __FUNCTION__);
+			ODBCPrintError(data,SQL_HANDLE_STMT);
+			goto ODBCError;
+			
+		}
+	    }
+	    else
+	    {
+		LogMessage("[%s()]: SQLAllocStmt() call failed \n",
+			   __FUNCTION__);
+		ODBCPrintError(data,SQL_HANDLE_STMT);
+		goto ODBCError;
+	    }
+	    
+	    SQLINTEGER col1_len = 0;
+	    SQLINTEGER col2_len = 0;
+	    
+	    /* Bind template object */
+	    if( SQLBindCol(data->u_statement,1,SQL_C_LONG,&tClassObj.db_sig_class_id,sizeof(u_int32_t),&col1_len) != SQL_SUCCESS)
+	    {
+		LogMessage("[%s()]: SQLBindCol() call failed \n",
+			   __FUNCTION__);
+		ODBCPrintError(data,SQL_HANDLE_STMT);
+		goto ODBCError;
+	    }
+	    
+	    if( SQLBindCol(data->u_statement,2,SQL_C_CHAR,&tClassObj.sig_class_name,(sizeof(char) * CLASS_NAME_LEN) ,&col2_len) != SQL_SUCCESS)
+	    {
+		LogMessage("[%s()]: SQLBindCol() call failed \n",
+			   __FUNCTION__);
+		ODBCPrintError(data,SQL_HANDLE_STMT);
+		goto ODBCError;
+	    }
+	    
+	    for(curr_row = 0; curr_row < data->u_rows;curr_row++)
+	    {
+		dbClassificationObj *cPtr = &(*iArrayPtr)[curr_row];
+		
+                /* fetch */
+		if( SQLFetch(data->u_statement) != SQL_SUCCESS)
+		{
+		    LogMessage("[%s()]: SQLFetch error on record [%u] \n",
+			       __FUNCTION__,
+			       curr_row+1);
+		    ODBCPrintError(data,SQL_HANDLE_STMT);
+		    goto ODBCError;
+		}
+		else
+		{
+		    if( (col1_len == SQL_NO_TOTAL || col1_len == SQL_NULL_DATA) ||
+			(col2_len == SQL_NO_TOTAL || col2_len == SQL_NULL_DATA))
+		    {
+			FatalError("[%s()] Seem's like we have some null data ...\n",
+				   __FUNCTION__);
+		    }
+		    
+		    
+		    /* Copy object */
+		    if( (memcpy(cPtr,&tClassObj,sizeof(dbClassificationObj))) != cPtr)
+		    {
+			FatalError("[%s()] : memcpy error ..\n",
+				   __FUNCTION__);
+		    }
+		    
+		    /* Clear temp obj */
+		    memset(&tClassObj,'\0',sizeof(dbClassificationObj));
+		}
+	    }
+
+	    SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
+	    return 0;
+
+    ODBCError:
+	    SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
+	    return 1;
+	    
+
 	    break;
 #endif /* ENABLE_ODBC */
 	    
+#ifdef ENABLE_ORACLE
+    case DB_ORACLE:
+	LogMessage("[%s()], is not yet implemented for DBMS configured\n",
+		   __FUNCTION__);
+	
+	break;
+#endif /* ENABLE_ORACLE */
+	
+	
 #ifdef ENABLE_MSSQL
-	case DB_MSSQL:
-	    LogMessage("[%s()], is not yet implemented for DBMS configured\n",
+    case DB_MSSQL:
+	LogMessage("[%s()], is not yet implemented for DBMS configured\n",
                    __FUNCTION__);
-	    break;
+	break;
 #endif /* ENABLE_MSSQL */
 	    
     default:
@@ -1792,12 +1932,12 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
 	/* XXX */
 	return 1;
     }
-
+    
 #if DEBUG
     db_classification_object_count=array_length;
 #endif
-
-
+    
+    
     if( array_length > 0 )
     {
 	if( (ClassificationCacheUpdateDBid(dbClassArray,array_length,cacheHead)) )
@@ -2169,15 +2309,22 @@ u_int32_t SignatureCacheUpdateDBid(dbSignatureObj *iDBList,u_int32_t array_lengt
  */
 u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,u_int32_t *array_length)
 {
-
-    u_int32_t queryColCount =0;
+    
     u_int32_t curr_row = 0;
+    
+#ifdef ENABLE_ODBC
+    dbSignatureObj tSigObj = {0};
+    SQLSMALLINT col_count = 0;
+#endif /* ENABLE_ODBC */
+
 
 #ifdef ENABLE_MYSQL
+    u_int32_t queryColCount =0;
     int result = 0;
 #endif
     
 #ifdef ENABLE_POSTGRESQL
+
     char *pg_val = NULL;
     int num_row = 0;
     u_int32_t curr_col = 0;    
@@ -2523,6 +2670,198 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
 
 #endif /* ENABLE_POSTGRESQL */
 
+
+#ifdef ENABLE_ODBC
+    case DB_ODBC:
+        if(SQLAllocHandle(SQL_HANDLE_STMT,data->u_connection, &data->u_statement) == SQL_SUCCESS)
+	{
+	    if(SQLExecDirect(data->u_statement,(ODBC_SQLCHAR *)data->SQL_SELECT, SQL_NTS) == SQL_SUCCESS)
+            {
+		    if( SQLNumResultCols(data->u_statement,&col_count) == SQL_SUCCESS)
+		    {
+			if(col_count ==  NUM_ROW_SIGNATURE)
+			{
+			    if(SQLRowCount(data->u_statement, &data->u_rows) != SQL_SUCCESS)
+			    {
+				ODBCPrintError(data,SQL_HANDLE_STMT);
+				FatalError("[%s()]: SQLRowCount() call failed \n",
+					   __FUNCTION__);
+			    }
+
+			    if(data->u_rows)
+			    {
+				if( (*iArrayPtr = SnortAlloc( (sizeof(dbSignatureObj) * data->u_rows))) == NULL)
+				{
+				    goto ODBCError;
+				}
+
+				*array_length = data->u_rows;
+
+			    }
+			    else
+			    {
+				/* We have no records */
+				*array_length = 0;
+				return 0;
+			    }
+
+			}
+			else
+			{
+			    FatalError("[%s()]: The number of column returned does not match [%u] \n",
+				       __FUNCTION__,
+				       NUM_ROW_SIGNATURE);
+			}
+		    }
+		    else
+		    {
+			LogMessage("[%s()]: SQLNumResultCols() call failed \n",
+				   __FUNCTION__);
+			ODBCPrintError(data,SQL_HANDLE_STMT);
+			goto ODBCError;
+		    }
+	    }
+	    else
+	    {
+		LogMessage("[%s()]: SQLExecDirect() call failed \n",
+			   __FUNCTION__);
+		ODBCPrintError(data,SQL_HANDLE_STMT);
+		goto ODBCError;
+		
+	    }
+	}
+	else
+	{
+	    LogMessage("[%s()]: SQLAllocStmt() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}
+
+	SQLINTEGER col1_len = 0;
+	SQLINTEGER col2_len = 0;
+	SQLINTEGER col3_len = 0;
+	SQLINTEGER col4_len = 0;
+	SQLINTEGER col5_len = 0;
+	SQLINTEGER col6_len = 0;
+	SQLINTEGER col7_len = 0;
+	
+	/* Bind template object */
+	if( SQLBindCol(data->u_statement,1,SQL_C_LONG,&tSigObj.db_id,sizeof(u_int32_t),&col1_len) != SQL_SUCCESS)
+	{
+	    LogMessage("[%s()]: SQLBindCol() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}
+	
+	if( SQLBindCol(data->u_statement,2,SQL_C_LONG,&tSigObj.sid,sizeof(u_int32_t),&col2_len) != SQL_SUCCESS)
+	{
+	    LogMessage("[%s()]: SQLBindCol() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}
+	
+	if( SQLBindCol(data->u_statement,3,SQL_C_LONG,&tSigObj.gid,sizeof(u_int32_t) ,&col3_len) != SQL_SUCCESS)
+	{
+	    LogMessage("[%s()]: SQLBindCol() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}
+	
+	if( SQLBindCol(data->u_statement,4,SQL_C_LONG,&tSigObj.rev,sizeof(u_int32_t) ,&col4_len) != SQL_SUCCESS)
+	{
+	    LogMessage("[%s()]: SQLBindCol() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}
+
+	if( SQLBindCol(data->u_statement,5,SQL_C_LONG,&tSigObj.class_id,sizeof(u_int32_t) ,&col4_len) != SQL_SUCCESS)
+	{
+	    LogMessage("[%s()]: SQLBindCol() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}
+	
+	if( SQLBindCol(data->u_statement,6,SQL_C_LONG,&tSigObj.priority_id,sizeof(u_int32_t) ,&col5_len) != SQL_SUCCESS)
+	{
+	    LogMessage("[%s()]: SQLBindCol() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}								
+	
+	if( SQLBindCol(data->u_statement,7,SQL_C_CHAR,tSigObj.message, (sizeof(char)*SIG_MSG_LEN) ,&col6_len) != SQL_SUCCESS)
+	{
+	    LogMessage("[%s()]: SQLBindCol() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}
+	
+	for(curr_row = 0; curr_row < data->u_rows ;curr_row++)
+	{
+	    dbSignatureObj *cPtr = &(*iArrayPtr)[curr_row];
+	    
+	    /* fetch */
+	    if( SQLFetch(data->u_statement) != SQL_SUCCESS)
+	    {
+		LogMessage("[%s()]: SQLFetch error on record [%u] \n",
+			   __FUNCTION__,
+			   curr_row+1);
+		ODBCPrintError(data,SQL_HANDLE_STMT);
+		goto ODBCError;
+	    }
+	    else
+	    {
+		if( (col1_len == SQL_NO_TOTAL || col1_len == SQL_NULL_DATA) ||
+		    (col2_len == SQL_NO_TOTAL || col2_len == SQL_NULL_DATA) ||
+		    (col3_len == SQL_NO_TOTAL || col3_len == SQL_NULL_DATA) ||
+		    (col4_len == SQL_NO_TOTAL || col4_len == SQL_NULL_DATA) ||
+		    (col5_len == SQL_NO_TOTAL || col5_len == SQL_NULL_DATA) ||
+		    (col6_len == SQL_NO_TOTAL || col6_len == SQL_NULL_DATA) ||
+		    (col7_len == SQL_NO_TOTAL || col7_len == SQL_NULL_DATA))
+		{
+		    FatalError("[%s()] Seem's like we have some null data ...\n",
+			       __FUNCTION__);
+		}
+		
+		/* Copy object */
+		if( (memcpy(cPtr,&tSigObj,sizeof(dbSignatureObj))) != cPtr)
+		{
+		    FatalError("[%s()] : memcpy error ..\n",
+			       __FUNCTION__);
+		}
+		
+		cPtr->message[SIG_MSG_LEN-1] = '\0';
+		if( (snort_escape_string_STATIC(cPtr->message,SIG_MSG_LEN,data)))
+		{
+		    FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+			       "[%s], Exiting. \n",
+			       __FUNCTION__,
+			       cPtr->message);
+		}
+		
+		/* Clear temp obj */
+		memset(&tSigObj,'\0',sizeof(dbSignatureObj));
+	    }
+	}
+
+
+	SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
+	return 0;
+
+    ODBCError:
+	SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
+	return 1;
+
+        break;
+#endif /* ENABLE_ODBC */
+
 #ifdef ENABLE_ORACLE
     case DB_ORACLE:
         LogMessage("[%s()], is not yet implemented for DBMS configured\n",
@@ -2531,12 +2870,7 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
         break;
 #endif /* ENABLE_ORACLE */
 
-#ifdef ENABLE_ODBC
-    case DB_ODBC:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
-#endif /* ENABLE_ODBC */
+
 	
 #ifdef ENABLE_MSSQL
     case DB_MSSQL:
@@ -2601,7 +2935,7 @@ u_int32_t SignatureCacheSynchronize(DatabaseData *data,cacheSignatureObj **cache
                 dbSigArray = NULL;
                 array_length = 0;
             }
-
+	    
             LogMessage("[%s()], Call to SignatureCacheUpdateDBid() failed \n",
                        __FUNCTION__);
             return 1;
@@ -2652,10 +2986,17 @@ u_int32_t SignatureCacheSynchronize(DatabaseData *data,cacheSignatureObj **cache
  */
 u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,u_int32_t *array_length)
 {
-    u_int32_t queryColCount =0;
+
     u_int32_t curr_row = 0;
-
-
+    
+#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL))    
+    u_int32_t queryColCount =0;
+#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)) */
+    
+#ifdef ENABLE_ODBC
+    dbReferenceObj tRefObj = {0};
+    SQLSMALLINT col_count = 0;
+#endif /* ENABLE_ODBC */
 
 #ifdef ENABLE_MYSQL
     int result = 0;
@@ -2983,6 +3324,148 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
 
 #endif /* ENABLE_POSTGRESQL */
 
+#ifdef ENABLE_ODBC
+    case DB_ODBC:
+	if(SQLAllocHandle(SQL_HANDLE_STMT,data->u_connection, &data->u_statement) == SQL_SUCCESS)
+	{
+	    if(SQLExecDirect(data->u_statement,(ODBC_SQLCHAR *)data->SQL_SELECT, SQL_NTS) == SQL_SUCCESS)
+            {
+		if( SQLNumResultCols(data->u_statement,&col_count) == SQL_SUCCESS)
+		{
+		    if(col_count ==  NUM_ROW_REF)
+		    {
+			if(SQLRowCount(data->u_statement, &data->u_rows) != SQL_SUCCESS)
+			{
+			    ODBCPrintError(data,SQL_HANDLE_STMT);
+			    FatalError("[%s()]: SQLRowCount() call failed \n",
+				       __FUNCTION__);
+			}
+			
+			if(data->u_rows)
+			{
+			    if( (*iArrayPtr = SnortAlloc( (sizeof(dbReferenceObj) * data->u_rows))) == NULL)
+			    {
+				goto ODBCError;
+			    }
+			    
+			    *array_length = data->u_rows;
+			    
+			}
+			else
+			{
+			    /* We have no records */
+			    *array_length = 0;
+			    return 0;
+			}
+			
+		    }
+		    else
+		    {
+			FatalError("[%s()]: The number of column returned does not match [%u] \n",
+				   __FUNCTION__,
+				   NUM_ROW_CLASSIFICATION);
+		    }
+		}
+		else
+		{
+		    LogMessage("[%s()]: SQLNumResultCols() call failed \n",
+			       __FUNCTION__);
+		    ODBCPrintError(data,SQL_HANDLE_STMT);
+		    goto ODBCError;
+		}
+	    }
+	    else
+	    {
+		LogMessage("[%s()]: SQLExecDirect() call failed \n",
+			   __FUNCTION__);
+		ODBCPrintError(data,SQL_HANDLE_STMT);
+		goto ODBCError;
+	    }
+	}
+	else
+	{
+	    LogMessage("[%s()]: SQLAllocStmt() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}
+	
+	SQLINTEGER col1_len = 0;
+	SQLINTEGER col2_len = 0;
+	SQLINTEGER col3_len = 0;
+	
+	/* Bind template object */
+	if( SQLBindCol(data->u_statement,1,SQL_C_LONG,&tRefObj.ref_id,sizeof(u_int32_t),&col1_len) != SQL_SUCCESS)
+	{
+	    LogMessage("[%s()]: SQLBindCol() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}
+	
+	if( SQLBindCol(data->u_statement,2,SQL_C_LONG,&tRefObj.system_id,sizeof(u_int32_t),&col2_len) != SQL_SUCCESS)
+	{
+	    LogMessage("[%s()]: SQLBindCol() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}
+	
+	if( SQLBindCol(data->u_statement,3,SQL_C_CHAR,&tRefObj.ref_tag,(sizeof(char) *REF_TAG_LEN) ,&col3_len) != SQL_SUCCESS)
+	{
+	    LogMessage("[%s()]: SQLBindCol() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}
+
+	for(curr_row = 0; curr_row < data->u_rows;curr_row++)
+	{
+	    dbReferenceObj *cPtr = &(*iArrayPtr)[curr_row];
+	    
+	    /* fetch */
+	    if( SQLFetch(data->u_statement) != SQL_SUCCESS)
+	    {
+		LogMessage("[%s()]: SQLFetch error on record [%u] \n",
+			   __FUNCTION__,
+			   curr_row+1);
+		ODBCPrintError(data,SQL_HANDLE_STMT);
+		goto ODBCError;
+	    }
+	    else
+	    {
+		if( (col1_len == SQL_NO_TOTAL || col1_len == SQL_NULL_DATA) ||
+		    (col2_len == SQL_NO_TOTAL || col2_len == SQL_NULL_DATA) ||
+		    (col3_len == SQL_NO_TOTAL || col3_len == SQL_NULL_DATA))
+		{
+		    FatalError("[%s()] Seem's like we have some null data ...\n",
+			       __FUNCTION__);
+		}
+		
+		/* Copy object */
+		if( (memcpy(cPtr,&tRefObj,sizeof(dbReferenceObj))) != cPtr)
+		{
+		    FatalError("[%s()] : memcpy error ..\n",
+			       __FUNCTION__);
+		}
+		
+		/* Clear temp obj */
+		memset(&tRefObj,'\0',sizeof(dbReferenceObj));
+	    }
+	}
+	
+
+	SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
+	return 0;
+	
+    ODBCError:
+
+	SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
+	return 1;
+	
+        break;
+#endif /* ENABLE_ODBC */
+
 #ifdef ENABLE_ORACLE
     case DB_ORACLE:
         LogMessage("[%s()], is not yet implemented for DBMS configured\n",
@@ -2990,13 +3473,6 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
 
         break;
 #endif /* ENABLE_ORACLE */
-
-#ifdef ENABLE_ODBC
-    case DB_ODBC:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
-#endif /* ENABLE_ODBC */
 
 #ifdef ENABLE_MSSQL
     case DB_MSSQL:
@@ -3031,9 +3507,17 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
 u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int32_t *array_length)
 {
 
-    u_int32_t queryColCount =0;
     u_int32_t curr_row = 0;
-
+    
+#if (defined(ENABLE_ODBC))
+    dbSystemObj tSystemObj = {0};
+    SQLSMALLINT col_count = 0;
+#endif /* (defined(ENABLE_ODBC)) */
+    
+#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL))    
+    u_int32_t queryColCount =0;
+#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)) */
+    
 #ifdef ENABLE_MYSQL
     int result = 0;
 #endif
@@ -3352,6 +3836,142 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
 
 #endif /* ENABLE_POSTGRESQL */
 
+#ifdef ENABLE_ODBC
+    case DB_ODBC:
+
+	if(SQLAllocHandle(SQL_HANDLE_STMT,data->u_connection, &data->u_statement) == SQL_SUCCESS)
+	{
+
+	    if(SQLExecDirect(data->u_statement,(ODBC_SQLCHAR *)data->SQL_SELECT, SQL_NTS) == SQL_SUCCESS)
+	    {
+		if( SQLNumResultCols(data->u_statement,&col_count) == SQL_SUCCESS)
+		{
+		    if(col_count == NUM_ROW_REFERENCE_SYSTEM)
+		    {
+			if(SQLRowCount(data->u_statement, &data->u_rows) != SQL_SUCCESS)
+			{
+			    ODBCPrintError(data,SQL_HANDLE_STMT);
+			    FatalError("[%s()]: SQLRowCount() call failed \n",
+				       __FUNCTION__);
+			}
+			
+			if(data->u_rows)
+			{
+			    if( (*iArrayPtr = SnortAlloc( (sizeof(dbSystemObj) * data->u_rows))) == NULL)
+			    {
+				goto ODBCError;
+			    }
+			    
+			    *array_length = data->u_rows;
+			    
+			}
+			else
+			{
+			    /* We have no records */
+			    *array_length = 0;
+			    return 0;
+			}
+			
+		    }
+		    else
+		    {
+			FatalError("[%s()]: The number of column returned does not match [%u] \n",
+				   __FUNCTION__,
+				   NUM_ROW_REFERENCE_SYSTEM);
+		    }
+		}
+		else
+		{
+			LogMessage("[%s()]: SQLNumResultCols() call failed \n",
+				   __FUNCTION__);
+			ODBCPrintError(data,SQL_HANDLE_STMT);
+			goto ODBCError;
+			}
+		
+	    }
+	    else
+	    {
+		LogMessage("[%s()]: SQLExecDirect() call failed \n",
+			   __FUNCTION__);
+		ODBCPrintError(data,SQL_HANDLE_STMT);
+		goto ODBCError;
+		
+	    }
+	}
+	else
+	{
+	    LogMessage("[%s()]: SQLAllocStmt() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}
+	
+	SQLINTEGER col1_len = 0;
+	SQLINTEGER col2_len = 0;
+	    
+	    /* Bind template object */
+	    if( SQLBindCol(data->u_statement,1,SQL_C_LONG,&tSystemObj.db_ref_system_id,sizeof(u_int32_t),&col1_len) != SQL_SUCCESS)
+	    {
+		LogMessage("[%s()]: SQLBindCol() call failed \n",
+			   __FUNCTION__);
+		ODBCPrintError(data,SQL_HANDLE_STMT);
+		goto ODBCError;
+	    }
+	    
+	    if( SQLBindCol(data->u_statement,2,SQL_C_CHAR,&tSystemObj.ref_system_name,(sizeof(char) * SYSTEM_NAME_LEN) ,&col2_len) != SQL_SUCCESS)
+	    {
+		LogMessage("[%s()]: SQLBindCol() call failed \n",
+			   __FUNCTION__);
+		ODBCPrintError(data,SQL_HANDLE_STMT);
+		goto ODBCError;
+	    }
+	    
+	    for(curr_row = 0; curr_row < data->u_rows;curr_row++)
+	    {
+		dbSystemObj *cPtr = &(*iArrayPtr)[curr_row];
+		
+                /* fetch */
+		if( SQLFetch(data->u_statement) != SQL_SUCCESS)
+		{
+		    LogMessage("[%s()]: SQLFetch error on record [%u] \n",
+			       __FUNCTION__,
+			       curr_row+1);
+		    ODBCPrintError(data,SQL_HANDLE_STMT);
+		    goto ODBCError;
+		}
+		else
+		{
+		    if( (col1_len == SQL_NO_TOTAL || col1_len == SQL_NULL_DATA) ||
+			(col2_len == SQL_NO_TOTAL || col2_len == SQL_NULL_DATA))
+		    {
+			FatalError("[%s()] Seem's like we have some null data ...\n",
+				   __FUNCTION__);
+		    }
+		    
+		    
+		    /* Copy object */
+		    if( (memcpy(cPtr,&tSystemObj,sizeof(dbSystemObj))) != cPtr)
+		    {
+			FatalError("[%s()] : memcpy error ..\n",
+				   __FUNCTION__);
+		    }
+		    
+		    /* Clear temp obj */
+		    memset(&tSystemObj,'\0',sizeof(dbSystemObj));
+		}
+	    }
+
+
+	    SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
+	    return 0;
+
+    ODBCError:
+	    SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
+	    return 1;
+
+        break;
+#endif /* ENABLE_ODBC */
+
 #ifdef ENABLE_ORACLE
     case DB_ORACLE:
         LogMessage("[%s()], is not yet implemented for DBMS configured\n",
@@ -3359,13 +3979,6 @@ u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int3
 
         break;
 #endif /* ENABLE_ORACLE */
-
-#ifdef ENABLE_ODBC
-    case DB_ODBC:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
-#endif /* ENABLE_ODBC */
 
 #ifdef ENABLE_MSSQL
     case DB_MSSQL:
@@ -4030,10 +4643,19 @@ u_int32_t GenerateSigRef(cacheSignatureReferenceObj **iHead,cacheSignatureObj *s
  */
 u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferenceObj **iArrayPtr,u_int32_t *array_length)
 {
+    
 
-    u_int32_t queryColCount =0;
     u_int32_t curr_row = 0;
-
+    
+#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL))
+    u_int32_t queryColCount =0;
+#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)) */
+    
+#ifdef ENABLE_ODBC
+    dbSignatureReferenceObj tSigRefObj = {0};
+    SQLSMALLINT col_count = 0;
+#endif /* ENABLE_ODBC */
+    
 #ifdef ENABLE_MYSQL
     int result = 0;
 #endif
@@ -4330,6 +4952,152 @@ u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferen
 
 #endif /* ENABLE_POSTGRESQL */
 
+#ifdef ENABLE_ODBC
+    case DB_ODBC:
+	
+	if(SQLAllocHandle(SQL_HANDLE_STMT,data->u_connection, &data->u_statement) == SQL_SUCCESS)
+	{
+	    if(SQLExecDirect(data->u_statement,(ODBC_SQLCHAR *)data->SQL_SELECT, SQL_NTS) == SQL_SUCCESS)
+            {
+		if( SQLNumResultCols(data->u_statement,&col_count) == SQL_SUCCESS)
+		{
+		    if(col_count == NUM_ROW_SIGREF)
+		    {
+			if(SQLRowCount(data->u_statement, &data->u_rows) != SQL_SUCCESS)
+			{
+			    ODBCPrintError(data,SQL_HANDLE_STMT);
+			    FatalError("[%s()]: SQLRowCount() call failed \n",
+				       __FUNCTION__);
+			}
+			
+			if(data->u_rows)
+			{
+			    if( (*iArrayPtr = SnortAlloc( (sizeof(dbSignatureReferenceObj) * data->u_rows))) == NULL)
+			    {
+				goto ODBCError;
+			    }
+			    
+			    *array_length = data->u_rows;
+			}
+			else
+			{
+			    /* We have no records */
+			    *array_length = 0;
+			    return 0;
+			}
+			
+		    }
+		    else
+			{
+			    FatalError("[%s()]: The number of column returned does not match [%u] \n",
+				       __FUNCTION__,
+				       NUM_ROW_CLASSIFICATION);
+			}
+		}
+		else
+		{
+		    LogMessage("[%s()]: SQLNumResultCols() call failed \n",
+			       __FUNCTION__);
+		    ODBCPrintError(data,SQL_HANDLE_STMT);
+		    goto ODBCError;
+		}
+		
+	    }
+	    else
+	    {
+		    LogMessage("[%s()]: SQLExecDirect() call failed \n",
+			       __FUNCTION__);
+		    ODBCPrintError(data,SQL_HANDLE_STMT);
+		    goto ODBCError;
+		    
+	    }
+	}
+	else
+	{
+	    LogMessage("[%s()]: SQLAllocStmt() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}
+	
+	SQLINTEGER col1_len = 0;
+	SQLINTEGER col2_len = 0;
+	SQLINTEGER col3_len = 0;
+	
+	/* Bind template object */
+	if( SQLBindCol(data->u_statement,1,SQL_C_LONG,&tSigRefObj.db_ref_id,sizeof(u_int32_t),&col1_len) != SQL_SUCCESS)
+	{
+	    LogMessage("[%s()]: SQLBindCol() call failed \n",
+		       __FUNCTION__);
+		ODBCPrintError(data,SQL_HANDLE_STMT);
+		goto ODBCError;
+	}
+
+	if( SQLBindCol(data->u_statement,2,SQL_C_LONG,&tSigRefObj.db_sig_id,sizeof(u_int32_t),&col1_len) != SQL_SUCCESS)
+	{
+	    LogMessage("[%s()]: SQLBindCol() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}
+	
+	if( SQLBindCol(data->u_statement,3,SQL_C_LONG,&tSigRefObj.ref_seq,sizeof(u_int32_t),&col1_len) != SQL_SUCCESS)
+	{
+	    LogMessage("[%s()]: SQLBindCol() call failed \n",
+		       __FUNCTION__);
+	    ODBCPrintError(data,SQL_HANDLE_STMT);
+	    goto ODBCError;
+	}
+	
+	    
+	for(curr_row = 0; curr_row < data->u_rows;curr_row++)
+	{
+	    dbSignatureReferenceObj *cPtr = &(*iArrayPtr)[curr_row];
+	    
+	    /* fetch */
+	    if( SQLFetch(data->u_statement) != SQL_SUCCESS)
+		{
+		    LogMessage("[%s()]: SQLFetch error on record [%u] \n",
+			       __FUNCTION__,
+			       curr_row+1);
+		    ODBCPrintError(data,SQL_HANDLE_STMT);
+		    goto ODBCError;
+		}
+	    else
+	    {
+		if( (col1_len == SQL_NO_TOTAL || col1_len == SQL_NULL_DATA) ||
+		    (col2_len == SQL_NO_TOTAL || col2_len == SQL_NULL_DATA) ||
+		    (col3_len == SQL_NO_TOTAL || col3_len == SQL_NULL_DATA))
+		{
+		    FatalError("[%s()] Seem's like we have some null data ...\n",
+			       __FUNCTION__);
+		}
+		
+		/* Copy object */
+		if( (memcpy(cPtr,&tSigRefObj,sizeof(dbSignatureReferenceObj))) != cPtr)
+		{
+		    FatalError("[%s()] : memcpy error ..\n",
+			       __FUNCTION__);
+		}
+		
+		/* Clear temp obj */
+		memset(&tSigRefObj,'\0',sizeof(dbSignatureReferenceObj));
+	    }
+	}
+	
+
+	
+
+	SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
+	return 0;
+	
+    ODBCError:
+	SQLFreeHandle(SQL_HANDLE_STMT,data->u_statement);
+	return 1;
+	
+        break;
+#endif /* ENABLE_ODBC */
+	
 #ifdef ENABLE_ORACLE
     case DB_ORACLE:
         LogMessage("[%s()], is not yet implemented for DBMS configured\n",
@@ -4337,13 +5105,6 @@ u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferen
 
         break;
 #endif /* ENABLE_ORACLE */
-
-#ifdef ENABLE_ODBC
-    case DB_ODBC:
-        LogMessage("[%s()], is not yet implemented for DBMS configured\n",
-                   __FUNCTION__);
-        break;
-#endif /* ENABLE_ODBC */
 
 #ifdef ENABLE_MSSQL
     case DB_MSSQL:

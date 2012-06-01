@@ -36,6 +36,9 @@
    ++ This will be present in the next version of the schema database plugin.
 */
 /*-- TODO */
+
+
+
 #include "output-plugins/spo_database.h"
 #include "output-plugins/spo_database_cache.h"
 
@@ -2055,6 +2058,23 @@ u_int32_t SignatureLookupDatabase(DatabaseData *data,dbSignatureObj *sObj)
 	return 1;
     }
     
+    if(db_sig_id == 0)
+    {
+	/* XXX */
+	LogMessage("[%s()]: A lookup received a result but a result of 0 shouldn't be returned,\n"
+		   "\t this shouldn't happen for sid[%u] sid[%u] rev[%u] class_id[%u] priority_id[%u] \n",
+		   sObj->sid,
+		   sObj->gid,
+		   sObj->rev,
+		   sObj->class_id,
+		   sObj->priority_id);
+	
+	/* Added for bugcheck */
+	assert(db_sig_id != 0);
+	/* Will die before this :) */
+	return 1;
+    }
+    
     /* Found */
     sObj->db_id = db_sig_id;
     return 0;
@@ -2108,10 +2128,21 @@ u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cache
         
     while(cacheHead != NULL)
     {
-
-	if(cacheHead->flag & CACHE_INTERNAL_ONLY)
+	
+	/* This condition block is a shortcut in the signature insertion code.
+	** Preventing signature that have not been under "revision" (rev == 0) to be inserted in the database.
+	** It will also prevent the code to take wrong execution path downstream.
+	*/
+	if( ((cacheHead->flag & CACHE_INTERNAL_ONLY) && 
+	     (((cacheHead->obj.gid != 1 && cacheHead->obj.gid != 3)) ||
+	      ((cacheHead->obj.gid == 1 || cacheHead->obj.gid == 3) && cacheHead->obj.rev != 0))))
 	{
+	/* This condition block is a shortcut in the signature insertion code.
+	** Preventing signature that have not been under "revision" (rev == 0) to be inserted in the database.
+	** It will also prevent the code to take wrong execution path downstream.
+	*/
 
+	    
 #if DEBUG
 	    inserted_signature_object_count++;
 #endif 
@@ -2195,7 +2226,7 @@ u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cache
 		}
 		break;
 	    }
-		
+	    
 	    if(Insert(data->SQL_INSERT,data,1))
 	    {
 		/* XXX */
@@ -2210,7 +2241,7 @@ u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cache
 	    
 	    cacheHead->obj.db_id = db_sig_id;
 
-
+	    
 	    cacheHead->flag ^=  (CACHE_INTERNAL_ONLY | CACHE_BOTH);
 	}
 

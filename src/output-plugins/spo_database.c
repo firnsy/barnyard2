@@ -35,8 +35,6 @@
  *
  */
 
-
-
 #include "output-plugins/spo_database.h"
 
 void DatabaseCleanSelect(DatabaseData *data)
@@ -1215,7 +1213,11 @@ void ParseDatabaseArgs(DatabaseData *data)
     return;
 }
 
-
+/*
+** This function will either insert a "new" signature, present in file and not in db and update
+** the cache information (db_sig_id) or update an existing signature using its db_sig_id.
+**
+*/
 u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUpdateSig)
 {
 
@@ -1227,7 +1229,6 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
 	/* XXX */
 	return 1;
     }
-    
     
     DatabaseCleanSelect(data);
     DatabaseCleanInsert(data);
@@ -1273,19 +1274,67 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
 	break;
     }
     
-    
-    if( SnortSnprintf(data->SQL_INSERT,data->SQL_INSERT_SIZE,
-		      SQL_UPDATE_SPECIFIC_SIGNATURE,
-		      iUpdateSig->obj.class_id,
-		      iUpdateSig->obj.priority_id,
-		      iUpdateSig->obj.rev,
-		      iUpdateSig->obj.db_id))
+    if(iUpdateSig->flag & CACHE_BOTH ||
+       iUpdateSig->flag & CACHE_DATABASE_ONLY)
     {
-	/* XXX */
-	LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_INSERT in [%s()] \n",
-		   __FUNCTION__);
-
-	return 1;
+	if( SnortSnprintf(data->SQL_INSERT,data->SQL_INSERT_SIZE,
+			  SQL_UPDATE_SPECIFIC_SIGNATURE,
+			  iUpdateSig->obj.class_id,
+			  iUpdateSig->obj.priority_id,
+			  iUpdateSig->obj.rev,
+			  iUpdateSig->obj.db_id))
+	{
+	    /* XXX */
+	    LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_INSERT in [%s()] \n",
+		       __FUNCTION__);
+	    
+	    return 1;
+	}
+    }
+    else
+    {
+	switch(data->dbtype_id)
+	{
+#if defined(ENABLE_POSTGRESQL)
+	case DB_POSTGRESQL:
+	    if( SnortSnprintf(data->SQL_INSERT,data->SQL_INSERT_SIZE,
+			      PGSQL_SQL_INSERT_SIGNATURE,
+			      iUpdateSig->obj.sid,
+			      iUpdateSig->obj.gid,
+			      iUpdateSig->obj.rev,
+			      iUpdateSig->obj.class_id,
+			      iUpdateSig->obj.priority_id,
+			      iUpdateSig->obj.message))
+	    {
+		/* XXX */
+		LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_INSERT in [%s()] \n",
+			   __FUNCTION__);
+		
+		return 1;
+	    }
+	    break;
+	    
+#endif
+	default:
+	    if( SnortSnprintf(data->SQL_INSERT,data->SQL_INSERT_SIZE,
+			      SQL_INSERT_SIGNATURE,
+			      iUpdateSig->obj.sid,
+			      iUpdateSig->obj.gid,
+			      iUpdateSig->obj.rev,
+			      iUpdateSig->obj.class_id,
+			      iUpdateSig->obj.priority_id,
+			      iUpdateSig->obj.message))
+	    {
+		/* XXX */
+		LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_INSERT in [%s()] \n",
+			   __FUNCTION__);
+		
+		return 1;
+	    }
+	    
+	    break;
+	    
+	}
     }
     
     
@@ -1314,23 +1363,34 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
 	
         return 1;
     }
-    
-    
-    if(db_sig_id != iUpdateSig->obj.db_id)
+
+    if(iUpdateSig->flag & CACHE_INTERNAL_ONLY)
     {
-	/* XXX */
-	LogMessage("ERROR database: Returned signature_id [%u] is not equal to updated signature_id [%u] in [%s()] \n",
-		   db_sig_id,
-		   iUpdateSig->obj.db_id,
-		   __FUNCTION__);
+	iUpdateSig->flag ^=(CACHE_INTERNAL_ONLY | CACHE_BOTH);
+	iUpdateSig->obj.db_id = db_sig_id;
 	
-        return 1;
+    }
+    else if(iUpdateSig->flag & CACHE_BOTH ||
+	    iUpdateSig->flag & CACHE_DATABASE_ONLY)
+    {
+	if(db_sig_id != iUpdateSig->obj.db_id)
+	{
+	    /* XXX */
+	    LogMessage("ERROR database: Returned signature_id [%u] is not equal to updated signature_id [%u] in [%s()] \n",
+		       db_sig_id,
+		       iUpdateSig->obj.db_id,
+		       __FUNCTION__);
+	    
+	    return 1;
+	}
     }
     
     return 0;
     
 }
 
+
+/* NOTE: -elz this function need to be broken up.. */
 int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t event_type, 
 				      u_int32_t *psig_id)
 {
@@ -1338,18 +1398,18 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
     cacheSignatureObj *unInitSig = NULL;
     dbSignatureObj sigInsertObj= {0};
 
-    
-    
     u_int32_t db_classification_id = 0;
     
     u_int32_t sigMatchCount = 0;
     u_int32_t x =0;
-
+    
     u_int32_t sid = 0;
     u_int32_t gid = 0;
     u_int32_t revision = 0;
     u_int32_t priority = 0;
     u_int32_t classification = 0;
+
+    u_int32_t oldRevision = 0;
     
     if( (data == NULL)   ||
         (event == NULL)  ||
@@ -1410,6 +1470,9 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 		(data->mc.plgSigCompare[0].cacheSigObj->obj.priority_id == priority))
 	    {
 		
+                /* Added for bugcheck */
+		assert( data->mc.plgSigCompare[0].cacheSigObj->obj.db_id != 0);		
+		
 		*psig_id = data->mc.plgSigCompare[0].cacheSigObj->obj.db_id;
 		return 0;
 	    }
@@ -1417,6 +1480,7 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 	    /* We hit a case where the signature never has been present beside being inserted by the process from the map file*/
 	    if(data->mc.plgSigCompare[0].cacheSigObj->obj.rev == 0)
 	    {
+		oldRevision = data->mc.plgSigCompare[0].cacheSigObj->obj.rev;
 		data->mc.plgSigCompare[0].cacheSigObj->obj.rev = revision;
 		data->mc.plgSigCompare[0].cacheSigObj->obj.class_id = db_classification_id;
 		data->mc.plgSigCompare[0].cacheSigObj->obj.priority_id = priority;
@@ -1425,15 +1489,22 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 		if( (dbSignatureInformationUpdate(data,data->mc.plgSigCompare[0].cacheSigObj)))
 		{
 		    /* XXX */
-		    LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for [gid :%u ] [sid: %u] [rev: %u] \n",
+		    LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for : \n"
+			       "[gid :%u] [sid: %u] [rev: %u] __ [upd rev: %u] [upd class: %u] [upd pri %u]\n",
 			       __FUNCTION__,
 			       __LINE__,
 			       gid,
 			       sid,
-			       revision);
+			       oldRevision,
+			       revision,
+			       db_classification_id,
+			       priority);
 		    return 1;
 		}
-		
+
+		/* Added for bugcheck */
+		assert( data->mc.plgSigCompare[0].cacheSigObj->obj.db_id != 0);
+
 		*psig_id = data->mc.plgSigCompare[0].cacheSigObj->obj.db_id;
                 return 0;
 	    }
@@ -1446,21 +1517,23 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 		/* If we have an "uninitialized signature save it */
 		if(data->mc.plgSigCompare[x].cacheSigObj->obj.rev == 0)
 		{
-		    unInitSig = data->mc.plgSigCompare[x].cacheSigObj;
+		    memcpy(&unInitSig,data->mc.plgSigCompare[x].cacheSigObj,sizeof(cacheSignatureObj));
 		}
 		
 		if( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev == revision) &&
 		    (data->mc.plgSigCompare[x].cacheSigObj->obj.class_id == db_classification_id) && 
 		    (data->mc.plgSigCompare[x].cacheSigObj->obj.priority_id == priority))
 		{
+		    /* Added for bugcheck */
+		    assert( data->mc.plgSigCompare[x].cacheSigObj->obj.db_id != 0);
+
 		    *psig_id = data->mc.plgSigCompare[x].cacheSigObj->obj.db_id;
 		    return 0;
 		}
 	    }
-	
+	    
 	    if(unInitSig != NULL)
 	    {
-		
 #if DEBUG
 		DEBUG_WRAP(DebugMessage(DB_DEBUG,"[%s()], [%u] signatures where found in cache for [gid: %u] [sid: %u] but non matched\n" 
 					"updating database [db_sig_id: %u] with [rev: 0] to [rev: %u] \n",
@@ -1480,15 +1553,22 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
                 if( (dbSignatureInformationUpdate(data,unInitSig)))
                 {
                     /* XXX */
-		    LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for [gid :%u ] [sid: %u] [rev: %u] \n",
+		    LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for : \n"
+			       "[gid :%u] [sid: %u] [rev: %u] __ [upd rev: %u] [upd class: %u] [upd pri %u]\n",
 			       __FUNCTION__,
 			       __LINE__,
 			       gid,
 			       sid,
-			       revision);
+			       oldRevision,
+			       revision,
+			       db_classification_id,
+			       priority);
                     return 1;
                 }
 		
+		/* Added for bugcheck */
+		assert( unInitSig->obj.db_id != 0);
+
                 *psig_id = unInitSig->obj.db_id;
                 return 0;
 	    }
@@ -1510,11 +1590,11 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
     {
 	/* The signature was not found we will have to insert it */
 	LogMessage("WARNING [%s()]: [Event: %u] with [gid: %u] [sid: %u] [rev: %u] [classification: %u] [priority: %u]\n"
-		   "\t Was not found in barnyard2 signature cache, this could lead to display inconsistency.\n"
-		   "\t To prevent this warning, make sure your sid-msg.map and gen-msg.map file are up to date with the snort process logging to the unified2 file.\n"
-		   "\t The inserted signature will not have its information present in the sig_reference table. \n"
+		   "\t sas not found in barnyard2 signature cache, this could lead to display inconsistency.\n"
+		   "\t To prevent this warning, make sure that your sid-msg.map and gen-msg.map file are up to date with the snort process logging to the spool file.\n"
+		   "\t The new inserted signature will not have its information present in the sig_reference table. \n"
 		   "\t Note that the message inserted in the signature table will be snort default message \"Snort Alert [gid:sid:revision]\" \n"
-		   "\t You can allways update the message via a SQL query if you want it to be displayed correctly by your favorite interface\n",
+		   "\t You can allways update the message via a SQL query if you want it to be displayed correctly by your favorite interface\n\n",
 		   __FUNCTION__,
 		   ntohl(((Unified2EventCommon *)event)->event_id),
 		   gid,
@@ -1527,7 +1607,7 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 			  gid,sid,revision))
 	{
 	    /* XXX */
-	return 1;
+	    return 1;
 	}
 	
 	
@@ -1538,13 +1618,12 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 		       __FUNCTION__);
 	    goto func_err;
 	}
-
 	
 	/* 
 	   There is some little overhead traversing the list once 
 	   the insertion is done on the HEAD so
 	   unless you run 1M rules and still there it should 
-	   complete in just a few more jiffies, also its better his way
+	   complete in just a few more jiffies, also its better this way
 	   than to query the database everytime isin't.
 	*/    
 	if(SignaturePopulateDatabase(data,data->mc.cacheSignatureHead,1))
@@ -1567,6 +1646,9 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
         }
 	
     }
+    
+    /* Added for bugcheck */
+    assert( data->mc.cacheSignatureHead->obj.db_id != 0);
     
     *psig_id = data->mc.cacheSignatureHead->obj.db_id;
     return 0;
@@ -3787,7 +3869,10 @@ Select_reconnect:
  ******************************************************************************/
 void Connect(DatabaseData * data)
 {
+
+#ifdef ENABLE_ODBC
     ODBC_SQLRETURN ret;
+#endif /* ENABLE_ODBC */
 
     if(data == NULL)
     {

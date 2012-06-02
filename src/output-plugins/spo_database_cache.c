@@ -1059,7 +1059,7 @@ u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache,Databa
 	    
 	    TobjNode->next = iMasterCache->cacheSignatureHead;
 	    iMasterCache->cacheSignatureHead = TobjNode;
-	
+	    	    
 	    if(cNode->refs != NULL)
 	    {
 		if( (ConvertReferenceCache(cNode->refs,iMasterCache,TobjNode,data)))
@@ -4066,7 +4066,7 @@ u_int32_t SystemCacheUpdateDBid(dbSystemObj *iDBList,u_int32_t array_length,cach
             if( (TobjNode = SnortAlloc(sizeof(cacheSystemObj))) == NULL)
             {
                 /* XXX */
-		printf("Failed to allocate ? \n");
+		LogMessage("[%s()]: Error Failed to allocate..\n",__FUNCTION__);
                 return 1;
             }
 	    
@@ -4474,13 +4474,14 @@ u_int32_t SystemCacheSynchronize(DatabaseData *data,cacheSystemObj **cacheHead)
     
     u_int32_t array_length = 0;
 
-    if( (data == NULL) ||
+    if( (data == NULL)  ||
         (*cacheHead == NULL))
     {
         /* XXX */
         return 1;
     }
-    
+
+
     if( (SystemPullDataStore(data,&dbSysArray,&array_length)))
     {
         /* XXX */
@@ -4627,31 +4628,36 @@ u_int32_t GenerateSigRef(cacheSignatureReferenceObj **iHead,cacheSignatureObj *s
 	return 1;
     }
     
+    
     while(sigHead != NULL)
     {
-	for(node_count = 0; node_count < sigHead->obj.ref_count; node_count++)
+	/* Do not generate sig_ref for internal sig only, since they are not inserted anymore. */
+	if(sigHead->obj.db_id != 0)
 	{
-	    memset(&lookupNode,'\0',sizeof(dbSignatureReferenceObj));
-	    lookupNode.db_ref_id = sigHead->obj.ref[node_count]->obj.ref_id;	 
-	    lookupNode.db_sig_id = sigHead->obj.db_id;
-	    lookupNode.ref_seq = (node_count + 1);
-	    
-	    if( (cacheSignatureReferenceLookup(&lookupNode,*iHead)) == 0 )
+	    for(node_count = 0; node_count < sigHead->obj.ref_count; node_count++)
 	    {
-		if( (newNode = SnortAlloc(sizeof(cacheSignatureReferenceObj))) == NULL)
+		memset(&lookupNode,'\0',sizeof(dbSignatureReferenceObj));
+		lookupNode.db_ref_id = sigHead->obj.ref[node_count]->obj.ref_id;	 
+		lookupNode.db_sig_id = sigHead->obj.db_id;
+		lookupNode.ref_seq = (node_count + 1);
+		
+		if( (cacheSignatureReferenceLookup(&lookupNode,*iHead)) == 0 )
 		{
-		    /* XXX */
-		    return 1;
-		}
-		
-		memcpy(&newNode->obj,&lookupNode,sizeof(dbSignatureReferenceObj));
-		newNode->flag ^= CACHE_INTERNAL_ONLY;
-		
-		newNode->next = *iHead;
-		*iHead = newNode;
+		    if( (newNode = SnortAlloc(sizeof(cacheSignatureReferenceObj))) == NULL)
+		    {
+			/* XXX */
+			return 1;
+		    }
+		    
+		    memcpy(&newNode->obj,&lookupNode,sizeof(dbSignatureReferenceObj));
+		    newNode->flag ^= CACHE_INTERNAL_ONLY;
+		    
+		    newNode->next = *iHead;
+		    *iHead = newNode;
 #if DEBUG
-		file_sigref_object_count++;
+		    file_sigref_object_count++;
 #endif
+		}
 	    }
 	}
         sigHead = sigHead->next;	
@@ -4675,7 +4681,6 @@ u_int32_t GenerateSigRef(cacheSignatureReferenceObj **iHead,cacheSignatureObj *s
 u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferenceObj **iArrayPtr,u_int32_t *array_length)
 {
     
-
     u_int32_t curr_row = 0;
     
 #if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL))
@@ -5490,6 +5495,7 @@ u_int32_t SigRefSynchronize(DatabaseData *data,cacheSignatureReferenceObj **cach
     
     /* We initialize the structure in a la */
     if( (GenerateSigRef(cacheHead,cacheSigHead)))
+    //if( (GenerateSigRef(cacheHead,data->mc.cacheSignatureHead)))
     {
 	/* XXX */
 	return 1;
@@ -5726,23 +5732,29 @@ u_int32_t CacheSynchronize(DatabaseData *data)
     
     
     //System Synchronize
-    if( (SystemCacheSynchronize(data,&data->mc.cacheSystemHead)))
+    if(data->mc.cacheSystemHead != NULL)
     {
-	/* XXX */
-	LogMessage("[%s()]:, SystemCacheSyncronize() call failed. \n",
-		   __FUNCTION__);
-	return 1;
+	if( (SystemCacheSynchronize(data,&data->mc.cacheSystemHead)))
+	{
+	    /* XXX */
+	    LogMessage("[%s()]:, SystemCacheSyncronize() call failed. \n",
+		       __FUNCTION__);
+	    return 1;
+	}
+	
+	//SigRef Synchronize 
+	if( (SigRefSynchronize(data,&data->mc.cacheSigReferenceHead,data->mc.cacheSignatureHead)))
+	{
+	    /* XXX */
+	    LogMessage("[%s()]: SigRefSynchronize() call failed \n",
+		       __FUNCTION__);
+	    return 1;
+	}
     }
-    
-    //SigRef Synchronize 
-    if( (SigRefSynchronize(data,&data->mc.cacheSigReferenceHead,data->mc.cacheSignatureHead)))
+    else
     {
-	/* XXX */
-	LogMessage("[%s()]: SigRefSynchronize() call failed \n",
-		   __FUNCTION__);
-	return 1;
+	LogMessage("\n[%s()],INFO: No system was found in cache (from signature map file), will not process or synchronize informations found in the database \n\n",__FUNCTION__);
     }
-
 #if DEBUG
 
     DEBUG_WRAP(DebugMessage(DB_DEBUG,"================================================"

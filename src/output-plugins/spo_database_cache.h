@@ -84,8 +84,16 @@
 #define NUM_ROW_CLASSIFICATION 2
 #define NUM_ROW_SIGNATURE 7
 
-
+/*
 #if defined(ENABLE_POSTGRESQL)
+
+** Note : ELZ
+**
+** Initially i tought that using E'' would escape some issue. 
+** It turns out it would also create other issue like automatically
+** encode special sequence and its not a good thing since in initial testing non of the signature has such char, but it turned out
+** some had and it would wreck logical havock, so to prevent bugs Queries have been keept commented but the code has been reverted to normal behavior.
+** Ref: http://www.postgresql.org/docs/9.1/static/datatype-binary.html
 
 #define PGSQL_SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM "INSERT INTO reference_system (ref_system_name) VALUES (E'%s');"
 #define PGSQL_SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM "SELECT ref_system_id FROM reference_system WHERE ref_system_name = E'%s';"
@@ -101,10 +109,12 @@
     "(sig_class_id = '%u') AND "					\
     "(sig_priority = '%u') AND "					\
     "(sig_name = E'%s'); "						\
-    
 #endif 
+*/  
 
 //#if defined(ENABLE_MYSQL) || defined (ENABLE_ODBC) || defined (ENABLE_ORACLE) || defined (ENABLE_MSSQL)    
+//#endif
+
 
 #define SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM "INSERT INTO reference_system (ref_system_name) VALUES ('%s');"
 #define SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM "SELECT ref_system_id FROM reference_system WHERE ref_system_name = '%s';"
@@ -120,8 +130,6 @@
     "(sig_class_id = '%u') AND "					\
     "(sig_priority = '%u') AND "					\
     "(sig_name = '%s'); "						\
-
-//#endif
 
 
 /* Used for backward compatibility with older barnyard process */

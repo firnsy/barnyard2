@@ -28,17 +28,6 @@
  *
  */
 
-/*-- TODO */
-/* 
-   Standardize datbase DB API to work with abstract structure form
-   so that it is easyer to work with a standard row fetching mechanism
-   for example (less code dup's and easyer to make transforms. 
-   ++ This will be present in the next version of the schema database plugin.
-*/
-/*-- TODO */
-
-
-
 #include "output-plugins/spo_database.h"
 #include "output-plugins/spo_database_cache.h"
 
@@ -114,7 +103,6 @@ u_int32_t CacheSynchronize(DatabaseData *data);
 /* Destructor */
 void MasterCacheFlush(DatabaseData *data);
 /* Destructor */
-
 
 
 extern SigNode *sigTypes;
@@ -788,8 +776,6 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
     u_int32_t tItr = 0;
     u_int32_t refFound = 0;
     
-
-    
     if( (iMasterCache == NULL) || 
 	(cSobj == NULL))
     {
@@ -821,7 +807,6 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
 			   __FUNCTION__,
 			   sys_LobjNode.ref_system_name);
 	    }
-
 
 	}
 	
@@ -869,6 +854,14 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
 	    strncpy(ref_LobjNode.ref_tag,cNode->id,REF_TAG_LEN);
 	    ref_LobjNode.ref_tag[REF_TAG_LEN-1] = '\0'; //safety			
 	    
+            if( (snort_escape_string_STATIC(ref_LobjNode.ref_tag,REF_TAG_LEN,data)))
+            {
+                FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+                           "[%s], Exiting. \n",
+                           __FUNCTION__,
+                           ref_LobjNode.ref_tag);
+            }
+	    
 	    /* Lookup Reference node */
 	    if((cacheReferenceLookup(&ref_LobjNode,sysRetCacheNode->obj.refList,&retRefLookupNode) == 0))
 	    {
@@ -877,7 +870,7 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
 		    /* XXX */
 		    return 1;
 		}
-
+		
 #if DEBUG
 		file_reference_object_count++;
 #endif
@@ -919,8 +912,6 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
 		    }
 		}
 	    }
-	    sysRetCacheNode = sysRetCacheNode->next;
-	    
 	}
 	else
 	{
@@ -1025,15 +1016,14 @@ u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache,Databa
 	    strncpy(lookupNode.message,cNode->msg,SIG_MSG_LEN);
 	    lookupNode.message[SIG_MSG_LEN-1] = '\0'; //safety
 	    
-	    //Safety escape value.
-	    if( (snort_escape_string_STATIC(lookupNode.message,SIG_MSG_LEN,data)))
-	    {
-		FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-			   "[%s], Exiting. \n",
-			   __FUNCTION__,
-			   lookupNode.message);
-	    }
 	    
+	    if( (snort_escape_string_STATIC(lookupNode.message,SIG_MSG_LEN,data)))
+            {
+                FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+                           "[%s], Exiting. \n",
+                           __FUNCTION__,
+                           lookupNode.message);
+            }
 	}
 	else
 	{
@@ -1054,12 +1044,12 @@ u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache,Databa
 	    }
 	    
 	    memcpy(&TobjNode->obj,&lookupNode,sizeof(dbSignatureObj));
-
+	    
 	    TobjNode->flag ^= CACHE_INTERNAL_ONLY;
 	    
 	    TobjNode->next = iMasterCache->cacheSignatureHead;
 	    iMasterCache->cacheSignatureHead = TobjNode;
-	
+	    	    
 	    if(cNode->refs != NULL)
 	    {
 		if( (ConvertReferenceCache(cNode->refs,iMasterCache,TobjNode,data)))
@@ -1133,14 +1123,12 @@ u_int32_t ConvertClassificationCache(ClassType **iHead, MasterCache *iMasterCach
 
 	/* 
 	   -- config classification:shortname,short description,priority
-
 	   NOTE: -elz i wongly assumed , short description was logged, while it 
 	   was actually shortname that should have been logged, this is why
 	   this part of the code is now commented :)
-	  
 	   so using cNode->type instead of cNode->name
 	*/
-
+	
 	if(cNode->type != NULL)
 	{
 	    strncpy(LobjNode.obj.sig_class_name,cNode->type,CLASS_NAME_LEN);
@@ -1827,53 +1815,21 @@ u_int32_t ClassificationPopulateDatabase(DatabaseData  *data,cacheClassification
 	    
 	    DatabaseCleanInsert(data);
 
-	    switch(data->dbtype_id)
-            {
-#if defined(ENABLE_POSTGRESQL)
-            case DB_POSTGRESQL:
-		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-				   PGSQL_SQL_INSERT_CLASSIFICATION,
-				   cacheHead->obj.sig_class_name)) !=  SNORT_SNPRINTF_SUCCESS)
-		{
-		    /* XXX */
-		    goto TransactionFail;
-		}
-		break;
-#endif
-	    default:
-		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-				   SQL_INSERT_CLASSIFICATION,
-				   cacheHead->obj.sig_class_name)) !=  SNORT_SNPRINTF_SUCCESS)
-		{
-		    /* XXX */
-		    goto TransactionFail;
-		}
-		break;
+	    if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+			       SQL_INSERT_CLASSIFICATION,
+			       cacheHead->obj.sig_class_name)) !=  SNORT_SNPRINTF_SUCCESS)
+	    {
+		/* XXX */
+		goto TransactionFail;
 	    }
-	    
-	    DatabaseCleanSelect(data);
-	    switch(data->dbtype_id)
-            {
-#if defined(ENABLE_POSTGRESQL)
-            case DB_POSTGRESQL:
-		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-				   PGSQL_SQL_SELECT_SPECIFIC_CLASSIFICATION,
-				   cacheHead->obj.sig_class_name)) !=  SNORT_SNPRINTF_SUCCESS)
-		{
-		    /* XXX */
+
+
+	    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
+			       SQL_SELECT_SPECIFIC_CLASSIFICATION,
+			       cacheHead->obj.sig_class_name)) !=  SNORT_SNPRINTF_SUCCESS)
+	    {
+		/* XXX */
 		    goto TransactionFail;
-		}
-		break;
-#endif
-	    default:
-		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-				   SQL_SELECT_SPECIFIC_CLASSIFICATION,
-				   cacheHead->obj.sig_class_name)) !=  SNORT_SNPRINTF_SUCCESS)
-		{
-		    /* XXX */
-		    goto TransactionFail;
-		}
-		break;
 	    }
 	
 	    if(Insert(data->SQL_INSERT,data,1))
@@ -2060,18 +2016,17 @@ u_int32_t SignatureLookupDatabase(DatabaseData *data,dbSignatureObj *sObj)
     
     if(db_sig_id == 0)
     {
-	/* XXX */
-	LogMessage("[%s()]: A lookup received a result but a result of 0 shouldn't be returned,\n"
-		   "\t this shouldn't happen for sid[%u] sid[%u] rev[%u] class_id[%u] priority_id[%u] \n",
-		   sObj->sid,
-		   sObj->gid,
-		   sObj->rev,
-		   sObj->class_id,
-		   sObj->priority_id);
 	
-	/* Added for bugcheck */
-	assert(db_sig_id != 0);
-	/* Will die before this :) */
+#if DEBUG
+	DEBUG_WRAP(DebugMessage("[%s()]: A lookup received a result but a result of 0 shouldn't be returned,\n"
+				"\t this shouldn't happen for sid[%u] sid[%u] rev[%u] class_id[%u] priority_id[%u] \n",
+				__FUNCTION__,
+				sObj->sid,
+				sObj->gid,
+				sObj->rev,
+				sObj->class_id,
+				sObj->priority_id));
+#endif
 	return 1;
     }
     
@@ -2079,6 +2034,8 @@ u_int32_t SignatureLookupDatabase(DatabaseData *data,dbSignatureObj *sObj)
     sObj->db_id = db_sig_id;
     return 0;
 }
+
+
 
 /** 
  *  Populate the signature table with record that are not present in the database.
@@ -2157,76 +2114,36 @@ u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cache
 	    */
 
 	    DatabaseCleanInsert(data);
-	    switch(data->dbtype_id)
-            {
-#if defined(ENABLE_POSTGRESQL)
-            case DB_POSTGRESQL:
-		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-				   PGSQL_SQL_INSERT_SIGNATURE,
-				   cacheHead->obj.sid,
-				   cacheHead->obj.gid,
-				   cacheHead->obj.rev,
-				   cacheHead->obj.class_id,
-				   cacheHead->obj.priority_id,
-				   cacheHead->obj.message)) !=  SNORT_SNPRINTF_SUCCESS)
-		{
+
+
+	    if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+			       SQL_INSERT_SIGNATURE,
+			       cacheHead->obj.sid,
+			       cacheHead->obj.gid,
+			       cacheHead->obj.rev,
+			       cacheHead->obj.class_id,
+			       cacheHead->obj.priority_id,
+			       cacheHead->obj.message)) !=  SNORT_SNPRINTF_SUCCESS)
+	    {
 		    /* XXX */
-		    goto TransactionFail;
-		}
-		break;
-#endif
-	    default:
-		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-				   SQL_INSERT_SIGNATURE,
-				   cacheHead->obj.sid,
-				   cacheHead->obj.gid,
-				   cacheHead->obj.rev,
-				   cacheHead->obj.class_id,
-				   cacheHead->obj.priority_id,
-				   cacheHead->obj.message)) !=  SNORT_SNPRINTF_SUCCESS)
-		{
-		    /* XXX */
-		    goto TransactionFail;
-		}
-		break;
+		goto TransactionFail;
 	    }
-	    
+		    
 	    DatabaseCleanSelect(data);
 
-	    switch(data->dbtype_id)
-            {
-#if defined(ENABLE_POSTGRESQL)		
-            case DB_POSTGRESQL:
-		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-				   PGSQL_SQL_SELECT_SPECIFIC_SIGNATURE,
-				   cacheHead->obj.sid,
-				   cacheHead->obj.gid,
-				   cacheHead->obj.rev,
-				   cacheHead->obj.class_id,
-				   cacheHead->obj.priority_id,
-				   cacheHead->obj.message)) !=  SNORT_SNPRINTF_SUCCESS)
-		{
-		    /* XXX */
-		    goto TransactionFail;
-		}
-		break;
-#endif		
-	    default:
-		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-				   SQL_SELECT_SPECIFIC_SIGNATURE,
-				   cacheHead->obj.sid,
-				   cacheHead->obj.gid,
-				   cacheHead->obj.rev,
-				   cacheHead->obj.class_id,
-				   cacheHead->obj.priority_id,
-				   cacheHead->obj.message)) !=  SNORT_SNPRINTF_SUCCESS)
-		{
-		    /* XXX */
-		    goto TransactionFail;
-		}
-		break;
+	    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
+			       SQL_SELECT_SPECIFIC_SIGNATURE,
+			       cacheHead->obj.sid,
+			       cacheHead->obj.gid,
+			       cacheHead->obj.rev,
+			       cacheHead->obj.class_id,
+			       cacheHead->obj.priority_id,
+			       cacheHead->obj.message)) !=  SNORT_SNPRINTF_SUCCESS)
+	    {
+		/* XXX */
+		goto TransactionFail;
 	    }
-	    
+		    
 	    if(Insert(data->SQL_INSERT,data,1))
 	    {
 		/* XXX */
@@ -2342,17 +2259,22 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
 {
     
     u_int32_t curr_row = 0;
+
+#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL))
+    u_int32_t queryColCount =0;
+#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)) */
+
     
 #ifdef ENABLE_ODBC
     dbSignatureObj tSigObj = {0};
     SQLSMALLINT col_count = 0;
 #endif /* ENABLE_ODBC */
 
-
+    
 #ifdef ENABLE_MYSQL
-    u_int32_t queryColCount =0;
     int result = 0;
 #endif
+
     
 #ifdef ENABLE_POSTGRESQL
 
@@ -4066,7 +3988,7 @@ u_int32_t SystemCacheUpdateDBid(dbSystemObj *iDBList,u_int32_t array_length,cach
             if( (TobjNode = SnortAlloc(sizeof(cacheSystemObj))) == NULL)
             {
                 /* XXX */
-		printf("Failed to allocate ? \n");
+		LogMessage("[%s()]: Error Failed to allocate..\n",__FUNCTION__);
                 return 1;
             }
 	    
@@ -4210,60 +4132,25 @@ u_int32_t ReferencePopulateDatabase(DatabaseData  *data,cacheReferenceObj *cache
             }
 	    
 	    DatabaseCleanInsert(data);
-
-	    switch(data->dbtype_id)
-            {
-#if defined(ENABLE_POSTGRESQL)
-            case DB_POSTGRESQL:
-		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-				   PGSQL_SQL_INSERT_SPECIFIC_REF,
-				   cacheHead->obj.parent->obj.db_ref_system_id,
-				   cacheHead->obj.ref_tag)) !=  SNORT_SNPRINTF_SUCCESS)
-		{
-		    /* XXX */
-		    goto TransactionFail;
-		}
-		break;
-#endif
-	    default:
-		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-				   SQL_INSERT_SPECIFIC_REF,
-				   cacheHead->obj.parent->obj.db_ref_system_id,
-				   cacheHead->obj.ref_tag)) !=  SNORT_SNPRINTF_SUCCESS)
-		{
-		    /* XXX */
-		    goto TransactionFail;
-		}
-		break;
+	    
+	    if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+			       SQL_INSERT_SPECIFIC_REF,
+			       cacheHead->obj.parent->obj.db_ref_system_id,
+			       cacheHead->obj.ref_tag)) !=  SNORT_SNPRINTF_SUCCESS)
+	    {
+		/* XXX */
+		goto TransactionFail;
 	    }
 	    
 	    DatabaseCleanSelect(data);
 
-	    switch(data->dbtype_id)
-            {
-#if defined(ENABLE_POSTGRESQL)
-            case DB_POSTGRESQL:
-		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-				   PGSQL_SQL_SELECT_SPECIFIC_REF,
-				   cacheHead->obj.parent->obj.db_ref_system_id,
-				   cacheHead->obj.ref_tag)) !=  SNORT_SNPRINTF_SUCCESS)
-		{
-		    /* XXX */
-		    goto TransactionFail;
-		}
-		break;
-#endif
-	    default:
-		
-		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-				   SQL_SELECT_SPECIFIC_REF,
-				   cacheHead->obj.parent->obj.db_ref_system_id,
-				   cacheHead->obj.ref_tag)) !=  SNORT_SNPRINTF_SUCCESS)
-		{
-		    /* XXX */
-		    goto TransactionFail;
-		}
-		break;
+	    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
+			       SQL_SELECT_SPECIFIC_REF,
+			       cacheHead->obj.parent->obj.db_ref_system_id,
+			       cacheHead->obj.ref_tag)) !=  SNORT_SNPRINTF_SUCCESS)
+	    {
+		/* XXX */
+		goto TransactionFail;
 	    }
 
             if(Insert(data->SQL_INSERT,data,1))
@@ -4362,55 +4249,22 @@ u_int32_t SystemPopulateDatabase(DatabaseData  *data,cacheSystemObj *cacheHead)
 	    
             DatabaseCleanInsert(data);
 	    
-	    switch(data->dbtype_id)
+	    if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
+			       SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM,
+				   cacheHead->obj.ref_system_name)) !=  SNORT_SNPRINTF_SUCCESS)
 	    {
-#if defined(ENABLE_POSTGRESQL)
-	    case DB_POSTGRESQL:
-		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-                                   PGSQL_SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM,
-                                   cacheHead->obj.ref_system_name)) !=  SNORT_SNPRINTF_SUCCESS)
-                {
-                    /* XXX */
-                    goto TransactionFail;
-                }
-		break;
-#endif
-	    default:
-		if( (SnortSnprintf(data->SQL_INSERT, MAX_QUERY_LENGTH,
-				   SQL_INSERT_SPECIFIC_REFERENCE_SYSTEM,
-				   cacheHead->obj.ref_system_name)) !=  SNORT_SNPRINTF_SUCCESS)
-		{
-		    /* XXX */
-		    goto TransactionFail;
-		}
-		break;
+		/* XXX */
+		goto TransactionFail;
 	    }
-	    
+
 	    DatabaseCleanSelect(data);
-
-	    switch(data->dbtype_id)
-            {
-#if defined(ENABLE_POSTGRESQL)
-            case DB_POSTGRESQL:
-		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-                                   PGSQL_SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM,
-                                   cacheHead->obj.ref_system_name)) !=  SNORT_SNPRINTF_SUCCESS)
-                {
-                    /* XXX */
-                    goto TransactionFail;
-                }
-
-		break;
-#endif
-	    default:
-		if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
-				   SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM,
-				   cacheHead->obj.ref_system_name)) !=  SNORT_SNPRINTF_SUCCESS)
-		{
-		    /* XXX */
-		    goto TransactionFail;
-		}
-		break;
+	
+	    if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
+			       SQL_SELECT_SPECIFIC_REFERENCE_SYSTEM,
+			       cacheHead->obj.ref_system_name)) !=  SNORT_SNPRINTF_SUCCESS)
+	    {
+		/* XXX */
+		goto TransactionFail;
 	    }
 
             if(Insert(data->SQL_INSERT,data,1))
@@ -4474,13 +4328,14 @@ u_int32_t SystemCacheSynchronize(DatabaseData *data,cacheSystemObj **cacheHead)
     
     u_int32_t array_length = 0;
 
-    if( (data == NULL) ||
+    if( (data == NULL)  ||
         (*cacheHead == NULL))
     {
         /* XXX */
         return 1;
     }
-    
+
+
     if( (SystemPullDataStore(data,&dbSysArray,&array_length)))
     {
         /* XXX */
@@ -4627,31 +4482,36 @@ u_int32_t GenerateSigRef(cacheSignatureReferenceObj **iHead,cacheSignatureObj *s
 	return 1;
     }
     
+    
     while(sigHead != NULL)
     {
-	for(node_count = 0; node_count < sigHead->obj.ref_count; node_count++)
+	/* Do not generate sig_ref for internal sig only, since they are not inserted anymore. */
+	if(sigHead->obj.db_id != 0)
 	{
-	    memset(&lookupNode,'\0',sizeof(dbSignatureReferenceObj));
-	    lookupNode.db_ref_id = sigHead->obj.ref[node_count]->obj.ref_id;	 
-	    lookupNode.db_sig_id = sigHead->obj.db_id;
-	    lookupNode.ref_seq = (node_count + 1);
-	    
-	    if( (cacheSignatureReferenceLookup(&lookupNode,*iHead)) == 0 )
+	    for(node_count = 0; node_count < sigHead->obj.ref_count; node_count++)
 	    {
-		if( (newNode = SnortAlloc(sizeof(cacheSignatureReferenceObj))) == NULL)
+		memset(&lookupNode,'\0',sizeof(dbSignatureReferenceObj));
+		lookupNode.db_ref_id = sigHead->obj.ref[node_count]->obj.ref_id;	 
+		lookupNode.db_sig_id = sigHead->obj.db_id;
+		lookupNode.ref_seq = (node_count + 1);
+		
+		if( (cacheSignatureReferenceLookup(&lookupNode,*iHead)) == 0 )
 		{
-		    /* XXX */
-		    return 1;
-		}
-		
-		memcpy(&newNode->obj,&lookupNode,sizeof(dbSignatureReferenceObj));
-		newNode->flag ^= CACHE_INTERNAL_ONLY;
-		
-		newNode->next = *iHead;
-		*iHead = newNode;
+		    if( (newNode = SnortAlloc(sizeof(cacheSignatureReferenceObj))) == NULL)
+		    {
+			/* XXX */
+			return 1;
+		    }
+		    
+		    memcpy(&newNode->obj,&lookupNode,sizeof(dbSignatureReferenceObj));
+		    newNode->flag ^= CACHE_INTERNAL_ONLY;
+		    
+		    newNode->next = *iHead;
+		    *iHead = newNode;
 #if DEBUG
-		file_sigref_object_count++;
+		    file_sigref_object_count++;
 #endif
+		}
 	    }
 	}
         sigHead = sigHead->next;	
@@ -4675,7 +4535,6 @@ u_int32_t GenerateSigRef(cacheSignatureReferenceObj **iHead,cacheSignatureObj *s
 u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferenceObj **iArrayPtr,u_int32_t *array_length)
 {
     
-
     u_int32_t curr_row = 0;
     
 #if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL))
@@ -5490,6 +5349,7 @@ u_int32_t SigRefSynchronize(DatabaseData *data,cacheSignatureReferenceObj **cach
     
     /* We initialize the structure in a la */
     if( (GenerateSigRef(cacheHead,cacheSigHead)))
+    //if( (GenerateSigRef(cacheHead,data->mc.cacheSignatureHead)))
     {
 	/* XXX */
 	return 1;
@@ -5726,23 +5586,29 @@ u_int32_t CacheSynchronize(DatabaseData *data)
     
     
     //System Synchronize
-    if( (SystemCacheSynchronize(data,&data->mc.cacheSystemHead)))
+    if(data->mc.cacheSystemHead != NULL)
     {
-	/* XXX */
-	LogMessage("[%s()]:, SystemCacheSyncronize() call failed. \n",
-		   __FUNCTION__);
-	return 1;
+	if( (SystemCacheSynchronize(data,&data->mc.cacheSystemHead)))
+	{
+	    /* XXX */
+	    LogMessage("[%s()]:, SystemCacheSyncronize() call failed. \n",
+		       __FUNCTION__);
+	    return 1;
+	}
+	
+	//SigRef Synchronize 
+	if( (SigRefSynchronize(data,&data->mc.cacheSigReferenceHead,data->mc.cacheSignatureHead)))
+	{
+	    /* XXX */
+	    LogMessage("[%s()]: SigRefSynchronize() call failed \n",
+		       __FUNCTION__);
+	    return 1;
+	}
     }
-    
-    //SigRef Synchronize 
-    if( (SigRefSynchronize(data,&data->mc.cacheSigReferenceHead,data->mc.cacheSignatureHead)))
+    else
     {
-	/* XXX */
-	LogMessage("[%s()]: SigRefSynchronize() call failed \n",
-		   __FUNCTION__);
-	return 1;
+	LogMessage("\n[%s()],INFO: No system was found in cache (from signature map file), will not process or synchronize informations found in the database \n\n",__FUNCTION__);
     }
-
 #if DEBUG
 
     DEBUG_WRAP(DebugMessage(DB_DEBUG,"================================================"

@@ -324,7 +324,11 @@ void RegisterOutputPlugins(void)
 
     AlertCEFSetup();
     AlertSyslogSetup();
+
+#ifdef HAVE_LIBPCAP
     LogTcpdumpSetup();
+#endif /* HAVE_LIBPCAP */
+
     DatabaseSetup();
     AlertFastSetup();
     AlertFullSetup();

@@ -41,7 +41,7 @@
 #include "unified2.h"
 #include "util.h"
 
-#define CACHED_EVENTS_MAX 64
+#define CACHED_EVENTS_MAX 256
 
 /*
 ** PRIVATE FUNCTIONS

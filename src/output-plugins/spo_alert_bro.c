@@ -31,6 +31,7 @@
 
 #ifdef BROCCOLI
 
+#include <string.h>
 #include <sys/types.h>
 #include <stdlib.h>
 #ifdef HAVE_STRINGS_H
@@ -120,6 +121,24 @@ void AlertBroInit(char *args)
     AddFuncToRestartList(AlertBroRestart, 0);
 }
 
+#ifdef SUP_IP6
+static INLINE void map_broccoli_addr(BroAddr* a, const snort_ip_p i)
+{
+    if ( i->family == AF_INET )
+    {
+        memcpy(a->addr, BRO_IPV4_MAPPED_PREFIX, sizeof(BRO_IPV4_MAPPED_PREFIX));
+        memcpy(&a->addr[3], i->ip.u6_addr32, sizeof(uint32_t));
+    }
+    else if ( i->family == AF_INET6 )
+        memcpy(a->addr, &i->ip, sizeof(a->addr));
+}
+#else
+static INLINE void map_broccoli_addr(BroAddr* a, const struct in_addr i)
+{
+    memcpy(a->addr, BRO_IPV4_MAPPED_PREFIX, sizeof(BRO_IPV4_MAPPED_PREFIX));
+    memcpy(&a->addr[3], &i, sizeof(uint32_t));
+}
+#endif
 
 /*
  * Function: AlertBro(Packet *)
@@ -139,6 +158,8 @@ void AlertBro(Packet *p, void *event, u_int32_t event_type, void *arg)
     Unified2EventCommon *uevent = (Unified2EventCommon *) event; 
     BroPort src_p;
     BroPort dst_p;
+    BroAddr src_addr;
+    BroAddr dst_addr;
 
     if ( p == NULL || event == NULL )
     {
@@ -150,7 +171,7 @@ void AlertBro(Packet *p, void *event, u_int32_t event_type, void *arg)
     
     if(p && IPH_IS_VALID(p))
     {
-        ev = bro_event_new("barnyard_alert");
+        ev = bro_event_new("Barnyard2::barnyard_alert");
         
         // First value
         BroRecord *packet_id = bro_record_new();
@@ -164,44 +185,47 @@ void AlertBro(Packet *p, void *event, u_int32_t event_type, void *arg)
             src_p.port_proto = dst_p.port_proto = GET_IPH_PROTO(p);
             if((GET_IPH_PROTO(p) == IPPROTO_ICMP) && p->icmph)
             {
-                src_p.port_num = htons(p->icmph->type);
-                dst_p.port_num = htons(p->icmph->code);
+                src_p.port_num = p->icmph->type;
+                dst_p.port_num = p->icmph->code;
             } else {
                 src_p.port_num = p->sp;
                 dst_p.port_num = p->dp;
             }
         }
-        
-        bro_record_add_val(packet_id, "src_ip", BRO_TYPE_IPADDR, NULL, &GET_SRC_ADDR(p));
+
+        map_broccoli_addr(&src_addr, GET_SRC_ADDR(p));
+        bro_record_add_val(packet_id, "src_ip", BRO_TYPE_IPADDR, NULL, &src_addr);
         bro_record_add_val(packet_id, "src_p",  BRO_TYPE_PORT,   NULL, &src_p);
-        bro_record_add_val(packet_id, "dst_ip", BRO_TYPE_IPADDR, NULL, &GET_DST_ADDR(p));
+        map_broccoli_addr(&dst_addr, GET_DST_ADDR(p));
+        bro_record_add_val(packet_id, "dst_ip", BRO_TYPE_IPADDR, NULL, &dst_addr);
         bro_record_add_val(packet_id, "dst_p",  BRO_TYPE_PORT,   NULL, &dst_p);
-        bro_event_add_val(ev, BRO_TYPE_RECORD, "packet_id", packet_id);
+        bro_event_add_val(ev, BRO_TYPE_RECORD, "Barnyard2::PacketID", packet_id);
         bro_record_free(packet_id);
         
         // Second value
         BroRecord *sad = bro_record_new();
-        uint32_t sensor_id_hl = ntohl(uevent->sensor_id);
+        uint64_t sensor_id_hl = ntohl(uevent->sensor_id);
         bro_record_add_val(sad, "sensor_id",          BRO_TYPE_COUNT, NULL, &sensor_id_hl);
         double ts = (double) ntohl(uevent->event_second) + (((double) ntohl(uevent->event_microsecond))/1000000);
         bro_record_add_val(sad, "ts",                 BRO_TYPE_TIME,  NULL, &ts);
-        uint32_t signature_id_hl = ntohl(uevent->signature_id);
+        uint64_t signature_id_hl = ntohl(uevent->signature_id);
         bro_record_add_val(sad, "signature_id",       BRO_TYPE_COUNT, NULL, &signature_id_hl);
-        uint32_t generator_id_hl = ntohl(uevent->generator_id);
+        uint64_t generator_id_hl = ntohl(uevent->generator_id);
         bro_record_add_val(sad, "generator_id",       BRO_TYPE_COUNT, NULL, &generator_id_hl);
-        uint32_t signature_revision_hl = ntohl(uevent->signature_revision);
+        uint64_t signature_revision_hl = ntohl(uevent->signature_revision);
         bro_record_add_val(sad, "signature_revision", BRO_TYPE_COUNT, NULL, &signature_revision_hl);
-        uint32_t classification_id_hl = ntohl(uevent->classification_id);
+        uint64_t classification_id_hl = ntohl(uevent->classification_id);
         bro_record_add_val(sad, "classification_id",  BRO_TYPE_COUNT, NULL, &classification_id_hl);
         BroString class_bs;
         cn = ClassTypeLookupById(barnyard2_conf, ntohl(uevent->classification_id));
         bro_string_init(&class_bs);
-        bro_string_set(&class_bs, cn->name);
+        if ( cn )
+            bro_string_set(&class_bs, cn->name);
         bro_record_add_val(sad, "classification",     BRO_TYPE_STRING, NULL, &class_bs);
         bro_string_cleanup(&class_bs);
-        uint32_t priority_id_hl = ntohl(uevent->priority_id);
+        uint64_t priority_id_hl = ntohl(uevent->priority_id);
         bro_record_add_val(sad, "priority_id",        BRO_TYPE_COUNT, NULL, &priority_id_hl);
-        uint32_t event_id_hl = ntohl(uevent->event_id);
+        uint64_t event_id_hl = ntohl(uevent->event_id);
         bro_record_add_val(sad, "event_id",           BRO_TYPE_COUNT, NULL, &event_id_hl);
         //BroSet *ref_set = bro_set_new();
         //BroString ref_name_bs;
@@ -217,7 +241,7 @@ void AlertBro(Packet *p, void *event, u_int32_t event_type, void *arg)
         //bro_record_add_val(sad, "references", BRO_TYPE_SET, NULL, ref_set);
         //bro_set_free(ref_set);
         
-        bro_event_add_val(ev, BRO_TYPE_RECORD, "barnyard_alert_data", sad);
+        bro_event_add_val(ev, BRO_TYPE_RECORD, "Barnyard2::AlertData", sad);
         bro_record_free(sad);
         
         // Third value

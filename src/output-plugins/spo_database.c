@@ -1285,6 +1285,7 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
 			  iUpdateSig->obj.db_id))
 	{
 	    /* XXX */
+
 	    LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_INSERT in [%s()] \n",
 		       __FUNCTION__);
 	    
@@ -1432,7 +1433,7 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
        For sanity purpose the sig_class table SHOULD have internal classification id to prevent possible 
        miss classification tagging ... but this is not happening with the old schema.
     */
-
+    
    
     
 #if DEBUG
@@ -1568,7 +1569,7 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 		
 		/* Added for bugcheck */
 		assert( unInitSig->obj.db_id != 0);
-
+		
                 *psig_id = unInitSig->obj.db_id;
                 return 0;
 	    }
@@ -2687,11 +2688,12 @@ char * snort_escape_string(char * from, DatabaseData * data)
 u_int32_t snort_escape_string_STATIC(char *from, u_int32_t buffer_max_len ,DatabaseData *data)
 {
 
-    //int error = 0;
 
-#if defined(DB_POSRGRESQL)   
+
+#if defined(ENABLE_POSTGRESQL)   
+    int error = 0;
     size_t write_len = 0;
-#endif /* defined(DB_POSRGRESQL) */
+#endif /* defined(ENABLE_POSRGRESQL) */
 
     char * to = NULL;
     char * to_start = NULL;

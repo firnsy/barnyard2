@@ -2342,17 +2342,22 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
 {
     
     u_int32_t curr_row = 0;
+
+#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL))
+    u_int32_t queryColCount =0;
+#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)) */
+
     
 #ifdef ENABLE_ODBC
     dbSignatureObj tSigObj = {0};
     SQLSMALLINT col_count = 0;
 #endif /* ENABLE_ODBC */
 
-
+    
 #ifdef ENABLE_MYSQL
-    u_int32_t queryColCount =0;
     int result = 0;
 #endif
+
     
 #ifdef ENABLE_POSTGRESQL
 

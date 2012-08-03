@@ -519,72 +519,7 @@ typedef struct _DatabaseData
 #define LATEST_DB_SCHEMA_VERSION 107
 
 
-/******** fatals *******************************************************/
-/*
-  NOTE: -elz 
-  Some of those messages have been removed but they will be added and cleaned before release 
-*/
 
-/* these strings deliberately break fatal error messages into
-   chunks with lengths < 509 to keep ISO C89 compilers happy
- */
-
-static const char* FATAL_NO_SENSOR_1 =
-    " When this plugin starts, a SELECT query is run to find the sensor id for the\n"
-    " currently running sensor. If the sensor id is not found, the plugin will run\n"
-    " an INSERT query to insert the proper data and generate a new sensor id. Then a\n"
-    " SELECT query is run to get the newly allocated sensor id. If that fails then\n"
-    " this error message is generated.\n";
-
-static const char* FATAL_NO_SENSOR_2 =
-    " Some possible causes for this error are:\n"
-    "  * the user does not have proper INSERT or SELECT privileges\n"
-    "  * the sensor table does not exist\n"
-    "\n"
-    " If you are _absolutely_ certain that you have the proper privileges set and\n"
-    " that your database structure is built properly please let me know if you\n"
-    " continue to get this error. You can contact me at (roman@danyliw.com).\n";
-
-static const char* FATAL_BAD_SCHEMA_1 =
-    "database: The underlying database has not been initialized correctly.  This\n"
-    "          version of Snort requires version %d of the DB schema.  Your DB\n"
-    "          doesn't appear to have any records in the 'schema' table.\n%s";
-
-static const char* FATAL_BAD_SCHEMA_2 =
-    "          Please re-run the appropriate DB creation script (e.g. create_mysql,\n"
-    "          create_postgresql, create_oracle, create_mssql) located in the\n"
-    "          contrib\\ directory.\n\n"
-    "          See the database documentation for cursory details (doc/README.database).\n"
-    "          and the URL to the most recent database plugin documentation.\n";
-
-static const char* FATAL_OLD_SCHEMA_1 =
-    "database: The underlying database seems to be running an older version of\n"
-    "          the DB schema (current version=%d, required minimum version= %d).\n\n"
-    "          If you have an existing database with events logged by a previous\n"
-    "          version of snort, this database must first be upgraded to the latest\n"
-    "          schema (see the snort-users mailing list archive or DB plugin\n"
-    "          documention for details).\n%s\n";
-
-static const char* FATAL_OLD_SCHEMA_2 =
-    "          If migrating old data is not desired, merely create a new instance\n"
-    "          of the snort database using the appropriate DB creation script\n"
-    "          (e.g. create_mysql, create_postgresql, create_oracle, create_mssql)\n"
-    "          located in the contrib\\ directory.\n\n"
-    "          See the database documentation for cursory details (doc/README.database).\n"
-    "          and the URL to the most recent database plugin documentation.\n";
-
-static const char* FATAL_NO_SUPPORT_1 =
-    "If this build of snort was obtained as a binary distribution (e.g., rpm,\n"
-    "or Windows), then check for alternate builds that contains the necessary\n"
-    "'%s' support.\n\n"
-    "If this build of snort was compiled by you, then re-run the\n"
-    "the ./configure script using the '--with-%s' switch.\n"
-    "For non-standard installations of a database, the '--with-%s=DIR'\n%s";
-
-static const char* FATAL_NO_SUPPORT_2 =
-    "syntax may need to be used to specify the base directory of the DB install.\n\n"
-    "See the database documentation for cursory details (doc/README.database).\n"
-    "and the URL to the most recent database plugin documentation.\n";
 
 void DatabaseSetup(void);
 

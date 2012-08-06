@@ -1,0 +1,95 @@
+The default schema creation scripts does not create ACL's for database access.
+This file define what type of access barnyard2 require for the database output plugin to work correctly.
+
+=============
+TABLE : sensor
+=============
+INSERT 
+SELECT 
+UPDATE 
+=============
+
+=============
+TABLE : event 
+=============
+SELECT 
+INSERT 
+=============
+
+=============
+TABLE : iphdr 
+=============
+SELECT 
+INSERT 
+=============
+
+=============
+TABLE : tcphdr 
+=============
+SELECT 
+INSERT 
+=============
+
+=============
+TABLE : udphdr
+=============
+SELECT 
+INSERT 
+=============
+
+=============
+TABLE : opt 
+=============
+SELECT 
+INSERT 
+=============
+
+=============
+TABLE : icmphdr 
+=============
+SELECT 
+INSERT 
+=============
+
+=============
+TABLE : data 
+=============
+SELECT 
+INSERT 
+=============
+
+=============
+TABLE : reference_system 
+=============
+INSERT 
+SELECT 
+=============
+
+=============
+TABLE : reference 
+=============
+INSERT 
+SELECT 
+=============
+
+=============
+TABLE : sig_class 
+=============
+INSERT 
+SELECT 
+=============
+
+=============
+TABLE : signature 
+=============
+INSERT 
+SELECT 
+UPDATE 
+=============
+
+=============
+TABLE : sig_reference 
+=============
+SELECT 
+INSERT 
+=============

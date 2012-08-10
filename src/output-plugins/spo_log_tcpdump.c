@@ -45,7 +45,7 @@
 #include "config.h"
 #endif
 
-#ifdef HAVE_LIBCPAP
+#ifdef HAVE_LIBPCAP
 
 #ifdef HAVE_STRINGS_H
 #include <strings.h>

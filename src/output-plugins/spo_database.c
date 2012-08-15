@@ -1299,44 +1299,20 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
     DatabaseCleanInsert(data);
     
     
-    switch(data->dbtype_id)
+    if( SnortSnprintf(data->SQL_SELECT,data->SQL_SELECT_SIZE,
+		      SQL_SELECT_SPECIFIC_SIGNATURE,
+		      iUpdateSig->obj.sid,
+		      iUpdateSig->obj.gid,
+		      iUpdateSig->obj.rev,
+		      iUpdateSig->obj.class_id,
+		      iUpdateSig->obj.priority_id,
+		      iUpdateSig->obj.message))
     {
-#if defined(ENABLE_POSTGRESQL)
-    case DB_POSTGRESQL:
-	if( SnortSnprintf(data->SQL_SELECT,data->SQL_SELECT_SIZE,
-			  PGSQL_SQL_SELECT_SPECIFIC_SIGNATURE,
-			  iUpdateSig->obj.sid,
-			  iUpdateSig->obj.gid,
-			  iUpdateSig->obj.rev,
-			  iUpdateSig->obj.class_id,
-			  iUpdateSig->obj.priority_id,
-			  iUpdateSig->obj.message))
-	{
-	    /* XXX */
-	    LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_SELECT in [%s()] \n",
-		       __FUNCTION__);
-		    
-	    return 1;
-	}
-	break;
-#endif
-    default:
-	if( SnortSnprintf(data->SQL_SELECT,data->SQL_SELECT_SIZE,
-			  SQL_SELECT_SPECIFIC_SIGNATURE,
-			  iUpdateSig->obj.sid,
-			  iUpdateSig->obj.gid,
-			  iUpdateSig->obj.rev,
-			  iUpdateSig->obj.class_id,
-			  iUpdateSig->obj.priority_id,
-			  iUpdateSig->obj.message))
-	{
-	    /* XXX */
-	    LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_SELECT in [%s()] \n",
-		       __FUNCTION__);
-	    
-	    return 1;
-	}
-	break;
+	/* XXX */
+	LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_SELECT in [%s()] \n",
+		   __FUNCTION__);
+	
+	return 1;
     }
     
     if(iUpdateSig->flag & CACHE_BOTH ||
@@ -1359,47 +1335,20 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
     }
     else
     {
-	switch(data->dbtype_id)
+	if( SnortSnprintf(data->SQL_INSERT,data->SQL_INSERT_SIZE,
+			  SQL_INSERT_SIGNATURE,
+			  iUpdateSig->obj.sid,
+			  iUpdateSig->obj.gid,
+			  iUpdateSig->obj.rev,
+			  iUpdateSig->obj.class_id,
+			  iUpdateSig->obj.priority_id,
+			  iUpdateSig->obj.message))
 	{
-#if defined(ENABLE_POSTGRESQL)
-	case DB_POSTGRESQL:
-	    if( SnortSnprintf(data->SQL_INSERT,data->SQL_INSERT_SIZE,
-			      PGSQL_SQL_INSERT_SIGNATURE,
-			      iUpdateSig->obj.sid,
-			      iUpdateSig->obj.gid,
-			      iUpdateSig->obj.rev,
-			      iUpdateSig->obj.class_id,
-			      iUpdateSig->obj.priority_id,
-			      iUpdateSig->obj.message))
-	    {
-		/* XXX */
-		LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_INSERT in [%s()] \n",
-			   __FUNCTION__);
-		
-		return 1;
-	    }
-	    break;
+	    /* XXX */
+	    LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_INSERT in [%s()] \n",
+		       __FUNCTION__);
 	    
-#endif
-	default:
-	    if( SnortSnprintf(data->SQL_INSERT,data->SQL_INSERT_SIZE,
-			      SQL_INSERT_SIGNATURE,
-			      iUpdateSig->obj.sid,
-			      iUpdateSig->obj.gid,
-			      iUpdateSig->obj.rev,
-			      iUpdateSig->obj.class_id,
-			      iUpdateSig->obj.priority_id,
-			      iUpdateSig->obj.message))
-	    {
-		/* XXX */
-		LogMessage("ERROR database: calling SnortSnprintf() on data->SQL_INSERT in [%s()] \n",
-			   __FUNCTION__);
-		
-		return 1;
-	    }
-	    
-	    break;
-	    
+	    return 1;
 	}
     }
     

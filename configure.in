@@ -325,26 +325,29 @@ if test "x$PCAP_HEADERS" = "xno"; then
 
     if test "x$CYGWIN" = "x1" ; then
 
-    echo
-    echo "   ERROR: You will need to get Winpcap, install libraries and headers in your path"
-    echo "   Downlad from http://www.winpcap.org, uncompress it and copy */Lib/* to your lib path (/lib)"
-    echo "   and */Include/* to your include path (/usr/include)"
-    echo "   or use the --with-libpcap-* options, if you have it installed"
-    echo "   in unusual place.  Also check if your libpcap depends on another"
-    echo "   shared library that may be installed in an unusual place"
+   
+    echo	
+    echo "   ERROR: You will need to get Winpcap headers in your path"
+    echo "   Downlad from http://www.winpcap.org, uncompress it and copy"
+    echo "   */Include/* to your include path (/usr/include)"
+    echo "   or use the --with-libpcap-headers* options, if you have it installed"
+    echo "   in unusual place."
+    echo 
 
-    exit 1
+    exit 1	
 
     else
-
+    
     echo
-    echo "   ERROR!  Libpcap library/headers (libpcap.a (or .so)/pcap.h)"
+    echo "   ERROR!  Libpcap headers (pcap.h)"
     echo "   not found, go get it from http://www.tcpdump.org"
-    echo "   or use the --with-libpcap-* options, if you have it installed"
-    echo "   in unusual place.  Also check if your libpcap depends on another"
-    echo "   shared library that may be installed in an unusual place"
+    echo "   or use the --with-libpcap-headers=* options, if you have it installed"
+    echo "   in unusual place."
+    echo
+
     exit 1
 
+    
     fi
 
 fi
@@ -385,26 +388,26 @@ if test "x$LPCAP" = "xno"; then
   if test "x$LPFRING_PCAP" = "xno"; then
 
          if test "x$CYGWIN" = "1" ; then
-    	 
-    echo	
-    echo "   ERROR: You will need to get Winpcap, install libraries and headers in your path"
+    	
+    echo
+    echo "   Warning: You will need to get Winpcap, install libraries and headers in your path "
+    echo "   to compile barnyard2 with the output plugin LogTcpdump"
     echo "   Downlad from http://www.winpcap.org, uncompress it and copy */Lib/* to your lib path (/lib)"
     echo "   and */Include/* to your include path (/usr/include)"
     echo "   or use the --with-libpcap-* options, if you have it installed"
-    echo "   in unusual place.  Also check if your libpcap depends on another"
-    echo "   shared library that may be installed in an unusual place"
-
-    exit 1	
+    echo "   in unusual place."
+    echo
 
     else
-    
+
     echo
-    echo "   ERROR!  Libpcap library/headers (libpcap.a (or .so)/pcap.h)"
-    echo "   not found, go get it from http://www.tcpdump.org"
+    echo "   Warning: you will need Libpcap library/headers (libpcap.a (or .so)/pcap.h) in your path"
+    echo "   to compile barnyard2 with the output plugin LogTcpdump"
+    echo "   You can download source from  from http://www.tcpdump.org"
     echo "   or use the --with-libpcap-* options, if you have it installed"
-    echo "   in unusual place.  Also check if your libpcap depends on another"
-    echo "   shared library that may be installed in an unusual place"
-    exit 1
+    echo "   in unusual place."
+    echo
+
 
     fi
 

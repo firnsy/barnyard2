@@ -221,6 +221,8 @@ u_int32_t GetTimestampByStruct_STATIC(register const struct timeval *tvp, int tz
 u_int32_t GetCurrentTimestamp_STATIC(char *buf);
 
 
+u_int32_t string_sanitize_character(char *input,char ichar);
+
 
 
 /***********************************************************

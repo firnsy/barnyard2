@@ -2677,3 +2677,43 @@ unsigned long int xatoup(const char *s , const char *etext)
     return val;
 }
 
+
+
+/* 
+   Tough to be a solution for a issue where it was not needed
+   but kept if its ever needed.
+*/
+u_int32_t string_sanitize_character(char *input,char ichar)
+{
+    char *cindex = NULL;
+
+    u_int32_t orig_len = 0;
+    u_int32_t end_len = 0;
+    
+    if( (input == NULL) ||
+	(ichar == 0x00))
+    {
+	/* XXX */
+	return 1;
+    }
+    
+    orig_len = strlen(input) + 1;
+    
+    while( (cindex = index(input,ichar)) != NULL)
+    {
+
+	if( (end_len = strlen(cindex)) > orig_len)
+        {
+	    /* Could be far fetched ...but who know's...*/
+	    /* XXX */
+	    return 1;
+        }
+
+	memcpy(cindex,cindex+1,strlen((cindex)));
+	cindex[end_len] = '\0';
+	cindex = NULL;
+    }
+
+    return 0;
+}
+

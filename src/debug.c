@@ -28,9 +28,13 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <wchar.h>
+
 #include "debug.h"
 
 #include "barnyard2.h"
+
+
 
 #ifdef DEBUG
 int debuglevel = DEBUG_ALL;
@@ -130,10 +134,11 @@ void DebugWideMessageFunc(int level, wchar_t *fmt, ...)
         
     if(BcDaemonMode())
     {
-#ifdef WIN32
+#if  defined(WIN32) && (defined(__USE_ISOC95) || defined(__USE_UNIX98))
         _vsnwprintf(buf, STD_BUF, fmt, ap);
 #else
-#ifdef HAVE_VSWPRINTF
+#if  defined(HAVE_VSWPRINTF) && (defined(__USE_ISOC95) || defined(__USE_UNIX98))
+
         vswprintf(buf, STD_BUF, fmt, ap);
 #endif
 #endif
@@ -141,11 +146,11 @@ void DebugWideMessageFunc(int level, wchar_t *fmt, ...)
     }
     else
     {
-#ifdef HAVE_WPRINTF
+#if   defined(HAVE_WPRINTF) && (defined(__USE_ISOC95) || defined(__USE_UNIX98))
         vwprintf(fmt, ap);
 #endif
     }
-
+    
     va_end(ap);
 }
 #endif

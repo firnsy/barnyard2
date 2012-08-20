@@ -1196,9 +1196,10 @@ u_int32_t ConvertClassificationCache(ClassType **iHead, MasterCache *iMasterCach
 u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **iArrayPtr,u_int32_t *array_length)
 {
 
-    u_int32_t curr_row = 0;
+    
     
 #if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL))    
+    u_int32_t curr_row = 0;
     u_int32_t queryColCount =0;
 #endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)) */
 
@@ -2018,7 +2019,7 @@ u_int32_t SignatureLookupDatabase(DatabaseData *data,dbSignatureObj *sObj)
     {
 	
 #if DEBUG
-	DEBUG_WRAP(DebugMessage("[%s()]: A lookup received a result but a result of 0 shouldn't be returned,\n"
+	DEBUG_WRAP(DebugMessage(DB_DEBUG,"[%s()]: A lookup received a result but a result of 0 shouldn't be returned,\n"
 				"\t this shouldn't happen for sid[%u] sid[%u] rev[%u] class_id[%u] priority_id[%u] \n",
 				__FUNCTION__,
 				sObj->sid,
@@ -2257,11 +2258,14 @@ u_int32_t SignatureCacheUpdateDBid(dbSignatureObj *iDBList,u_int32_t array_lengt
  */
 u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,u_int32_t *array_length)
 {
-    
+
+#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) || defined(ENABLE_ODBC))
     u_int32_t curr_row = 0;
+#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) || defined(ENABLE_ODBC)) */        
+    
 
 #if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL))
-    u_int32_t queryColCount =0;
+      u_int32_t queryColCount =0;
 #endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)) */
 
     
@@ -2940,7 +2944,9 @@ u_int32_t SignatureCacheSynchronize(DatabaseData *data,cacheSignatureObj **cache
 u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,u_int32_t *array_length)
 {
 
+#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) || defined(ENABLE_ODBC))
     u_int32_t curr_row = 0;
+#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) || defined(ENABLE_ODBC)) */        
     
 #if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL))    
     u_int32_t queryColCount =0;
@@ -3460,8 +3466,10 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
 u_int32_t SystemPullDataStore(DatabaseData *data, dbSystemObj **iArrayPtr,u_int32_t *array_length)
 {
 
+#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) || defined(ENABLE_ODBC))
     u_int32_t curr_row = 0;
-    
+#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) || defined(ENABLE_ODBC)) */    
+
 #if (defined(ENABLE_ODBC))
     dbSystemObj tSystemObj = {0};
     SQLSMALLINT col_count = 0;
@@ -4534,8 +4542,10 @@ u_int32_t GenerateSigRef(cacheSignatureReferenceObj **iHead,cacheSignatureObj *s
  */
 u_int32_t SignatureReferencePullDataStore(DatabaseData *data, dbSignatureReferenceObj **iArrayPtr,u_int32_t *array_length)
 {
-    
+
+#if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) || defined(ENABLE_ODBC))
     u_int32_t curr_row = 0;
+#endif /* (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) || defined(ENABLE_ODBC)) */            
     
 #if  (defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL))
     u_int32_t queryColCount =0;

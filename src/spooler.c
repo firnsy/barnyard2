@@ -450,18 +450,20 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
                 LogMessage("ERROR: Unable to create spooler!\n");
                 exit_signal = -1;
                 pc_ret = -1;
-                continue;
+		continue;
             }
+	    else
+	    {
+		/* Make sure we create a new waldo even if we did not have processed an event */
+		spooler->record_idx = 0;    
+		spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);
+			    
+		waiting_logged = 0;
+		
+		/* set timestamp to ensure we look for a newer file next time */
+		timestamp = extension + 1;
+	    }
 	    
-            /* Make sure we create a new waldo even if we did not have processed an event */
-            spooler->record_idx = 0;
-            spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);
-	    
-            waiting_logged = 0;
-
-            /* set timestamp to ensure we look for a newer file next time */
-            timestamp = extension + 1;
-
             continue;
         }
 

@@ -977,8 +977,11 @@ void AlertFWsam(Packet *p, void *event, uint32_t event_type, void *arg)
 
     SigNode     *sn = NULL;
     ClassType   *cn = NULL;
-    ReferenceNode   *rn = NULL;
 
+    /*
+    ** Remove Compiler warning.
+      ReferenceNode   *rn = NULL;
+    */
 
     if(event==NULL)
     {

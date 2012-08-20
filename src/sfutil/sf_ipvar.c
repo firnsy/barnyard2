@@ -36,7 +36,10 @@
 #define LIST_OPEN '['
 #define LIST_CLOSE ']'
 
+/*
+** Remove compiler warning
 static SFIP_RET sfvar_list_compare(sfip_node_t *, sfip_node_t *);
+*/
 
 static INLINE sfip_var_t *_alloc_var(void)
 {

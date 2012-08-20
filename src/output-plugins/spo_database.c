@@ -1409,8 +1409,7 @@ u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUp
 int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t event_type, 
 				      u_int32_t *psig_id)
 {
-
-    cacheSignatureObj *unInitSig = NULL;
+    cacheSignatureObj unInitSig;
     dbSignatureObj sigInsertObj= {0};
 
     u_int32_t db_classification_id = 0;
@@ -1434,6 +1433,8 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
         return 1;
     }
     
+    memset(&unInitSig,'\0',sizeof(cacheSignatureObj));
+
     *psig_id = 0;
     
     sid =  ntohl(((Unified2EventCommon *)event)->signature_id);
@@ -1547,7 +1548,7 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 		}
 	    }
 	    
-	    if(unInitSig != NULL)
+	    if(unInitSig.obj.db_id != 0)
 	    {
 #if DEBUG
 		DEBUG_WRAP(DebugMessage(DB_DEBUG,"[%s()], [%u] signatures where found in cache for [gid: %u] [sid: %u] but non matched\n" 
@@ -1556,16 +1557,16 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 					sigMatchCount,
 					gid,
 					sid,
-					unInitSig->obj.db_id,
+					unInitSig.obj.db_id,
 					revision));
 #endif
 		
-		unInitSig->obj.rev = revision;
-		unInitSig->obj.class_id = db_classification_id;
-		unInitSig->obj.priority_id = priority;
+		unInitSig.obj.rev = revision;
+		unInitSig.obj.class_id = db_classification_id;
+		unInitSig.obj.priority_id = priority;
 		
                 /* UPDATE the signature information */
-                if( (dbSignatureInformationUpdate(data,unInitSig)))
+                if( (dbSignatureInformationUpdate(data,&unInitSig)))
                 {
                     /* XXX */
 		    LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for : \n"
@@ -1582,9 +1583,9 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
                 }
 		
 		/* Added for bugcheck */
-		assert( unInitSig->obj.db_id != 0);
+		assert( unInitSig.obj.db_id != 0);
 		
-                *psig_id = unInitSig->obj.db_id;
+                *psig_id = unInitSig.obj.db_id;
                 return 0;
 	    }
 	}
@@ -2333,7 +2334,7 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 			     * packet_payload data after query, which later in Insert()
 			     * will be cut off and uploaded with OCIBindByPos().
 			     */
-			    if( (SnortSnprintf(SQLQueryPtr, (p->dsize * 2) + MAX_QUERY_LENGTH - 3,
+			    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
 					       "INSERT INTO "
 					       "data (sid,cid,data_payload) "
 					       "VALUES (%u,%u,:1);|%s",
@@ -2347,7 +2348,7 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 			    break;
 			    
 			default:
-			    if( (SnortSnprintf(SQLQueryPtr, (p->dsize * 2) + MAX_QUERY_LENGTH - 3,
+			    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
 					       "INSERT INTO "
 					       "data (sid,cid,data_payload) "
 					       "VALUES (%u,%u,'%s');",
@@ -3368,7 +3369,11 @@ int Insert(char * query, DatabaseData * data,u_int32_t inTransac)
     long fRes = 0;
 #endif
 
+
+#if defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)
     int result = 0;
+#endif /* defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) */
+
     
     if( (query == NULL) ||
 	(data == NULL) || 
@@ -3589,7 +3594,10 @@ int Insert(char * query, DatabaseData * data,u_int32_t inTransac)
  ******************************************************************************/
 int Select(char * query, DatabaseData * data,u_int32_t *rval)
 {
+
+#if defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL)
     int result = 0;
+#endif /* defined(ENABLE_MYSQL) || defined(ENABLE_POSTGRESQL) */
     
     if( (query == NULL) || 
 	(data == NULL) ||

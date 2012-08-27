@@ -20,7 +20,7 @@
  *  Maintainers : The Barnyard2 Team <firnsy@gmail.com> <beenph@gmail.com> 2011-20xx
  *
  *    Special thanks to: Rusell Fuleton <russell.fulton@gmail.com> for helping us stress test
- *                       this in production produce the required fix for bugs experienced.
+ *                       this in production for us.
  *
  *
  */
@@ -163,12 +163,16 @@
 #define CACHE_INTERNAL_ONLY 0x00000001
 #define CACHE_DATABASE_ONLY 0x00000010
 #define CACHE_BOTH          0x00000100 /* Digging a grave */
-
-
 #endif /* CACHE_FLAGS */
 
 
-
+#ifndef CACHE_FLUSH_FLAGS 
+#define CACHE_FLUSH_SIGNATURE      0x00000001
+#define CACHE_FLUSH_CLASSIFICATION 0x00000002
+#define CACHE_FLUSH_SYSTEM_REF     0x00000004
+#define CACHE_FLUSH_SIGREF         0x00000008
+#define CACHE_FLUSH_ALL            0xFFFFFFFF
+#endif /* CACHE_FLUSH_FLAGS*/
 
 
 

@@ -19,8 +19,10 @@
 ** along with this program; if not, write to the Free Software
 ** Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-*    Special thanks to: Rusell Fuleton <russell.fulton@gmail.com> for helping us stress test
-*                       this in production produce the required fix for bugs experienced.
+**
+**    Special thanks to: Rusell Fuleton <russell.fulton@gmail.com> for helping us stress test
+**                       this in production for us.
+**
 
 */
 
@@ -608,7 +610,7 @@ u_int32_t cacheEventSignatureLookup(cacheSignatureObj *iHead,
 u_int32_t SignatureCacheInsertObj(dbSignatureObj *iSigObj,MasterCache *iMasterCache,u_int32_t from);
 u_int32_t SignaturePopulateDatabase(DatabaseData  *data,cacheSignatureObj *cacheHead,int inTransac);
 u_int32_t SignatureLookupDatabase(DatabaseData *data,dbSignatureObj *sObj);
-void MasterCacheFlush(DatabaseData *data);
+void MasterCacheFlush(DatabaseData *data,u_int32_t flushFlag);
 
 u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH);
 u_int32_t dbConnectionStatusODBC(dbReliabilityHandle *pdbRH);

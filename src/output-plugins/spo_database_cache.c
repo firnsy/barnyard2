@@ -19,12 +19,13 @@
  *    Theses caches are built by combining existing caches from the snort map files and config files,
  *    The goal is to reduce the number of database interaction to a minimum so the output plugins 
  *    is more performant especially under heavy load of events.
+ *
  *   
  *    Note that the default schema compatibility is kept intact
  *    Maintainers : The Barnyard2 Team <firnsy@gmail.com> <beenph@gmail.com> - 2011
  *
  *    Special thanks to: Rusell Fuleton <russell.fulton@gmail.com> for helping us stress test
- *                       this in production produce the required fix for bugs experienced.
+ *                       this in production for us.
  *
  */
 
@@ -87,6 +88,7 @@ u_int32_t SignatureReferenceCacheUpdateDBid(dbSignatureReferenceObj *iDBList,
 
 u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureReferenceObj *cacheHead);
 u_int32_t SigRefSynchronize(DatabaseData *data,cacheSignatureReferenceObj **cacheHead,cacheSignatureObj *cacheSigHead);
+u_int32_t SignatureReferencePreGenerate(cacheSignatureObj *iHead);
 /* SIGNATURE REFERENCE FUNCTIONS */
 
 
@@ -101,7 +103,7 @@ u_int32_t CacheSynchronize(DatabaseData *data);
 
 
 /* Destructor */
-void MasterCacheFlush(DatabaseData *data);
+void MasterCacheFlush(DatabaseData *data,u_int32_t flushFlag);
 /* Destructor */
 
 
@@ -614,7 +616,7 @@ u_int32_t dbSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead)
  */
 u_int32_t dbSignatureLookup(dbSignatureObj *iLookup,cacheSignatureObj *iHead)
 {
-
+    
     if( (iLookup == NULL))
     {
         /* XXX */
@@ -825,6 +827,7 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
 	}
 	
 	sysRetCacheNode = NULL;
+
 	if(cacheSystemLookup(&sys_LobjNode,iMasterCache->cacheSystemHead,&sysRetCacheNode) == 0)
 	{
 	    if( (sys_TobjNode = SnortAlloc(sizeof(cacheSystemObj))) == NULL)
@@ -874,7 +877,6 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
 #if DEBUG
 		file_reference_object_count++;
 #endif
-		
 		memcpy(&ref_TobjNode->obj,&ref_LobjNode,sizeof(dbReferenceObj));	    
 		
 		ref_TobjNode->flag ^= CACHE_INTERNAL_ONLY;
@@ -1049,7 +1051,7 @@ u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache,Databa
 	    
 	    TobjNode->next = iMasterCache->cacheSignatureHead;
 	    iMasterCache->cacheSignatureHead = TobjNode;
-	    	    
+	    
 	    if(cNode->refs != NULL)
 	    {
 		if( (ConvertReferenceCache(cNode->refs,iMasterCache,TobjNode,data)))
@@ -2848,6 +2850,58 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
 }
 
 
+/**
+ * Find signature with the same SID and GID and set Ref. If Ref is found, 
+ * also check for CACHE_BOTH FLAG
+ *
+ * @param cacheHead 
+ * 
+ * @return 
+ * 0 OK
+ * 1 ERROR
+ */
+u_int32_t SignatureReferencePreGenerate(cacheSignatureObj *iHead)
+{
+    cacheSignatureObj *cObj = NULL;
+    cacheSignatureObj *searchObj = NULL;
+    if( iHead == NULL)
+    {
+	/* XXX */
+	return 1;
+    }
+    
+    cObj = iHead;
+
+    while(cObj != NULL)
+    {
+	if( (cObj->flag & CACHE_BOTH) &&
+	    (cObj->obj.rev != 0) &&
+	    (cObj->obj.ref_count > 0))
+	{
+	    searchObj = iHead;
+	    
+	    while(searchObj != NULL)
+	    {
+		if( (searchObj != cObj) &&
+		    (cObj->obj.sid == searchObj->obj.sid) &&
+		    (cObj->obj.gid == searchObj->obj.gid) &&
+		    (cObj->obj.rev != searchObj->obj.rev))
+		{
+		    searchObj->obj.ref_count = cObj->obj.ref_count;
+		    memcpy(searchObj->obj.ref,cObj->obj.ref, (sizeof(cacheReferenceObj *)*MAX_REF_OBJ));
+		}
+		
+		searchObj = searchObj->next;
+	    }
+	}
+	
+	cObj = cObj->next;
+    }
+    
+    return 0;
+
+}
+
 /** 
  * Wrapper function for signature cache synchronization
  * 
@@ -2914,8 +2968,13 @@ u_int32_t SignatureCacheSynchronize(DatabaseData *data,cacheSignatureObj **cache
 	return 1;
     }
 
-    /* Stop right there sailor! */
-    //CleanExit(0);
+    /* Equilibrate references thru sibblings.*/
+    if(SignatureReferencePreGenerate(*cacheHead))
+    {
+	LogMessage("[%s()], Call to SignatureReferencePreGenerate failed \n",
+		   __FUNCTION__);
+	return 1;
+    }
 
     /* Well done */
     return 0;
@@ -5357,7 +5416,6 @@ u_int32_t SigRefSynchronize(DatabaseData *data,cacheSignatureReferenceObj **cach
 	return 1;
     }
     
-    /* We initialize the structure in a la */
     if( (GenerateSigRef(cacheHead,cacheSigHead)))
     //if( (GenerateSigRef(cacheHead,data->mc.cacheSignatureHead)))
     {
@@ -5462,7 +5520,7 @@ u_int32_t ConvertDefaultCache(Barnyard2Config *bc,DatabaseData *data)
  * 
  * @param data 
  */
-void MasterCacheFlush(DatabaseData *data)
+void MasterCacheFlush(DatabaseData *data,u_int32_t flushFlag)
 {
 
     cacheSignatureObj *MCcacheSignature;
@@ -5479,8 +5537,25 @@ void MasterCacheFlush(DatabaseData *data)
 	/* XXX */
 	return ;
     }
+
+
+    /* Just clean the array's. */
+    if( (flushFlag & CACHE_FLUSH_SIGREF) &&
+	(!(flushFlag & CACHE_FLUSH_SIGNATURE)) &&
+	(data->mc.cacheSignatureHead != NULL))
+    {
+	MCcacheSignature = data->mc.cacheSignatureHead;
+
+        while( MCcacheSignature != NULL)
+        {
+	    MCcacheSignature->obj.ref_count = 0;
+	    memset(MCcacheSignature->obj.ref,'\0',(sizeof(cacheReferenceObj *) * MAX_REF_OBJ));
+	    MCcacheSignature= MCcacheSignature->next;
+	}
+    }
     
-    if( (data->mc.cacheSignatureHead != NULL))
+    if( (data->mc.cacheSignatureHead != NULL) &&
+	(flushFlag & CACHE_FLUSH_SIGNATURE))
     {
 	MCcacheSignature = data->mc.cacheSignatureHead;
 	
@@ -5493,8 +5568,12 @@ void MasterCacheFlush(DatabaseData *data)
 	
 	data->mc.cacheSignatureHead = NULL;
     }
+    
 
-    if( (data->mc.cacheClassificationHead!= NULL) )
+
+
+    if( (data->mc.cacheClassificationHead!= NULL) &&
+	(flushFlag & CACHE_FLUSH_CLASSIFICATION))
     {
 	MCcacheClassification = data->mc.cacheClassificationHead;
 	
@@ -5507,9 +5586,10 @@ void MasterCacheFlush(DatabaseData *data)
 	
 	data->mc.cacheClassificationHead = NULL;
     }
-    
-	
-    if( ( data->mc.cacheSigReferenceHead != NULL) )
+
+
+    if( ( data->mc.cacheSigReferenceHead != NULL) &&
+	(flushFlag & CACHE_FLUSH_SIGREF))
     {
 	MCcacheSigReference = data->mc.cacheSigReferenceHead;
 	
@@ -5522,8 +5602,9 @@ void MasterCacheFlush(DatabaseData *data)
 	
 	data->mc.cacheSigReferenceHead = NULL;
     }
-
-    if( (data->mc.cacheSystemHead != NULL) )
+    
+    if( (data->mc.cacheSystemHead != NULL) &&
+	(flushFlag & CACHE_FLUSH_SYSTEM_REF))
     {
 	MCcacheSystem = data->mc.cacheSystemHead;
 	
@@ -5543,7 +5624,7 @@ void MasterCacheFlush(DatabaseData *data)
 		}
 		
 		MCcacheSystem->obj.refList = NULL;
-
+		
 	    }
 
 	    free(MCcacheSystem);
@@ -5656,9 +5737,16 @@ u_int32_t CacheSynchronize(DatabaseData *data)
 
     DEBUG_WRAP(DebugMessage(DB_DEBUG,"================================================"
 			    "===============================\n\n"));
+
     sleep(5);
 
 #endif
+
+    
+    /* Since we do not need reference and sig_reference clear those cache (free memory) and clean signature reference list and count */
+    MasterCacheFlush(data,CACHE_FLUSH_SYSTEM_REF|CACHE_FLUSH_SIGREF|CACHE_FLUSH_SIGREF);
+    /* Since we do not need reference and sig_reference clear those cache (free memory) and clean signature reference list and count */
+    
     
     return 0;
 }

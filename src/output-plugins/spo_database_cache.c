@@ -37,13 +37,12 @@
 cacheSignatureObj *cacheGetSignatureNodeUsingDBid(cacheSignatureObj *iHead,u_int32_t lookupId);
 cacheReferenceObj *cacheGetReferenceNodeUsingDBid(cacheSystemObj *iHead,u_int32_t lookupId);
 
-u_int32_t cacheSignatureReferenceLookup(dbSignatureReferenceObj *iLookup,cacheSignatureReferenceObj *iHead);
 u_int32_t cacheSignatureLookup(dbSignatureObj *iLookup,cacheSignatureObj *iHead);
 u_int32_t cacheClassificationLookup(dbClassificationObj *iLookup,cacheClassificationObj *iHead);
 u_int32_t cacheSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead,cacheSystemObj **rcacheSystemObj);
 u_int32_t cacheReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead,cacheReferenceObj **retRefLookupNode);
 
-u_int32_t dbSignatureReferenceLookup(dbSignatureReferenceObj *iLookup,cacheSignatureReferenceObj *iHead,cacheSignatureReferenceObj **retSigRef);
+u_int32_t dbSignatureReferenceLookup(dbSignatureReferenceObj *iLookup,cacheSignatureReferenceObj *iHead,cacheSignatureReferenceObj **retSigRef,u_int32_t refCondCheck);
 u_int32_t dbReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead);
 u_int32_t dbSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead);
 u_int32_t dbSignatureLookup(dbSignatureObj *iLookup,cacheSignatureObj *iHead);
@@ -65,10 +64,11 @@ u_int32_t SignaturePullDataStore(DatabaseData *data, dbSignatureObj **iArrayPtr,
 u_int32_t SignatureCacheSynchronize(DatabaseData *data,cacheSignatureObj **cacheHead);
 /* SIGNATURE FUNCTIONS */
 
+/* REFERENCE FUNCTIONS */
 u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,u_int32_t *array_length);
 u_int32_t ReferenceCacheUpdateDBid(dbReferenceObj *iDBList,u_int32_t array_length,cacheSystemObj **cacheHead);
 u_int32_t ReferencePopulateDatabase(DatabaseData  *data,cacheReferenceObj *cacheHead);
-
+/* REFERENCE FUNCTIONS */
 
 /* SYSTEM FUNCTIONS */
 u_int32_t SystemPopulateDatabase(DatabaseData  *data,cacheSystemObj *cacheHead);
@@ -439,7 +439,6 @@ u_int32_t cacheReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead,
  * and return the cacheSignatureReferenceObj found (if any)
  * @note ref_seq is not compared because it could have changed and it is 
  *       handled elsewhere.
- * @note Used in context db->internaCache lookup (if found remove CACHE_INTERNAL_ONLY and set CACHE_BOTH flag)
  *
  * @param iLookup 
  * @param iHead 
@@ -449,7 +448,7 @@ u_int32_t cacheReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead,
  * 0 NOT FOUND
  * 1 FOUND
  */
-u_int32_t dbSignatureReferenceLookup(dbSignatureReferenceObj *iLookup,cacheSignatureReferenceObj *iHead,cacheSignatureReferenceObj **retSigRef)
+u_int32_t dbSignatureReferenceLookup(dbSignatureReferenceObj *iLookup,cacheSignatureReferenceObj *iHead,cacheSignatureReferenceObj **retSigRef,u_int32_t refCondCheck)
  {
      
      if( (iLookup == NULL) ||
@@ -464,34 +463,32 @@ u_int32_t dbSignatureReferenceLookup(dbSignatureReferenceObj *iLookup,cacheSigna
      
      while(iHead != NULL)
      {
-         //((iLookup->db_ref_id == iHead->obj.db_ref_id) &&
-	 /* 
-	    SHOULD BUT WE DO NOT.
-	    There is a little issue where definition in file for signature reference order could 
-	    be different than the one defined in the database and mabey for some reason the revision
-	    wouldn't have changed as with the rule body, 
-	    thus we define this as a fatal error
-	    to prevent wrongly inserted data.
-	    if( memcmp(&iHead->obj,iLookup,sizeof(dbSignatureReferenceObj)) == 0)
-	 */
-	 /* 
-	    This condition is actualy build on the primary key restriction on the table.
-            THIS TABLE WILL BE GONE, because the amount of effort it require to 
-	    populate is quite useless compared to its value, its clearly an artefact.
-	 */
-	 if( (iLookup->ref_seq == iHead->obj.ref_seq) &&
-	     (iLookup->db_sig_id == iHead->obj.db_sig_id))
-	 {
-	     /* Found */
-	     *retSigRef = iHead;
-	     if(  iHead->flag & CACHE_INTERNAL_ONLY)
-	     {
-		 iHead->flag ^= (CACHE_INTERNAL_ONLY | CACHE_BOTH);
-	     }
-	     
-	     return 1;
-	 }
 	 
+	 if(refCondCheck == 0)
+	 {
+	     if( (iLookup->ref_seq == iHead->obj.ref_seq) &&
+		 (iLookup->db_sig_id == iHead->obj.db_sig_id))
+	     {
+		 /* Found */
+		 *retSigRef = iHead;
+		 return 1;
+	     }
+	 }
+	 else if(refCondCheck == 1)
+	 {
+	     if( (iLookup->db_ref_id == iHead->obj.db_ref_id) &&
+                 (iLookup->db_sig_id == iHead->obj.db_sig_id))
+             {
+		 /* Found */
+                 *retSigRef = iHead;
+                 return 1;
+             }
+
+	 }
+
+	     
+	 
+
 	 iHead = iHead->next;
      }
      
@@ -857,13 +854,15 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
 	    strncpy(ref_LobjNode.ref_tag,cNode->id,REF_TAG_LEN);
 	    ref_LobjNode.ref_tag[REF_TAG_LEN-1] = '\0'; //safety			
 	    
-            if( (snort_escape_string_STATIC(ref_LobjNode.ref_tag,REF_TAG_LEN,data)))
-            {
-                FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-                           "[%s], Exiting. \n",
-                           __FUNCTION__,
-                           ref_LobjNode.ref_tag);
-            }
+	    
+	    if( (snort_escape_string_STATIC(ref_LobjNode.ref_tag,REF_TAG_LEN,data)))
+	    {
+		FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
+			   "[%s], Exiting. \n",
+			   __FUNCTION__,
+			   ref_LobjNode.ref_tag);
+	    }
+	    
 	    
 	    /* Lookup Reference node */
 	    if((cacheReferenceLookup(&ref_LobjNode,sysRetCacheNode->obj.refList,&retRefLookupNode) == 0))
@@ -2885,7 +2884,8 @@ u_int32_t SignatureReferencePreGenerate(cacheSignatureObj *iHead)
 		if( (searchObj != cObj) &&
 		    (cObj->obj.sid == searchObj->obj.sid) &&
 		    (cObj->obj.gid == searchObj->obj.gid) &&
-		    (cObj->obj.rev != searchObj->obj.rev))
+		    /* Only set lesser revision rule with refs */
+		    (cObj->obj.rev < searchObj->obj.rev))
 		{
 		    searchObj->obj.ref_count = cObj->obj.ref_count;
 		    memcpy(searchObj->obj.ref,cObj->obj.ref, (sizeof(cacheReferenceObj *)*MAX_REF_OBJ));
@@ -3162,11 +3162,11 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
 				/* Do nothing for now but could be used to do a consistency check */
 				cPtr->system_id = strtoul(row[i],NULL,10);
 				break;
-
+				
 			    case 2:
 				strncpy(cPtr->ref_tag,row[i],REF_TAG_LEN);
 				cPtr->ref_tag[REF_TAG_LEN-1] = '\0'; //toasty.
-
+				
 				//Safety escape value.
                                 if( (snort_escape_string_STATIC(cPtr->ref_tag,REF_TAG_LEN,data)))
                                 {
@@ -3175,7 +3175,7 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
                                                __FUNCTION__,
                                                cPtr->ref_tag);
                                 }
-
+				
 
 				break;
 
@@ -3292,7 +3292,7 @@ u_int32_t ReferencePullDataStore(DatabaseData *data, dbReferenceObj **iArrayPtr,
 			case 2:
 			    strncpy(cPtr->ref_tag,pg_val,REF_TAG_LEN);
 			    cPtr->ref_tag[REF_TAG_LEN-1] = '\0'; //toasty.
-
+			    
 			    //Safety escape value.
 			    if( (snort_escape_string_STATIC(cPtr->ref_tag,REF_TAG_LEN,data)))
 			    {
@@ -4190,13 +4190,7 @@ u_int32_t ReferencePopulateDatabase(DatabaseData  *data,cacheReferenceObj *cache
             inserted_reference_object_count++;
 #endif
 
-	    if( (snort_escape_string_STATIC(cacheHead->obj.ref_tag,REF_TAG_LEN,data)))
-            {
-                FatalError("database [%s()], Failed a call to snort_escape_string_STATIC() for string : \n"
-                           "[%s], Exiting. \n",
-                           __FUNCTION__,
-                           &cacheHead->obj.ref_tag);
-            }
+	    /* Removed the escaping because we live escaped in the cache */
 	    
 	    DatabaseCleanInsert(data);
 	    
@@ -4549,10 +4543,10 @@ u_int32_t GenerateSigRef(cacheSignatureReferenceObj **iHead,cacheSignatureObj *s
 	return 1;
     }
     
-    
     while(sigHead != NULL)
     {
-	/* Do not generate sig_ref for internal sig only, since they are not inserted anymore. */
+	/* Do not generate sig_ref for internal sig, since they are not inserted, 
+	   db_id is 0 and this is corrupting the process  */
 	if(sigHead->obj.db_id != 0)
 	{
 	    for(node_count = 0; node_count < sigHead->obj.ref_count; node_count++)
@@ -5149,6 +5143,8 @@ cacheReferenceObj *cacheGetReferenceNodeUsingDBid(cacheSystemObj *iHead,u_int32_
 /** 
  *  Merge internal SignatureReference cache with database data, detect difference, tag known node for database update
  * 
+ * @note This function cost alot but its the price to pay to sync and make sure we respect the db constraint
+ *
  * @param iDBList 
  * @param array_length 
  * @param cacheHead 
@@ -5165,18 +5161,17 @@ u_int32_t SignatureReferenceCacheUpdateDBid(dbSignatureReferenceObj *iDBList,
 					    cacheSignatureObj *sigCacheHead,
 					    cacheSystemObj *systemCacheHead)
 {
-    cacheSignatureObj *sigObj  = NULL;
-    cacheSignatureReferenceObj *cTobjNode = NULL;
-
-    cacheReferenceObj *refObj = NULL;
+    
+    cacheSignatureReferenceObj *cCheck = NULL;    
+    cacheSignatureReferenceObj *cacheLookup = NULL;
+    cacheSignatureReferenceObj *tempCache = NULL;
+    cacheSignatureReferenceObj *tNode = NULL;
+    cacheSignatureReferenceObj *rNode = NULL;
     
     dbSignatureReferenceObj *cObj = NULL;
-    dbSignatureReferenceObj *tObj = NULL;
     
-    u_int32_t refMaxPos = 0;
-
+    u_int32_t maxSeq = 0;
     int x = 0;
-    int y = 0;
     
     if( (iDBList == NULL) ||
 	(cacheHead == NULL) ||
@@ -5195,81 +5190,133 @@ u_int32_t SignatureReferenceCacheUpdateDBid(dbSignatureReferenceObj *iDBList,
 	return 0;
     }
     
+    /* Build a temporary list from db records */
     for(x = 0 ; x < array_length ; x++)
     {
-	cObj = &iDBList[x];
-	refMaxPos = 0;
-	cTobjNode = NULL;  /* In case something goes wrong.... */
+        cObj = &iDBList[x];
 	
-	if( (dbSignatureReferenceLookup(cObj,*cacheHead,&cTobjNode) == 0))
-        {	    
-	    if( (cTobjNode = SnortAlloc(sizeof(cacheSignatureReferenceObj))) == NULL)
-            {
-                /* XXX */
-                return 1;
-            }
-	    memcpy(&cTobjNode->obj,&cObj,sizeof(dbSignatureReferenceObj));
-	    cTobjNode->flag ^= CACHE_DATABASE_ONLY;
-	    cTobjNode->next = *cacheHead;
-            *cacheHead = cTobjNode;
+	if(tempCache != NULL)
+	{
+	    if( (dbSignatureReferenceLookup(cObj,tempCache,&rNode,0) == 0))
+	    {
+		if( (tNode = SnortAlloc(sizeof(cacheSignatureReferenceObj))) == NULL)
+		{
+		    /* XXX */
+		    goto f_err;
+		}
+		
+		memcpy(&tNode->obj,cObj,sizeof(dbSignatureReferenceObj));
+		tNode->flag ^= CACHE_DATABASE_ONLY;
+		tNode->next = tempCache;
+		tempCache = tNode;
+	    }
+	    else
+	    {
+		LogMessage("Warning [%s()] : sig_id [%u] ref_id [%u] ref_seq [%u] Duplicate found in database with database constraint? Ignoring element in temporary cache \n",
+			   cObj->db_sig_id,
+			   cObj->db_ref_id,
+			   cObj->ref_seq);
+	    }
 	}
 	else
 	{
-	    if(  (cTobjNode->obj.db_ref_id ==cObj->db_ref_id) &&
-		 (cTobjNode->obj.db_sig_id ==cObj->db_sig_id) &&
-		 (cTobjNode->obj.ref_seq != cObj->ref_seq))
-            {
-                /*
-		  Find the max ref for a node of same sig_id in dblist
-		  a good sql query would suffice ...honestly further this
-		  is from database interaction ...the better it is.
-		*/
-		for(y = 0; y < array_length ; y++)
-                {
-                    tObj = &iDBList[y];
-                    if( (cObj->db_sig_id == tObj->db_sig_id) &&
-                        (tObj->ref_seq > refMaxPos))
-                    {
-                        refMaxPos = tObj->ref_seq;
-
-                        if( refMaxPos > MAX_REF_OBJ)
-                        {
-                            /* XXX */
-                            LogMessage("[%s()]: To many ref's for you my dear! \n",
-                                       __FUNCTION__);
-                            return 1;
-                        }
-                    }
-                }
-		
-                if( (sigObj = cacheGetSignatureNodeUsingDBid(sigCacheHead,cObj->db_sig_id)) == NULL)
-                {
-                    /* XXX */
-                    return 1;
-                }
-		
-		if( (refObj = cacheGetReferenceNodeUsingDBid(systemCacheHead,cTobjNode->obj.db_ref_id)) == NULL)
-		{
-		    /* XXX */
-		    return 1;
-		}
-		
-                memcpy(&cTobjNode->obj,cObj,sizeof(dbSignatureReferenceObj));
-		
-		/* Set the reference at the new signature position */
-                sigObj->obj.ref[refMaxPos] = refObj;
-                sigObj->obj.ref_count =  refMaxPos+1;
+	    if( (tNode = SnortAlloc(sizeof(cacheSignatureReferenceObj))) == NULL)
+	    {
+		/* XXX */
+		goto f_err;
 	    }
+	    memcpy(&tNode->obj,cObj,sizeof(dbSignatureReferenceObj));
+	    tNode->flag ^= CACHE_DATABASE_ONLY;
+	    tNode->next = tempCache;
+	    tempCache = tNode;
+	    
 	}
     }
+   
+
+    cacheLookup = *cacheHead;
     
+    while(cacheLookup != NULL)
+    {
+	maxSeq = 0;
+
+	/* Look if we have colision with the databases entry*/
+	/* sig_id,ref_id */
+	/* if we have such collision, get Largest ref_id, bump it */
+	if(dbSignatureReferenceLookup(&cacheLookup->obj,tempCache,&rNode,1))
+	{
+	    if(cacheLookup->obj.ref_seq > rNode->obj.ref_seq)
+	    {
+		cacheLookup->obj.ref_seq =  rNode->obj.ref_seq;
+	    }
+	    cacheLookup->flag ^=(CACHE_BOTH | CACHE_INTERNAL_ONLY);
+	}
+	else
+	{
+	    /* Validate in internal cache */
+	    cCheck = *cacheHead;
+	    
+	    while(cCheck != NULL)
+	    {
+		if(cCheck->obj.db_sig_id == cacheLookup->obj.db_sig_id)
+		{
+		    if(cCheck->obj.ref_seq > maxSeq)
+		    {
+			maxSeq = cCheck->obj.ref_seq;
+		    }
+		}
+		
+		cCheck = cCheck->next;
+	    }
+	    
+	    /* Validate in temp cache */
+	    cCheck =  tempCache;
+
+	    while(cCheck != NULL)
+            {
+		if(cCheck->obj.db_sig_id == cacheLookup->obj.db_sig_id)
+                {
+                    if(cCheck->obj.ref_seq > maxSeq)
+                    {
+                        maxSeq = cCheck->obj.ref_seq;
+                    }
+                }
+
+                cCheck = cCheck->next;
+            }
+	    
+	    cacheLookup->obj.ref_seq = maxSeq+1;
+	    
+	}
+		
+	cacheLookup = cacheLookup->next;
+    }
+    
+    
+    while(tempCache != NULL)
+    {
+	tNode = tempCache->next;
+	free(tempCache);
+	tempCache = tNode;
+    }
     return 0;
+    
+f_err:
+    while(tempCache != NULL)
+    {
+	tNode = tempCache->next;
+	free(tempCache);
+	tempCache = tNode;
+    }
+    return 1;
+
 }
 
 
 /** 
  *  Populate the sig_reference table with record that are not present in the database.
  * 
+ * @note  Transaction isolation is done at row level to prevent possible race condition with an other starting process
  * @param data 
  * @param cacheHead 
  * 
@@ -5308,7 +5355,7 @@ u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureRe
                    data->SQL_SELECT);
     }
     
-    BeginTransaction(data);
+
     
     while(cacheHead != NULL)
     {
@@ -5327,12 +5374,11 @@ u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureRe
                                cacheHead->obj.ref_seq)) != SNORT_SNPRINTF_SUCCESS)
 	    {
                 /* XXX */
-                goto TransactionFail;
+                //goto TransactionFail;
+		goto f_exit;
             }
 
-	  
-
-            DatabaseCleanSelect(data);
+	    DatabaseCleanSelect(data);
             if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                                SQL_SELECT_SPECIFIC_SIGREF,
                                cacheHead->obj.db_ref_id,
@@ -5340,34 +5386,49 @@ u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureRe
                                cacheHead->obj.ref_seq)) !=  SNORT_SNPRINTF_SUCCESS)
 	    {
                 /* XXX */
-                goto TransactionFail;
+                //goto TransactionFail;
+		goto f_exit;
             }
 	    
-	    if(Insert(data->SQL_INSERT,data,1))
+	    /* Prevent race.. */
+	    usleep(100);
+	    
+	    if(Select(data->SQL_SELECT,data,&row_validate))
             {
-                /* XXX */
-                goto TransactionFail;
-            }
-	    
-	    row_validate = 0;
-	    
-            if(Select(data->SQL_SELECT,data,&row_validate))
-            {
-                /* XXX */
-                goto TransactionFail;
-            }
-	    
-	    if(row_validate != cacheHead->obj.db_ref_id)
-	    {
-		/* XXX */
-		LogMessage("[%s()]: Couldn't validate insertion of values inserted INSERTED[%u], RECEIVED[%u] this is inconsistance and we quit.\n",
-			   __FUNCTION__,
-			   cacheHead->obj.db_ref_id,
-			   row_validate);
-		
-		goto TransactionFail;
+		/* Entry was not found */
+		if(row_validate == 0)
+		{
+		    BeginTransaction(data);
+		    
+		    if(Insert(data->SQL_INSERT,data,1))
+		    {
+			/* XXX */
+			goto TransactionFail;
+		    }
+		    
+		    row_validate = 0;
+		    
+		    if(Select(data->SQL_SELECT,data,&row_validate))
+		    {
+			/* XXX */
+			goto TransactionFail;
+		    }
+		    
+		    if(row_validate != cacheHead->obj.db_ref_id)
+		    {
+			/* XXX */
+			LogMessage("[%s()]: Couldn't validate insertion of values inserted INSERTED[%u], RECEIVED[%u] this is inconsistance and we quit.\n",
+				   __FUNCTION__,
+				   cacheHead->obj.db_ref_id,
+				   row_validate);
+			
+			goto TransactionFail;
+		    }
+		    
+		    CommitTransaction(data);
+		}
 	    }
-
+	    
 	    if(cacheHead->flag & CACHE_INTERNAL_ONLY)
 	    {
 		cacheHead->flag ^=(CACHE_INTERNAL_ONLY | CACHE_BOTH);
@@ -5378,12 +5439,13 @@ u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureRe
 	
     }
     
-    CommitTransaction(data);
+
 
     return 0;
     
 TransactionFail:
     RollbackTransaction(data);
+f_exit:
     return 1;
 }
 
@@ -5417,7 +5479,6 @@ u_int32_t SigRefSynchronize(DatabaseData *data,cacheSignatureReferenceObj **cach
     }
     
     if( (GenerateSigRef(cacheHead,cacheSigHead)))
-    //if( (GenerateSigRef(cacheHead,data->mc.cacheSignatureHead)))
     {
 	/* XXX */
 	return 1;

@@ -2890,7 +2890,7 @@ u_int32_t snort_escape_string_STATIC(char *from, u_int32_t buffer_max_len ,Datab
 		*to++= '\\';
 		break;
 	    case '/':
-		*to++= '\\';      /* / --> \\/ */
+		*to++= '\\';      /* / --> \/ */
 		*to++= '/';
 		break;
 	    case '\'':           /* '  -->  \' */
@@ -2945,7 +2945,6 @@ u_int32_t snort_escape_string_STATIC(char *from, u_int32_t buffer_max_len ,Datab
 	break;
 #endif /* ENABLE_POSTGRESQL*/	
     default:
-
 	for (end=from+from_length; from != end; from++)
 	{
 	    switch(*from)

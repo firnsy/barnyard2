@@ -1438,7 +1438,7 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
     }
     
     memset(&unInitSig,'\0',sizeof(cacheSignatureObj));
-
+    
     *psig_id = 0;
     
     sid =  ntohl(((Unified2EventCommon *)event)->signature_id);
@@ -1462,7 +1462,6 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 #endif
     
     db_classification_id = cacheEventClassificationLookup(data->mc.cacheClassificationHead,classification);
-    
     
     /* 
        This function comes with a little twist where it return the number of matching couple for 

@@ -709,12 +709,12 @@ u_int32_t dbClassificationLookup(dbClassificationObj *iLookup,cacheClassificatio
                    iLookup,
                    iHead);
     }
-
+    
     if(iHead == NULL)
     {
 	return 0;
     }
-
+    
     while(iHead != NULL)
     {
 	if( (strncasecmp(iLookup->sig_class_name,iHead->obj.sig_class_name,strlen(iHead->obj.sig_class_name)) == 0))
@@ -1111,7 +1111,9 @@ u_int32_t ConvertClassificationCache(ClassType **iHead, MasterCache *iMasterCach
     
     if( (cNode = *iHead) == NULL)
     {
-	/* Nothing to do */
+	LogMessage("[%s()], No classification was found in the classification file,\n"
+                   "\t make sure that you have valid records in your database (sig_class) table, else this might result in complete signature logging. \n",
+		   __FUNCTION__);
 	return 0;
     }
     
@@ -1306,7 +1308,7 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
 		    }
                     mysql_free_result(data->m_result);
                     data->m_result = NULL;
-                    LogMessage("[%s()]: No signature found in database ... \n",
+                    LogMessage("[%s()]: No Classification found in database ... \n",
                                __FUNCTION__);
 		    return 0;
                 }
@@ -1709,10 +1711,10 @@ u_int32_t ClassificationPullDataStore(DatabaseData *data, dbClassificationObj **
  */
 u_int32_t ClassificationCacheUpdateDBid(dbClassificationObj *iDBList,u_int32_t array_length,cacheClassificationObj **cacheHead)
 {
-    
-    dbClassificationObj *cObj = NULL;
 
-    cacheClassificationObj *TobjNode = NULL;
+
+    cacheClassificationObj *TobjNode = NULL;    
+    dbClassificationObj *cObj = NULL;
 
     int x = 0;
 
@@ -1722,6 +1724,14 @@ u_int32_t ClassificationCacheUpdateDBid(dbClassificationObj *iDBList,u_int32_t a
     {
 	/* XXX */
 	return 1;
+    }
+
+
+    /* Set default db object classification id as invocation require */
+    for(x = 0 ; x < array_length ; x++)
+    {
+	cObj = &iDBList[x];
+	cObj->sig_class_id = x+1;
     }
     
     for(x = 0 ; x < array_length ; x++)
@@ -1769,9 +1779,8 @@ u_int32_t ClassificationCacheUpdateDBid(dbClassificationObj *iDBList,u_int32_t a
  */
 u_int32_t ClassificationPopulateDatabase(DatabaseData  *data,cacheClassificationObj *cacheHead)
 {
-
     u_int32_t db_class_id;
-
+    
     if( (data == NULL) ||
 	(cacheHead == NULL))
     {
@@ -1785,7 +1794,7 @@ u_int32_t ClassificationPopulateDatabase(DatabaseData  *data,cacheClassification
         /* XXX */
         return 1;
     }
-
+    
     if( (data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
     {
         /* XXX */
@@ -1850,7 +1859,6 @@ u_int32_t ClassificationPopulateDatabase(DatabaseData  *data,cacheClassification
 
 
 	}
-	cacheHead->flag ^=  (CACHE_INTERNAL_ONLY | CACHE_BOTH);
 	cacheHead = cacheHead->next;
 
 
@@ -1877,12 +1885,11 @@ TransactionFail:
  */
 u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationObj **cacheHead)
 {
-    
     dbClassificationObj *dbClassArray = NULL;
     u_int32_t array_length = 0;
     
     if( (data == NULL) ||
-	(*cacheHead == NULL))
+	(cacheHead == NULL))
     {
 	/* XXX */
        	return 1;
@@ -1893,11 +1900,11 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
 	/* XXX */
 	return 1;
     }
+
     
 #if DEBUG
     db_classification_object_count=array_length;
 #endif
-    
     
     if( array_length > 0 )
     {
@@ -1924,12 +1931,24 @@ u_int32_t ClassificationCacheSynchronize(DatabaseData *data,cacheClassificationO
 	array_length = 0;
     }
     
-    if(ClassificationPopulateDatabase(data,*cacheHead))
+    
+    if(*cacheHead == NULL)
     {
-	LogMessage("[%s()], Call to ClassificationPopulateDatabase() failed \n",
+	LogMessage("\n[%s()]: Make sure that your (config classification_config argument in your barnyard2 configuration file) or --classification or -C argument point \n"
+		   "\t to a file containing at least some valid classification or that that your database sig_class table contain data\n\n",
 		   __FUNCTION__);
-	
 	return 1;
+    }
+    
+    if(*cacheHead != NULL)
+    {
+	if(ClassificationPopulateDatabase(data,*cacheHead))
+	{
+	    LogMessage("[%s()], Call to ClassificationPopulateDatabase() failed \n",
+		       __FUNCTION__);
+	    
+	    return 1;
+	}
     }
     
     /* out list will behave now */

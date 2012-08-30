@@ -1411,22 +1411,17 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 {
     cacheSignatureObj unInitSig;
     dbSignatureObj sigInsertObj= {0};
-
-    u_int32_t db_classification_id = 0;
     
-    u_int32_t sigMatchCount = 0;
     u_int32_t x =0;
     
+    u_int32_t db_classification_id = 0;
+    u_int32_t sigMatchCount = 0;
     u_int32_t sid = 0;
     u_int32_t gid = 0;
     u_int32_t revision = 0;
     u_int32_t priority = 0;
     u_int32_t classification = 0;
-
-    u_int32_t oldRevision = 0;
-    
     u_int32_t sigMsgLen = 0;
-
     u_int8_t reuseSigMsg = 0;
 
     if( (data == NULL)   ||
@@ -1452,8 +1447,7 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
        For sanity purpose the sig_class table SHOULD have internal classification id to prevent possible 
        miss classification tagging ... but this is not happening with the old schema.
     */
-    
-   
+       
     
 #if DEBUG
     DEBUG_WRAP(DebugMessage(DB_DEBUG,"[%s()], Classification cachelookup [class_id: %u]\n",
@@ -1481,129 +1475,80 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 						   data->mc.plgSigCompare,
 						   gid,sid)) > 0 )
     {	
-        /* We only have one match */
-	if(sigMatchCount == 1)
+	for(x = 0 ; x < sigMatchCount ; x++)
 	{
-	    if( (data->mc.plgSigCompare[0].cacheSigObj->obj.rev == revision) &&
-		(data->mc.plgSigCompare[0].cacheSigObj->obj.class_id == db_classification_id) &&
-		(data->mc.plgSigCompare[0].cacheSigObj->obj.priority_id == priority))
+	    if( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev == revision) &&
+		(data->mc.plgSigCompare[x].cacheSigObj->obj.class_id == db_classification_id) && 
+		(data->mc.plgSigCompare[x].cacheSigObj->obj.priority_id == priority))
 	    {
-		
-                /* Added for bugcheck */
-		assert( data->mc.plgSigCompare[0].cacheSigObj->obj.db_id != 0);		
-		
-		*psig_id = data->mc.plgSigCompare[0].cacheSigObj->obj.db_id;
+		/* Added for bugcheck */
+		assert( data->mc.plgSigCompare[x].cacheSigObj->obj.db_id != 0);
+		*psig_id = data->mc.plgSigCompare[x].cacheSigObj->obj.db_id;
 		return 0;
 	    }
 	    
-	    /* We hit a case where the signature never has been present beside being inserted by the process from the map file*/
-	    if(data->mc.plgSigCompare[0].cacheSigObj->obj.rev == 0)
+	    /* If we have an "uninitialized signature save it */
+	    if( data->mc.plgSigCompare[x].cacheSigObj->obj.rev == 0 || 
+		data->mc.plgSigCompare[x].cacheSigObj->obj.rev < revision)
 	    {
-		oldRevision = data->mc.plgSigCompare[0].cacheSigObj->obj.rev;
-		data->mc.plgSigCompare[0].cacheSigObj->obj.rev = revision;
-		data->mc.plgSigCompare[0].cacheSigObj->obj.class_id = db_classification_id;
-		data->mc.plgSigCompare[0].cacheSigObj->obj.priority_id = priority;
+		memcpy(&unInitSig,data->mc.plgSigCompare[x].cacheSigObj,sizeof(cacheSignatureObj));
 		
-		/* UPDATE the signature information */
-		if( (dbSignatureInformationUpdate(data,data->mc.plgSigCompare[0].cacheSigObj)))
+		/* 
+		** We assume that we have the same signature, but with a smaller revision
+		** set the unInitSig db_id to 0 for post processing if we do not find a matching 
+		** signature, and get the lastest revision
+		*/
+		if( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev < revision) ||
+		    (data->mc.plgSigCompare[x].cacheSigObj->obj.rev > unInitSig.obj.rev))
 		{
-		    /* XXX */
-		    LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for : \n"
-			       "[gid :%u] [sid: %u] [rev: %u] __ [upd rev: %u] [upd class: %u] [upd pri %u]\n",
-			       __FUNCTION__,
-			       __LINE__,
-			       gid,
-			       sid,
-			       oldRevision,
-			       revision,
-			       db_classification_id,
-			       priority);
-		    return 1;
+		    unInitSig.obj.db_id = 0;
 		}
-
-		/* Added for bugcheck */
-		assert( data->mc.plgSigCompare[0].cacheSigObj->obj.db_id != 0);
-
-		*psig_id = data->mc.plgSigCompare[0].cacheSigObj->obj.db_id;
-                return 0;
-	    }
-	    
-	}
-	else
-	{
-	    for(x = 0 ; x < sigMatchCount ; x++)
-	    {
-		/* If we have an "uninitialized signature save it */
-		if( data->mc.plgSigCompare[x].cacheSigObj->obj.rev == 0 || 
-		    data->mc.plgSigCompare[x].cacheSigObj->obj.rev < revision)
-		{
-		    memcpy(&unInitSig,data->mc.plgSigCompare[x].cacheSigObj,sizeof(cacheSignatureObj));
-		    
-		    /* We assume that we have the same signature, but with a smaller revision
-		    ** set the unInitSig db_id to 0 for post processing if we do not find a matching 
-		    ** signature.
-		    */
-		    if( data->mc.plgSigCompare[x].cacheSigObj->obj.rev < revision)
-		    {
-			unInitSig.obj.db_id = 0;
-		    }
-		}
-		
-		if( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev == revision) &&
-		    (data->mc.plgSigCompare[x].cacheSigObj->obj.class_id == db_classification_id) && 
-		    (data->mc.plgSigCompare[x].cacheSigObj->obj.priority_id == priority))
-		{
-		    /* Added for bugcheck */
-		    assert( data->mc.plgSigCompare[x].cacheSigObj->obj.db_id != 0);
-		    
-		    *psig_id = data->mc.plgSigCompare[x].cacheSigObj->obj.db_id;
-		    return 0;
-		}
-	    }
-	    
-	    if(unInitSig.obj.db_id != 0)
-	    {
-#if DEBUG
-		DEBUG_WRAP(DebugMessage(DB_DEBUG,"[%s()], [%u] signatures where found in cache for [gid: %u] [sid: %u] but non matched\n" 
-					"updating database [db_sig_id: %u] with [rev: 0] to [rev: %u] \n",
-					__FUNCTION__,
-					sigMatchCount,
-					gid,
-					sid,
-					unInitSig.obj.db_id,
-					revision));
-#endif
-		
-		unInitSig.obj.rev = revision;
-		unInitSig.obj.class_id = db_classification_id;
-		unInitSig.obj.priority_id = priority;
-		
-                /* UPDATE the signature information */
-                if( (dbSignatureInformationUpdate(data,&unInitSig)))
-                {
-                    /* XXX */
-		    LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for : \n"
-			       "[gid :%u] [sid: %u] [rev: %u] __ [upd rev: %u] [upd class: %u] [upd pri %u]\n",
-			       __FUNCTION__,
-			       __LINE__,
-			       gid,\
-			       sid,
-			       oldRevision,
-			       revision,
-			       db_classification_id,
-			       priority);
-                    return 1;
-                }
-		
-		/* Added for bugcheck */
-		assert( unInitSig.obj.db_id != 0);
-		
-                *psig_id = unInitSig.obj.db_id;
-                return 0;
 	    }
 	}
     }
-    
+	
+/*
+  This shouldn't be needed since unitialized signature are not inserted anymore, thus preventing the need for update
+  if(unInitSig.obj.db_id != 0)
+  {
+  #if DEBUG
+  DEBUG_WRAP(DebugMessage(DB_DEBUG,"[%s()], [%u] signatures where found in cache for [gid: %u] [sid: %u] but non matched\n" 
+  "updating database [db_sig_id: %u] with [rev: 0] to [rev: %u] \n",
+  __FUNCTION__,
+  sigMatchCount,
+  gid,
+  sid,
+  unInitSig.obj.db_id,
+  revision));
+  #endif
+  
+  unInitSig.obj.rev = revision;
+  unInitSig.obj.class_id = db_classification_id;
+  unInitSig.obj.priority_id = priority;
+  
+  
+  if( (dbSignatureInformationUpdate(data,&unInitSig)))
+  {
+  
+  LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for : \n"
+  "[gid :%u] [sid: %u] [upd_rev: %u] [upd class: %u] [upd pri %u]\n",
+  __FUNCTION__,
+  __LINE__,
+  gid,						\
+  sid,
+  revision,
+  db_classification_id,
+  priority);
+  return 1;
+  }
+  
+  
+  assert( unInitSig.obj.db_id != 0);
+			   
+  *psig_id = unInitSig.obj.db_id;
+  return 0;
+  }
+*/  
     /* 
        To avoid possible collision with an older barnyard process or 
        avoid signature insertion race condition we will look in the 
@@ -1703,7 +1648,6 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 		       __FUNCTION__);
 	    goto func_err;
 	}
-	
     }
     else
     {

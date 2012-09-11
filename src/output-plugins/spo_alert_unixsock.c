@@ -176,17 +176,18 @@ void AlertUnixSock(Packet *p, void *event, uint32_t event_type, void *arg)
 
     DEBUG_WRAP(DebugMessage(DEBUG_LOG, "Logging Alert data!\n"););
 
-    bzero((char *)&alertpkt,sizeof(alertpkt));
+    memset((char *)&alertpkt, 0, sizeof(alertpkt)); /* bzero() deprecated, replaced with memset() */
     if (event)
     {
-        bcopy((const void *)event,(void *)&alertpkt.event,sizeof(Unified2EventCommon));
+	memmove((void *) &alertpkt.event, (const void *)event, sizeof(Unified2EventCommon)); /* bcopy() deprecated, replaced by memmove() */
     }
 
     if(p && p->pkt)
     {
-        bcopy((const void *)p->pkth,(void *)&alertpkt.pkth,sizeof(struct pcap_pkthdr));
-        bcopy((const void *)p->pkt,alertpkt.pkt,
-              alertpkt.pkth.caplen > SNAPLEN? SNAPLEN : alertpkt.pkth.caplen);
+	/* bcopy() deprecated, replaced by memmove() */
+	memmove((void *) &alertpkt.pkth, (const void *)p->pkth, sizeof(struct pcap_pkthdr));
+	memmmove(alertpkt.pkt, (const void *)p->pkt,
+		 alertpkt.pkth.caplen > SNAPLEN ? SNAPLEN : alertpkt.pkth.caplen);
     }
     else
         alertpkt.val|=NOPACKET_STRUCT;
@@ -196,8 +197,9 @@ void AlertUnixSock(Packet *p, void *event, uint32_t event_type, void *arg)
 
     if (sn != NULL)
     {
-        bcopy((const void *)sn->msg,(void *)alertpkt.alertmsg,
-               strlen(sn->msg)>ALERTMSG_LENGTH-1 ? ALERTMSG_LENGTH - 1 : strlen(sn->msg));
+	/* bcopy() deprecated, replaced by memmove() */
+	memmove((void *) alertpkt.alertmsg, (const void *) sn->msg,
+		strlen(sn->msg) > ALERTMSG_LENGTH-1 ? ALERTMSG_LENGTH - 1 : strlen(sn->msg));
     }
 
     /* some data which will help monitoring utility to dissect packet */
@@ -285,7 +287,7 @@ void OpenAlertSock(void)
             srv);
     }
 
-    bzero((char *) &alertaddr, sizeof(alertaddr));
+    memset((char *) &alertaddr, 0, sizeof(alertaddr)); /* bzero() deprecated, replaced with memset() */
     
     /* 108 is the size of sun_path */
     strncpy(alertaddr.sun_path, srv, 108);

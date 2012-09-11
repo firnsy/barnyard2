@@ -1083,7 +1083,7 @@ static void Barnyard2Cleanup(int exit_val)
         struct timeval difftime;
         struct timezone tz;
 
-        bzero((char *) &tz, sizeof(tz));
+	memset((char *) &tz, 0, sizeof(tz)); /* bzero() deprecated, replaced by memset() */
         gettimeofday(&endtime, &tz);
 
         TIMERSUB(&endtime, &starttime, &difftime);

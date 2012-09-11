@@ -90,7 +90,7 @@ int PlatypusAgentConnect(SpoPlatypusData *);
 int PlatypusAgentInit(SpoPlatypusData *);
 int PlatypusAgentEventSend(SpoPlatypusData *, char *);
 int PlatypusAgentSend(SpoPlatypusData *, char *);
-int PlatypusAgentReceive();
+int PlatypusAgentReceive(SpoPlatypusData *, char *);
 
 char *PlatypusTimestamp(u_int32_t, u_int32_t);
 

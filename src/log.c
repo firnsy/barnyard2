@@ -362,7 +362,7 @@ void PrintIPPkt(FILE * fp, int type, Packet * p)
 
     DEBUG_WRAP(DebugMessage(DEBUG_LOG, "PrintIPPkt type = %d\n", type););
 
-    bzero((char *) timestamp, TIMEBUF_SIZE);
+    memset((char *) timestamp, 0, TIMEBUF_SIZE); /* bzero() deprecated, replaced with memset */
     ts_print((struct timeval *) & p->pkth->ts, timestamp);
 
     /* dump the timestamp */
@@ -864,8 +864,8 @@ void PrintArpHeader(FILE * fp, Packet * p)
     const uint8_t *mac_src = NULL;
     const uint8_t *mac_dst = NULL;
 
-    bzero((struct in_addr *) &ip_addr, sizeof(struct in_addr));
-    bzero((char *) timestamp, TIMEBUF_SIZE);
+    memset((struct in_addr *) &ip_addr, 0, sizeof(struct in_addr)); /* bzero() deprecated, replaced with memset() */
+    memset((char *) timestamp, 0, TIMEBUF_SIZE); /* bzero() deprecated, replaced with memset() */
     ts_print((struct timeval *) & p->pkth->ts, timestamp);
 
     /* determine what to use as MAC src and dst */
@@ -1468,7 +1468,7 @@ void PrintICMPEmbeddedIP(FILE *fp, Packet *p)
     if (fp == NULL || p == NULL)
         return;
 
-    bzero((char *) &op, sizeof(Packet));
+    memset((char *) &op, 0, sizeof(Packet)); /* bzero() deprecated, replaced with memset() */
     orig_p = &op;
 
     orig_p->iph = p->orig_iph;
@@ -1718,7 +1718,7 @@ void PrintTcpOptions(FILE * fp, Packet * p)
         switch(p->tcp_options[i].code)
         {
             case TCPOPT_MAXSEG:
-                bzero((char *) tmp, 5);
+		memset((char *) tmp, 0, 5); /* bzero() deprecated, replaced with memset() */
                 fwrite("MSS: ", 5, 1, fp);
                 if (p->tcp_options[i].data)
                     memcpy(tmp, p->tcp_options[i].data, 2);
@@ -1741,11 +1741,11 @@ void PrintTcpOptions(FILE * fp, Packet * p)
                 break;
 
             case TCPOPT_SACK:
-                bzero((char *) tmp, 5);
+		memset((char *) tmp, 0, 5); /* bzero() deprecated, replaced by memset() */
                 if (p->tcp_options[i].data && (p->tcp_options[i].len >= 2))
                     memcpy(tmp, p->tcp_options[i].data, 2);
                 fprintf(fp, "Sack: %u@", EXTRACT_16BITS(tmp));
-                bzero((char *) tmp, 5);
+		memset((char *) tmp, 0, 5); /* bzero() deprecated, replaced by memset() */
                 if (p->tcp_options[i].data && (p->tcp_options[i].len >= 4))
                     memcpy(tmp, (p->tcp_options[i].data) + 2, 2);
                 fprintf(fp, "%u ", EXTRACT_16BITS(tmp));
@@ -1756,46 +1756,46 @@ void PrintTcpOptions(FILE * fp, Packet * p)
                 break;
 
             case TCPOPT_ECHO:
-                bzero((char *) tmp, 5);
+		memset((char *) tmp, 0, 5); /* bzero() deprecated, replaced by memset() */
                 if (p->tcp_options[i].data)
                     memcpy(tmp, p->tcp_options[i].data, 4);
                 fprintf(fp, "Echo: %u ", EXTRACT_32BITS(tmp));
                 break;
 
             case TCPOPT_ECHOREPLY:
-                bzero((char *) tmp, 5);
+		memset((char *) tmp, 0, 5); /* bzero() deprecated, replaced by memset() */
                 if (p->tcp_options[i].data)
                     memcpy(tmp, p->tcp_options[i].data, 4);
                 fprintf(fp, "Echo Rep: %u ", EXTRACT_32BITS(tmp));
                 break;
 
             case TCPOPT_TIMESTAMP:
-                bzero((char *) tmp, 5);
+		memset((char *) tmp, 0, 5); /* bzero() deprecated, replaced by memset() */
                 if (p->tcp_options[i].data)
                     memcpy(tmp, p->tcp_options[i].data, 4);
                 fprintf(fp, "TS: %u ", EXTRACT_32BITS(tmp));
-                bzero((char *) tmp, 5);
+		memset((char *) tmp, 0, 5); /* bzero() deprecated, replaced by memset() */
                 if (p->tcp_options[i].data)
                     memcpy(tmp, (p->tcp_options[i].data) + 4, 4);
                 fprintf(fp, "%u ", EXTRACT_32BITS(tmp));
                 break;
 
             case TCPOPT_CC:
-                bzero((char *) tmp, 5);
+		memset((char *) tmp, 0, 5); /* bzero() deprecated, replaced by memset() */
                 if (p->tcp_options[i].data)
                     memcpy(tmp, p->tcp_options[i].data, 4);
                 fprintf(fp, "CC %u ", EXTRACT_32BITS(tmp));
                 break;
 
             case TCPOPT_CCNEW:
-                bzero((char *) tmp, 5);
+		memset((char *) tmp, 0, 5); /* bzero() deprecated, replaced by memset() */
                 if (p->tcp_options[i].data)
                     memcpy(tmp, p->tcp_options[i].data, 4);
                 fprintf(fp, "CCNEW: %u ", EXTRACT_32BITS(tmp));
                 break;
 
             case TCPOPT_CCECHO:
-                bzero((char *) tmp, 5);
+		memset((char *) tmp, 0, 5); /* bzero() deprecated, replaced by memset() */
                 if (p->tcp_options[i].data)
                     memcpy(tmp, p->tcp_options[i].data, 4);
                 fprintf(fp, "CCECHO: %u ", EXTRACT_32BITS(tmp));
@@ -1848,7 +1848,7 @@ void PrintEapolPkt(FILE * fp, Packet * p)
   char timestamp[TIMEBUF_SIZE];
   
 
-    bzero((char *) timestamp, TIMEBUF_SIZE);
+    memset((char *) timestamp, 0, TIMEBUF_SIZE); /* bzero() deprecated, replaced by memset() */
     ts_print((struct timeval *) & p->pkth->ts, timestamp);
 
     /* dump the timestamp */
@@ -2022,7 +2022,7 @@ void PrintWifiPkt(FILE * fp, Packet * p)
     char timestamp[TIMEBUF_SIZE];
 
 
-    bzero((char *) timestamp, TIMEBUF_SIZE);
+    memset((char *) timestamp, 0, TIMEBUF_SIZE); /* bzero() deprecated, replaced by memset() */
     ts_print((struct timeval *) & p->pkth->ts, timestamp);
 
     /* dump the timestamp */

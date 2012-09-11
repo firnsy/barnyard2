@@ -539,7 +539,7 @@ void DatabaseSetup(void);
     /* this is for debugging purposes only */
     static char g_CurrentStatement[2048];
     #define SAVESTATEMENT(str)   strncpy(g_CurrentStatement, str, sizeof(g_CurrentStatement) - 1);
-    #define CLEARSTATEMENT()     bzero((char *) g_CurrentStatement, sizeof(g_CurrentStatement));
+    #define CLEARSTATEMENT()     memset((char *) g_CurrentStatement, 0, sizeof(g_CurrentStatement));
 #else
     #define SAVESTATEMENT(str)   NULL;
     #define CLEARSTATEMENT()     NULL;

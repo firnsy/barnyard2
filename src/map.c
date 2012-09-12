@@ -258,7 +258,7 @@ int ReadReferenceFile(Barnyard2Config *bc, const char *file)
         return -1;
     }
 
-    bzero(buf, BUFFER_SIZE);
+    memset(buf, 0, BUFFER_SIZE); /* bzero() deprecated, replaced with memset() */
     
     while ( fgets(buf, BUFFER_SIZE, fd) != NULL )
     {
@@ -459,7 +459,7 @@ int ReadClassificationFile(Barnyard2Config *bc, const char *file)
         return -1;
     }
 
-    bzero(buf, BUFFER_SIZE);
+    memset(buf, 0, BUFFER_SIZE); /* bzero() deprecated, replaced with memset() */
     
     while ( fgets(buf, BUFFER_SIZE, fd) != NULL )
     {
@@ -513,7 +513,7 @@ int ReadSidFile(Barnyard2Config *bc, const char *file)
         return -1;
     }
 
-    bzero(buf, BUFFER_SIZE);
+    memset(buf, 0, BUFFER_SIZE); /* bzero() deprecated, replaced by memset() */
     
     while(fgets(buf, BUFFER_SIZE, fd) != NULL)
     {
@@ -705,7 +705,7 @@ int ReadGenFile(Barnyard2Config *bc, const char *file)
         return -1;
     }
 
-    bzero(buf, BUFFER_SIZE);
+    memset(buf, 0, BUFFER_SIZE); /* bzero() deprecated, replaced by memset() */
     
     while( fgets(buf, BUFFER_SIZE, fd) != NULL )
     {

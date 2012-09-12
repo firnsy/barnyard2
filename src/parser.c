@@ -1100,7 +1100,7 @@ static char * ExpandVars(Barnyard2Config *bc, char *string)
     if(!string || !*string || !strchr(string, '$'))
         return(string);
 
-    bzero((char *) estring, PARSERULE_SIZE);
+    memset((char *) estring, 0, PARSERULE_SIZE); /* bzero() deprecated, replaced by memset() */
 
     i = j = 0;
     l_string = strlen(string);
@@ -1119,7 +1119,7 @@ static char * ExpandVars(Barnyard2Config *bc, char *string)
 
         if(c == '$' && !quote_toggle)
         {
-            bzero((char *) rawvarname, sizeof(rawvarname));
+	    memset((char *) rawvarname, 0, sizeof(rawvarname)); /* bzero() deprecated, replaced by memset() */
             varname_completed = 0;
             name_only = 1;
             iv = i;
@@ -1159,8 +1159,8 @@ static char * ExpandVars(Barnyard2Config *bc, char *string)
 
                 varcontents = NULL;
 
-                bzero((char *) varname, sizeof(varname));
-                bzero((char *) varaux, sizeof(varaux));
+		memset((char *) varname, 0, sizeof(varname)); /* bzero() deprecated, replaced by memset() */
+		memset((char *) varaux, 0, sizeof(varaux)); /* bzero() deprecated, replaced by memset() */
                 varmodifier = ' ';
 
                 p = strchr(rawvarname, ':');
@@ -1177,7 +1177,7 @@ static char * ExpandVars(Barnyard2Config *bc, char *string)
                 else
                     SnortStrncpy(varname, rawvarname, sizeof(varname));
 
-                bzero((char *) varbuffer, sizeof(varbuffer));
+		memset((char *) varbuffer, 0, sizeof(varbuffer)); /* bzero() deprecated, replaced by memset() */
 
                 varcontents = VarSearch(bc, varname);
 

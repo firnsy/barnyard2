@@ -205,9 +205,9 @@ FILE *OpenLogFile(int mode, Packet * p)
 #endif
 
     /* zero out our buffers */
-    bzero((char *) log_path, STD_BUF);
-    bzero((char *) log_file, STD_BUF);
-    bzero((char *) proto, 5);
+    memset((char *) log_path, 0, STD_BUF); /* bzero() deprecated, replaced by memset() */
+    memset((char *) log_file, 0, STD_BUF); /* bzero() deprecated, replaced by memset() */
+    memset((char *) proto, 0, 5); /* bzero() deprecated, replaced by memset() */
 
     if (mode == GENERIC_LOG || mode == DUMP || mode == BOGUS ||
         mode == NON_IP || mode == ARP)

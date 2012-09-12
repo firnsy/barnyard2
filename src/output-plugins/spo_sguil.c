@@ -112,7 +112,7 @@ int SguilSensorAgentConnect(SpoSguilData *);
 int SguilSensorAgentInit(SpoSguilData *);
 int SguilRTEventMsg(SpoSguilData *, char *);
 int SguilSendAgentMsg(SpoSguilData *, char *);
-int SguilRecvAgentMsg();
+int SguilRecvAgentMsg(SpoSguilData *, char *);
 
 char *SguilTimestamp(u_int32_t);
 
@@ -230,7 +230,7 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
     ClassType			*cn = NULL;
     Tcl_DString			list;
 
-    bzero(buffer, TMP_BUFFER);
+    memset(buffer, 0, TMP_BUFFER); /* bzero() deprecated, replaced by memset() */
 
 	if ( event == NULL || arg == NULL )
 	{
@@ -592,7 +592,7 @@ int SguilAppendIPHdrData(Tcl_DString *list, Packet *p)
 {
     char buffer[TMP_BUFFER];
 
-    bzero(buffer, TMP_BUFFER);
+    memset(buffer, 0, TMP_BUFFER); /* bzero() deprecated, replaced by memset() */
 
     SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohl(p->iph->ip_src.s_addr));
     Tcl_DStringAppendElement(list, buffer);
@@ -667,7 +667,7 @@ int SguilAppendICMPData(Tcl_DString *list, Packet *p)
     int i;
     char buffer[TMP_BUFFER];
 
-    bzero(buffer, TMP_BUFFER);
+    memset(buffer, 0, TMP_BUFFER); /* bzero() deprecated, replaced by memset() */
 
     if (!p->icmph)
     {
@@ -742,7 +742,7 @@ int SguilAppendTCPData(Tcl_DString *list, Packet *p)
     int i;
     char buffer[TMP_BUFFER];
 
-    bzero(buffer, TMP_BUFFER);
+    memset(buffer, 0, TMP_BUFFER); /* bzero() deprecated, replaced by memset() */
 
     /* empty elements for icmp data */
     for(i=0; i < 5; i++)
@@ -804,7 +804,7 @@ int SguilAppendUDPData(Tcl_DString *list, Packet *p)
     int i;
     char buffer[TMP_BUFFER];
 
-    bzero(buffer, TMP_BUFFER);
+    memset(buffer, 0, TMP_BUFFER); /* bzero() deprecated, replaced by memset() */
 
     /* empty elements for ICMP data */
     for(i=0; i < 5; i++)

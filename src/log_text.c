@@ -1603,7 +1603,8 @@ void LogArpHeader(TextLog* log, Packet * p)
     switch(ntohs(p->ah->ea_hdr.ar_op))
     {
         case ARPOP_REQUEST:
-            bcopy((void *)p->ah->arp_tpa, (void *) &ip_addr, sizeof(ip_addr));
+	    /* bcopy() deprecated, replaced with memmove() */
+	    memmove((void *) &ip_addr, (void *)p->ah->arp_tpa, sizeof(ip_addr));
             TextLog_Print(log, "ARP who-has %s", inet_ntoa(ip_addr));
 
             if(memcmp((char *) ezero, (char *) p->ah->arp_tha, 6) != 0)
@@ -1612,8 +1613,8 @@ void LogArpHeader(TextLog* log, Packet * p)
                         p->ah->arp_tha[1], p->ah->arp_tha[2], p->ah->arp_tha[3],
                         p->ah->arp_tha[4], p->ah->arp_tha[5]);
             }
-            bcopy((void *)p->ah->arp_spa, (void *) &ip_addr, sizeof(ip_addr));
-
+	    /* bcopy() deprecated, replaced with memmove() */
+	    memmove((void *) &ip_addr, (void *)p->ah->arp_spa, sizeof(ip_addr));
             TextLog_Print(log, " tell %s", inet_ntoa(ip_addr));
 
             if(memcmp((char *) mac_src, (char *) p->ah->arp_sha, 6) != 0)
@@ -1625,7 +1626,8 @@ void LogArpHeader(TextLog* log, Packet * p)
             break;
 
         case ARPOP_REPLY:
-            bcopy((void *)p->ah->arp_spa, (void *) &ip_addr, sizeof(ip_addr));
+	    /* bcopy() deprecated, replaced with memmove() */
+	    memmove((void *) &ip_addr, (void *)p->ah->arp_spa, sizeof(ip_addr));
             TextLog_Print(log, "ARP reply %s", inet_ntoa(ip_addr));
 
             /* print out the originating request if we're on a weirder
@@ -1658,7 +1660,8 @@ void LogArpHeader(TextLog* log, Packet * p)
             break;
 
         case ARPOP_RREPLY:
-            bcopy((void *)p->ah->arp_tpa, (void *) &ip_addr, sizeof(ip_addr));
+	    /* bcopy() deprecated, replaced with memmove() */
+	    memmove((void *) &ip_addr, (void *)p->ah->arp_tpa, sizeof(ip_addr));
             TextLog_Print(log, "RARP reply %X:%X:%X:%X:%X:%X at %s",
                     p->ah->arp_tha[0], p->ah->arp_tha[1], p->ah->arp_tha[2],
                     p->ah->arp_tha[3], p->ah->arp_tha[4], p->ah->arp_tha[5],

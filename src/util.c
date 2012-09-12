@@ -201,7 +201,7 @@ void ts_print(register const struct timeval *tvp, char *timebuf)
     if(!tvp)
     {
         /* manual page (for linux) says tz is never used, so.. */
-        bzero((char *) &tz, sizeof(tz));
+	memset((char *) &tz, 0, sizeof(tz)); /* bzero() deprecated, replaced by memset() */
         gettimeofday(&tv, &tz);
         tvp = &tv;
     }
@@ -2100,7 +2100,7 @@ char *GetCurrentTimestamp(void)
 
     buf = (char *)SnortAlloc(SMALLBUFFER * sizeof(char));
 
-    bzero((char *)&tz,sizeof(tz));
+    memset((char *)&tz, 0, sizeof(tz)); /* bzero() deprecated, replaced by memset() */
     gettimeofday(&tv,&tz);
     tvp = &tv;
 

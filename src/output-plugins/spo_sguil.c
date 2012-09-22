@@ -117,6 +117,7 @@ int SguilRecvAgentMsg();
 char *SguilTimestamp(u_int32_t);
 
 #ifdef ENABLE_TCL
+int SguilAppendIPHdrDataEVT(Tcl_DString *, void *);
 int SguilAppendIPHdrData(Tcl_DString *, Packet *);
 int SguilAppendICMPData(Tcl_DString *, Packet *);
 int SguilAppendTCPData(Tcl_DString *, Packet *);
@@ -584,45 +585,45 @@ void ParseSguilArgs(SpoSguilData *ssd_data)
 }
 
 #ifdef ENABLE_TCL
-int SguilAppendIPHdrDataEVT(Tcl_DString *list, null *event)
+int SguilAppendIPHdrDataEVT(Tcl_DString *list, void *event)
 {
     char buffer[TMP_BUFFER];
 
     bzero(buffer, TMP_BUFFER);
 
-    SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohl((Unified2IDSEvent *)event->ip_source));
+    SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohl(((Unified2IDSEvent *)event)->ip_source));
     Tcl_DStringAppendElement(list, buffer);
 #if defined(WORDS_BIGENDIAN)
     SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
-           ((Unified2IDSEvent *)event->ip_source & 0xff000000) >> 24,
-           ((Unified2IDSEvent *)event->ip_source & 0x00ff0000) >> 16,
-           ((Unified2IDSEvent *)event->ip_source & 0x0000ff00) >> 8,
-           ((Unified2IDSEvent *)event->ip_source & 0x000000ff));
+           (((Unified2IDSEvent *)event)->ip_source & 0xff000000) >> 24,
+           (((Unified2IDSEvent *)event)->ip_source & 0x00ff0000) >> 16,
+           (((Unified2IDSEvent *)event)->ip_source & 0x0000ff00) >> 8,
+           (((Unified2IDSEvent *)event)->ip_source & 0x000000ff));
 #else
     SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
-           ((Unified2IDSEvent *)event->ip_source & 0x000000ff),
-           ((Unified2IDSEvent *)event->ip_source & 0x0000ff00) >> 8,
-           ((Unified2IDSEvent *)event->ip_source & 0x00ff0000) >> 16,
-           ((Unified2IDSEvent *)event->ip_source & 0xff000000) >> 24);
+           (((Unified2IDSEvent *)event)->ip_source & 0x000000ff),
+           (((Unified2IDSEvent *)event)->ip_source & 0x0000ff00) >> 8,
+           (((Unified2IDSEvent *)event)->ip_source & 0x00ff0000) >> 16,
+           (((Unified2IDSEvent *)event)->ip_source & 0xff000000) >> 24);
 #endif
     Tcl_DStringAppendElement(list, buffer);
-    SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohl((Unified2IDSEvent *)event->ip_destination));
+    SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohl(((Unified2IDSEvent *)event)->ip_destination));
     Tcl_DStringAppendElement(list, buffer);
 #if defined(WORDS_BIGENDIAN)
     SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
-           ((Unified2IDSEvent *)event->ip_destination & 0xff000000) >> 24,
-           ((Unified2IDSEvent *)event->ip_destination & 0x00ff0000) >> 16,
-           ((Unified2IDSEvent *)event->ip_destination & 0x0000ff00) >> 8,
-           ((Unified2IDSEvent *)event->ip_destination & 0x000000ff));
+           (((Unified2IDSEvent *)event)->ip_destination & 0xff000000) >> 24,
+           (((Unified2IDSEvent *)event)->ip_destination & 0x00ff0000) >> 16,
+           (((Unified2IDSEvent *)event)->ip_destination & 0x0000ff00) >> 8,
+           (((Unified2IDSEvent *)event)->ip_destination & 0x000000ff));
 #else
     SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
-           ((Unified2IDSEvent *)event->ip_destination & 0x000000ff),
-           ((Unified2IDSEvent *)event->ip_destination & 0x0000ff00) >> 8,
-           ((Unified2IDSEvent *)event->ip_destination & 0x00ff0000) >> 16,
-           ((Unified2IDSEvent *)event->ip_destination & 0xff000000) >> 24);
+           (((Unified2IDSEvent *)event)->ip_destination & 0x000000ff),
+           (((Unified2IDSEvent *)event)->ip_destination & 0x0000ff00) >> 8,
+           (((Unified2IDSEvent *)event)->ip_destination & 0x00ff0000) >> 16,
+           (((Unified2IDSEvent *)event)->ip_destination & 0xff000000) >> 24);
 #endif
     Tcl_DStringAppendElement(list, buffer);
-    SnortSnprintf(buffer, TMP_BUFFER, "%u", (Unified2IDSEvent *)event->protocol);
+    SnortSnprintf(buffer, TMP_BUFFER, "%u", ((Unified2IDSEvent *)event)->protocol);
     Tcl_DStringAppendElement(list, buffer);
 
     return 0;

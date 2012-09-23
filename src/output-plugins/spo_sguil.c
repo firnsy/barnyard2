@@ -404,11 +404,19 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
     }
     else
     {
-        /* ack! an event without a packet. Append 32 fillers */
-        SguilAppendIPHdrDataEVT(&list, event);
-        int i;
-        for(i = 0; i < 26; ++i)
+        /* ack! an event without a packet. Append IP data from event struct and append
+        26 fillers */
+        if ( event_type == UNIFIED2_IDS_EVENT_VLAN){
+            SguilAppendIPHdrDataEVT(&list, event);
+            int i;
+            for(i = 0; i < 26; ++i)
             Tcl_DStringAppendElement(&list, "");
+        } else {
+        /* ack! an event without a packet. and no IP Data in eventAppend 32 fillers */
+            int i;
+            for(i = 0; i < 32; ++i)
+            Tcl_DStringAppendElement(&list, "");
+        }
     }
 
     /* send msg to sensor_agent */
@@ -587,6 +595,7 @@ void ParseSguilArgs(SpoSguilData *ssd_data)
 #ifdef ENABLE_TCL
 int SguilAppendIPHdrDataEVT(Tcl_DString *list, void *event)
 {
+    if (((Unified2EventCommon
     char buffer[TMP_BUFFER];
 
     bzero(buffer, TMP_BUFFER);

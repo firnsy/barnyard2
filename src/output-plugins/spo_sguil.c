@@ -112,11 +112,12 @@ int SguilSensorAgentConnect(SpoSguilData *);
 int SguilSensorAgentInit(SpoSguilData *);
 int SguilRTEventMsg(SpoSguilData *, char *);
 int SguilSendAgentMsg(SpoSguilData *, char *);
-int SguilRecvAgentMsg(SpoSguilData *, char *);
+int SguilRecvAgentMsg();
 
 char *SguilTimestamp(u_int32_t);
 
 #ifdef ENABLE_TCL
+int SguilAppendIPHdrDataEVT(Tcl_DString *, void *);
 int SguilAppendIPHdrData(Tcl_DString *, Packet *);
 int SguilAppendICMPData(Tcl_DString *, Packet *);
 int SguilAppendTCPData(Tcl_DString *, Packet *);
@@ -230,21 +231,16 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
     ClassType			*cn = NULL;
     Tcl_DString			list;
 
-    memset(buffer, 0, TMP_BUFFER); /* bzero() deprecated, replaced by memset() */
+    bzero(buffer, TMP_BUFFER);
 
 	if ( event == NULL || arg == NULL )
 	{
 		return;
 	}
 
-    if(p != NULL)
+    if ( (p != NULL) && (p->ip6h != NULL) )
     {
-        if(p->ip6h != NULL)
-        {
-          LogMessage("[%s] Received a IPv6 Packets, ignoring \n",
-                    __FUNCTION__);
-          return;
-        }
+        return;
     }
 
     data = (SpoSguilData *)arg;
@@ -408,10 +404,19 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
     }
     else
     {
-        /* ack! an event without a packet. Append 32 fillers */
-        int i;
-        for(i = 0; i < 32; ++i)
+        /* ack! an event without a packet. Append IP data from event struct and append
+        26 fillers */
+        if ( event_type == UNIFIED2_IDS_EVENT_VLAN){
+            SguilAppendIPHdrDataEVT(&list, event);
+            int i;
+            for(i = 0; i < 26; ++i)
             Tcl_DStringAppendElement(&list, "");
+        } else {
+        /* ack! an event without a packet. and no IP Data in eventAppend 32 fillers */
+            int i;
+            for(i = 0; i < 32; ++i)
+            Tcl_DStringAppendElement(&list, "");
+        }
     }
 
     /* send msg to sensor_agent */
@@ -588,11 +593,58 @@ void ParseSguilArgs(SpoSguilData *ssd_data)
 }
 
 #ifdef ENABLE_TCL
+int SguilAppendIPHdrDataEVT(Tcl_DString *list, void *event)
+{
+    if (((Unified2EventCommon
+    char buffer[TMP_BUFFER];
+
+    bzero(buffer, TMP_BUFFER);
+
+    SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohl(((Unified2IDSEvent *)event)->ip_source));
+    Tcl_DStringAppendElement(list, buffer);
+#if defined(WORDS_BIGENDIAN)
+    SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
+           (((Unified2IDSEvent *)event)->ip_source & 0xff000000) >> 24,
+           (((Unified2IDSEvent *)event)->ip_source & 0x00ff0000) >> 16,
+           (((Unified2IDSEvent *)event)->ip_source & 0x0000ff00) >> 8,
+           (((Unified2IDSEvent *)event)->ip_source & 0x000000ff));
+#else
+    SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
+           (((Unified2IDSEvent *)event)->ip_source & 0x000000ff),
+           (((Unified2IDSEvent *)event)->ip_source & 0x0000ff00) >> 8,
+           (((Unified2IDSEvent *)event)->ip_source & 0x00ff0000) >> 16,
+           (((Unified2IDSEvent *)event)->ip_source & 0xff000000) >> 24);
+#endif
+    Tcl_DStringAppendElement(list, buffer);
+    SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohl(((Unified2IDSEvent *)event)->ip_destination));
+    Tcl_DStringAppendElement(list, buffer);
+#if defined(WORDS_BIGENDIAN)
+    SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
+           (((Unified2IDSEvent *)event)->ip_destination & 0xff000000) >> 24,
+           (((Unified2IDSEvent *)event)->ip_destination & 0x00ff0000) >> 16,
+           (((Unified2IDSEvent *)event)->ip_destination & 0x0000ff00) >> 8,
+           (((Unified2IDSEvent *)event)->ip_destination & 0x000000ff));
+#else
+    SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
+           (((Unified2IDSEvent *)event)->ip_destination & 0x000000ff),
+           (((Unified2IDSEvent *)event)->ip_destination & 0x0000ff00) >> 8,
+           (((Unified2IDSEvent *)event)->ip_destination & 0x00ff0000) >> 16,
+           (((Unified2IDSEvent *)event)->ip_destination & 0xff000000) >> 24);
+#endif
+    Tcl_DStringAppendElement(list, buffer);
+    SnortSnprintf(buffer, TMP_BUFFER, "%u", ((Unified2IDSEvent *)event)->protocol);
+    Tcl_DStringAppendElement(list, buffer);
+
+    return 0;
+}
+#endif
+
+#ifdef ENABLE_TCL
 int SguilAppendIPHdrData(Tcl_DString *list, Packet *p)
 {
     char buffer[TMP_BUFFER];
 
-    memset(buffer, 0, TMP_BUFFER); /* bzero() deprecated, replaced by memset() */
+    bzero(buffer, TMP_BUFFER);
 
     SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohl(p->iph->ip_src.s_addr));
     Tcl_DStringAppendElement(list, buffer);
@@ -667,7 +719,7 @@ int SguilAppendICMPData(Tcl_DString *list, Packet *p)
     int i;
     char buffer[TMP_BUFFER];
 
-    memset(buffer, 0, TMP_BUFFER); /* bzero() deprecated, replaced by memset() */
+    bzero(buffer, TMP_BUFFER);
 
     if (!p->icmph)
     {
@@ -742,7 +794,7 @@ int SguilAppendTCPData(Tcl_DString *list, Packet *p)
     int i;
     char buffer[TMP_BUFFER];
 
-    memset(buffer, 0, TMP_BUFFER); /* bzero() deprecated, replaced by memset() */
+    bzero(buffer, TMP_BUFFER);
 
     /* empty elements for icmp data */
     for(i=0; i < 5; i++)
@@ -804,7 +856,7 @@ int SguilAppendUDPData(Tcl_DString *list, Packet *p)
     int i;
     char buffer[TMP_BUFFER];
 
-    memset(buffer, 0, TMP_BUFFER); /* bzero() deprecated, replaced by memset() */
+    bzero(buffer, TMP_BUFFER);
 
     /* empty elements for ICMP data */
     for(i=0; i < 5; i++)

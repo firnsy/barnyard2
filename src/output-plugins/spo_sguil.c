@@ -1,5 +1,5 @@
 /* 
-** Copyright (C) 2008-2011 Ian Firns (SecurixLive) <dev@securixlive.com>
+** Copyright (C) 2008-2012 Ian Firns (SecurixLive) <dev@securixlive.com>
 ** Copyright (C) 2002-2005 Robert (Bamm) Visscher <bamm@sguil.net>
 **
 ** This program is free software; you can redistribute it and/or modify
@@ -112,7 +112,7 @@ int SguilSensorAgentConnect(SpoSguilData *);
 int SguilSensorAgentInit(SpoSguilData *);
 int SguilRTEventMsg(SpoSguilData *, char *);
 int SguilSendAgentMsg(SpoSguilData *, char *);
-int SguilRecvAgentMsg();
+int SguilRecvAgentMsg(SpoSguilData *, char *);
 
 char *SguilTimestamp(u_int32_t);
 
@@ -238,9 +238,13 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
 		return;
 	}
 
-    if ( (p != NULL) && (p->ip6h != NULL) )
+    if (p != NULL) 
     {
-        return;
+      if(p->ip6h != NULL)
+        {
+          LogMessage("[%s] Received a IPv6 Packets, ignoring \n", __FUNCTION__);
+          return;
+        }
     }
 
     data = (SpoSguilData *)arg;

@@ -238,11 +238,12 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
 		return;
 	}
 
-    if (p != NULL) 
+    if(p != NULL) 
     {
-      if(p->ip6h != NULL)
+        if(p->ip6h != NULL)
         {
-          LogMessage("[%s] Received a IPv6 Packets, ignoring \n", __FUNCTION__);
+          LogMessage("[%s] Received a IPv6 Packets, ignoring \n", 
+                    __FUNCTION__);
           return;
         }
     }

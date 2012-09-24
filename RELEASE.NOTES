@@ -1,3 +1,35 @@
+2012-10-24 - Barnyard 2.1.10
+  [*] Additions
+     * spo_database. Support of encrypted connections to postgresql is now
+       available. See README.database for the appropriate options.
+
+     * spo_sguil. Fixed issue with duplication of alerts.
+
+     * Completely re-written database plugin for performance optimisation
+       against the original DB schema.
+
+       NOTE: If you have intentions of running this new version we highly
+       recommende you to clean two database tables for better performance:
+       reference and sig_reference, not doing so will not break anything but
+       could slow the startup caching process).
+
+     * New Bro output plugin (thanks to Seth Hall)
+
+     * A new syslog plugin (syslog_full) that support local and remote TCP and
+       UDP syslog.
+
+  [*] Improvements
+
+     * Improved support against the latest Unified 2 format. Extended
+       headers are read, however no plugins use the information currently.
+
+     * Improved core IPv6 support.
+
+     * Compile under cygwin
+
+     * And many, many bugfixes.
+
+
 2010-12-27 - Barnyard 2.1.9
   [*] Additions
      * spo_database. Support of encrypted connections to postgresql is now
@@ -35,7 +67,7 @@
        scripting the barnyard2 process. We welcome any suggestions for
        improvements to these return codes.
 
-     * spooler. The spooler now incorporates an improved event cache that will 
+     * spooler. The spooler now incorporates an improved event cache that willg
        in time facilitate improved correlation for TCP portscans and similar
        events.
 
@@ -48,7 +80,7 @@
   [*] Improvements
      * core. Barnyard2 has had the appropriate changes from snort 2.8.5.1 pushed
        into the core.
-     
+g
      * database. Fixed a duplication issue introduced with the alignment of the
        snort 2.8.4.1 code base. Thanks to Jonathan Tullet.
 
@@ -65,9 +97,9 @@
      * log_tcpdump. The output of tcpdump will now match the linktype being
        used by the packet. The output format can be explicitly defined or auto
        adapting.
-       
+g
 
-2009-07-15 - Barnyard 2.1.6 
+2009-07-15 - Barnyard 2.1.6g
   [*] Improvements
      * Waldo Files. Waldo files not being honoured has been fixed. The issue of
        no new waldo files being created or updated was caused by a number of key
@@ -98,7 +130,7 @@
   [*] Improvements
      * core. Barnyard2 has had the appropriate changes from snort 2.8.4.1 pushed
        into the core.
-     
+g
        In addition an issue with non-unique pid files being generated when
        multiple instances were running has been fixed. Thanks to Jon. B. Bayer
 
@@ -127,7 +159,7 @@
        updated and does not restrict to specific generator id's. This will be
        re-addressed if sid to gid maps ever happen. Thanks to Jason Wallace.
 
-     * spooler. Fixed an issue with blank permissions when creating waldo 
+     * spooler. Fixed an issue with blank permissions when creating waldog
        files from scratch. Thanks to Jason Wallace.
 
 
@@ -158,7 +190,7 @@
 
      * spo_sguil. Fixed inconsistencies between the documentated and the actual
        configuration requirements for the sguil output plugin. The parameters
-       can be either comma (",") or space (" ") separated. The documentation 
+       can be either comma (",") or space (" ") separated. The documentationg
        refers to space separated only.
 
 
@@ -182,7 +214,7 @@
 
 2008-11-11 - Barnyard 2.0.5
   [*] Improvements
-     * spo_sguil. Modifed the parameter parsing of the configuration to now 
+     * spo_sguil. Modifed the parameter parsing of the configuration to nowg
        expect "key=value" pairs and not "key value" pairs. This aligns with
        traditional spo_database plugin.
 
@@ -236,11 +268,11 @@
 
 2008-06-01 - Barnyard 2.0.2
   [*] Additions
-      * More databases (experimental). The spo_databsae plugin was able to be 
+      * More databases (experimental). The spo_databsae plugin was able to beg
         ported across with little effort. This means there is now database
         support for MSSQL, MYSQL, Postgresql, any unixOBDC and Oracle. Awesome!
 
-      * Sguil support (experimental). We have started converting the original 
+      * Sguil support (experimental). We have started converting the originalg
         Sguil plugin to the new API. This is a big milestone as it will now
         allow us to start working on a more contemporary frontend for Sguil.
 
@@ -256,22 +288,22 @@
 
 2008-05-10 - Barnyard 2.0.1
   [*] Additions
-      * Unified2 support. Since the release of Snort 2.8.0 a new output plugin 
-        named 'unified2' will address all the shortfalls of the original 
+      * Unified2 support. Since the release of Snort 2.8.0 a new output pluging
+        named 'unified2' will address all the shortfalls of the originalg
         unified output plugin. The new format supports multiple records in the
         one format as well as expansion for additional records such as packet
         statistics, etc in the future.
-        
+g
       * 64-bit support. Support for 64-bit systems has been considered from the
         outset. However, given that we don't have any 64-bit machines to test
         the current builds on we will wait for community feedback on this.
-      
+g
   [*] Improvements
       * Plugin structure. Given that we initially fused majority of the current
-        Snort core with the original barnyard code and improved from there we 
+        Snort core with the original barnyard code and improved from there weg
         have attained/retained a similar output plugin API to that of Snort.
         This requires only slight modification to existing Snort output plugins
         to work with Barnyard. This may change to full compatibility in the
         future depending on feedback.
 
-      
+g

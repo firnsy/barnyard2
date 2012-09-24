@@ -411,7 +411,9 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
     {
         /* ack! an event without a packet. Append IP data from event struct and append
         26 fillers */
-        if ( event_type == UNIFIED2_IDS_EVENT_VLAN){
+        if ( (event_type == UNIFIED2_IDS_EVENT_VLAN)||
+                (event_type == UNIFIED2_IDS_EVENT_MPLS) ||
+                (event_type == UNIFIED2_IDS_EVENT_VLAN)){
             SguilAppendIPHdrDataEVT(&list, event);
             int i;
             for(i = 0; i < 26; ++i)

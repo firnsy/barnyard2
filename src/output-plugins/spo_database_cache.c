@@ -22,7 +22,7 @@
  *
  *   
  *    Note that the default schema compatibility is kept intact
- *    Maintainers : The Barnyard2 Team <firnsy@gmail.com> <beenph@gmail.com> - 2011
+ *    Maintainers : The Barnyard2 Team <firnsy@gmail.com> <beenph@gmail.com> - 2011-2012
  *
  *    Special thanks to: Rusell Fuleton <russell.fulton@gmail.com> for helping us stress test
  *                       this in production for us.

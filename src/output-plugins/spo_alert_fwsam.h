@@ -3,7 +3,7 @@
 ** spo_alert_fwsam.h
 **
 ** Copyright (c) 2001-2005 Frank Knobbe <frank@knobbe.us>
-** Copyright (c) 2011      Ian Firns    <firnsy@securixlive.com>
+** Copyright (c) 2012      Ian Firns    <firnsy@securixlive.com>
 **
 ** This program is free software; you can redistribute it and/or modify
 ** it under the terms of the GNU General Public License as published by

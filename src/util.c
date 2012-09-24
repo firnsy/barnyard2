@@ -150,7 +150,7 @@ int DisplayBanner(void)
         "  ______   -*> Barnyard2 <*-\n"
         " / ,,_  \\  Version %s.%s.%s (Build %s)%s%s\n"
         " |o\"  )~|  By Ian Firns (SecurixLive): http://www.securixlive.com/\n"
-		" + '''' +  (C) Copyright 2008-2011 Ian Firns <firnsy@securixlive.com>\n"
+		" + '''' +  (C) Copyright 2008-2012 Ian Firns <firnsy@securixlive.com>\n"
         "\n"
         , VER_MAJOR, VER_MINOR, VER_REVISION, VER_BUILD,
 #ifdef DEBUG

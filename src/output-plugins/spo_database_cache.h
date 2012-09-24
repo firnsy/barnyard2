@@ -17,7 +17,7 @@
 */
 
 /*
- *  Maintainers : The Barnyard2 Team <firnsy@gmail.com> <beenph@gmail.com> 2011-20xx
+ *  Maintainers : The Barnyard2 Team <firnsy@gmail.com> <beenph@gmail.com> 2011-2012
  *
  *    Special thanks to: Rusell Fuleton <russell.fulton@gmail.com> for helping us stress test
  *                       this in production for us.

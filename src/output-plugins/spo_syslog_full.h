@@ -42,6 +42,14 @@
 #include "strlcpyu.h"
 #include "unified2.h"
 
+
+#define OUT_MODE_DEFAULT 0
+#define OUT_MODE_FULL 1
+
+#define LOG_UDP 0
+#define LOG_TCP 1
+
+
 typedef struct _OpSyslog_Data 
 {
     char *server;

@@ -49,6 +49,7 @@
 */
 
 #include "output-plugins/spo_syslog_full.h"
+#include "ipv6_port.h"
 
 /* Output plugin API functions */
 static void OpSyslog_Exit(int signal,void *outputPlugin);
@@ -129,11 +130,11 @@ void OpSyslog_Init(char *args)
     case OUTPUT_TYPE_FLAG__LOG:
 	switch(syslogContext->operation_mode)
         {
-        case 1:
+        case OUT_MODE_FULL:
             AddFuncToOutputList(OpSyslog_Log, OUTPUT_TYPE__LOG, (void *)syslogContext);
             break;
 	    
-        case 0:
+        case OUT_MODE_DEFAULT:
         default:
             LogMessage("[%s()]: OUTPUT_TYPE__LOG was selected but operation_mode is set to \"default\", using defaut logging hook \n",
                        __FUNCTION__);
@@ -248,7 +249,7 @@ int OpSyslog_Concat(OpSyslog_Data *syslogContext)
     switch(syslogContext->operation_mode)
     {
 
-    case 0:
+    case OUT_MODE_DEFAULT:
 	if( (syslogContext->payload_current_pos += snprintf((syslogContext->payload+syslogContext->payload_current_pos),
 							    (SYSLOG_MAX_QUERY_SIZE - syslogContext->payload_current_pos),
 							    "%s",
@@ -259,7 +260,7 @@ int OpSyslog_Concat(OpSyslog_Data *syslogContext)
 	}
 	break;
 	
-    case 1:
+    case OUT_MODE_FULL:
 	if( (syslogContext->payload_current_pos += snprintf((syslogContext->payload+syslogContext->payload_current_pos),
 							    (SYSLOG_MAX_QUERY_SIZE - syslogContext->payload_current_pos),
 							    "%c %s %c",
@@ -362,15 +363,15 @@ static int Syslog_FormatTrigger(OpSyslog_Data *syslogData, Unified2EventCommon *
     switch(opType)
     {
 	
-    case 0:
+    case OUT_MODE_DEFAULT:
 	/* Alert */
-	if( (syslogData->format_current_pos += snprintf(syslogData->formatBuffer,SYSLOG_MAX_QUERY_SIZE,"[SNORTIDS[ALERT]: [%s] }", syslogData->sensor_name)) >=  SYSLOG_MAX_QUERY_SIZE)
+	if( (syslogData->format_current_pos += snprintf(syslogData->formatBuffer,SYSLOG_MAX_QUERY_SIZE,"[SNORTIDS[ALERT]: [%s] ]", syslogData->sensor_name)) >=  SYSLOG_MAX_QUERY_SIZE)
 	{
 	    /* XXX */
 	    return 1;
 	}
 	break;
-    case 1:
+    case OUT_MODE_FULL:
 	/* Log */
 	if( (syslogData->format_current_pos += snprintf(syslogData->formatBuffer,SYSLOG_MAX_QUERY_SIZE,"[SNORTIDS[LOG]: [%s] ]", syslogData->sensor_name)) >=  SYSLOG_MAX_QUERY_SIZE)
 	{
@@ -496,10 +497,10 @@ static int Syslog_FormatIPHeaderAlert(OpSyslog_Data *data, Packet *p)
     
     if(p->iph)
     {
-        p_ip = inet_ntoa(p->iph->ip_src);
+        p_ip = inet_ntoa(GET_SRC_ADDR(p));
 	memcpy(s_ip,p_ip,strlen(p_ip));
 	
-	p_ip = inet_ntoa(p->iph->ip_dst);
+	p_ip = inet_ntoa(GET_DST_ADDR(p));
 	memcpy(d_ip,p_ip,strlen(p_ip));
 	
 	if( (data->format_current_pos += snprintf(data->formatBuffer,SYSLOG_MAX_QUERY_SIZE,"%lu%c%s%c%s",   
@@ -858,8 +859,8 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
     switch(syslogContext->operation_mode)
     {
 
-    case 0:  /* Ze Classic (Requested) */
-
+    case OUT_MODE_DEFAULT:  
+	
 	if(IPH_IS_VALID(p))
 	{	
 	    if (strlcpy(sip, inet_ntoa(GET_SRC_ADDR(p)), sizeof(sip)) >= sizeof(sip))
@@ -873,7 +874,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	    if (strlcpy(dip, inet_ntoa(GET_DST_ADDR(p)), sizeof(dip)) >= sizeof(dip))
 	    {
 		FatalError("[%s()], strlcpy() error , bailing \n",
-		       __FUNCTION__);
+			   __FUNCTION__);
 		return;
 	    }
 	}
@@ -885,8 +886,8 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 				 ntohl(iEvent->classification_id));
 	
 	if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
-							"[%u:%u:%u] ",
-							ntohl(iEvent->generator_id),
+							   "[%u:%u:%u] ",
+							   ntohl(iEvent->generator_id),
 							ntohl(iEvent->signature_id),
 							ntohl(iEvent->signature_revision))) >=  SYSLOG_MAX_QUERY_SIZE)
 	{
@@ -1051,7 +1052,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 
 	break;
 	
-    case 1: /* Ze verbose */
+    case OUT_MODE_FULL: /* Ze verbose */
 	
 	if(Syslog_FormatTrigger(syslogContext, iEvent,0) ) 
 	{
@@ -1116,7 +1117,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	    FatalError("NetSend(): call failed for host:port '%s:%u' bailing...\n", syslogContext->server, syslogContext->port);
 	}
     }
-
+    
 
     return;
 }
@@ -1329,11 +1330,11 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
             {
 		if(num_stoks >=1)
 		{
-		    if(strcasecmp("default",stoks[1]))
+		    if(strcasecmp("default",stoks[1]) == 0)
 		    {
 			op_data->operation_mode = 0;
 		    }
-		    else if(strcasecmp("complete",stoks[1]))
+		    else if(strcasecmp("complete",stoks[1]) == 0)
 		    {
 			op_data->operation_mode = 1;
 		    }
@@ -1718,10 +1719,10 @@ int NetConnect(OpSyslog_Data *op_data)
     
     switch(op_data->proto)
     {
-    case 0:
+    case LOG_UDP:
 	return UDPConnect(op_data);
 	break;
-    case 1:
+    case LOG_TCP:
 	return TCPConnect(op_data);
 	break;
     default:
@@ -1826,7 +1827,7 @@ int NetSend(OpSyslog_Data *op_data)
     switch(op_data->proto) 
     {
 	
-    case 0: 
+    case LOG_UDP: 
 	/* UDP */
 	if(sendto(op_data->socket,op_data->payload, strlen(op_data->payload), 0 , (struct sockaddr *)&op_data->sockaddr, sizeof(struct sockaddr)) <= 0) 
 	{
@@ -1837,7 +1838,7 @@ int NetSend(OpSyslog_Data *op_data)
 	}
 	break;
 	
-    case 1: 
+    case LOG_TCP: 
 	/* TCP */ 
 	
 	sendRetVal = send(op_data->socket, op_data->payload, strlen(op_data->payload),0);

@@ -68,6 +68,7 @@
 #include "plugbase.h"
 #include "unified2.h"
 #include "util.h"
+#include "ipv6_port.h"
 
 typedef struct _CEFData
 {

@@ -66,6 +66,7 @@
 
 #include "sfutil/sf_textlog.h"
 #include "log_text.h"
+#include "ipv6_port.h"
 
 #define DEFAULT_CSV "timestamp,sig_generator,sig_id,sig_rev,msg,proto,src,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcpln,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 

@@ -68,6 +68,8 @@
 
 #include "sfutil/sf_textlog.h"
 #include "log_text.h"
+#include "ipv6_port.h"
+
 
 /* full buf was chosen to allow printing max size packets
  * in hex/ascii mode:

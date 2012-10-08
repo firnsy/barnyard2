@@ -55,9 +55,9 @@
 
 typedef struct _SFHASHFCN {
 
- unsigned seed;
- unsigned scale;
- unsigned hardener;
+ unsigned int seed;
+ unsigned int scale;
+ unsigned int hardener;
  unsigned (*hash_fcn)(struct _SFHASHFCN * p,
                       unsigned char *d,
                       int n );
@@ -70,10 +70,10 @@ SFHASHFCN * sfhashfcn_new( int nrows );
 void sfhashfcn_free( SFHASHFCN * p );
 void sfhashfcn_static( SFHASHFCN * p );
 
-unsigned sfhashfcn_hash( SFHASHFCN * p, unsigned char *d, int n );
+unsigned int sfhashfcn_hash( SFHASHFCN * p, unsigned char *d, int n );
 
 int sfhashfcn_set_keyops( SFHASHFCN * p,
-                          unsigned (*hash_fcn)( SFHASHFCN * p,
+                          unsigned int (*hash_fcn)( SFHASHFCN * p,
                                                 unsigned char *d,
                                                 int n),
                           int (*keycmp_fcn)( const void *s1,

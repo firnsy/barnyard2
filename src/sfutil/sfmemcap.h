@@ -27,16 +27,16 @@
 
 typedef struct
 {
-   unsigned memused;
-   unsigned memcap;
+   unsigned int memused;
+   unsigned int memcap;
    int      nblocks;
 
 }MEMCAP;
 
-void     sfmemcap_init(MEMCAP * mc, unsigned nbytes);
-MEMCAP * sfmemcap_new( unsigned nbytes );
+void     sfmemcap_init(MEMCAP * mc, unsigned int nbytes);
+MEMCAP * sfmemcap_new( unsigned int nbytes );
 void     sfmemcap_delete( MEMCAP * mc );
-void   * sfmemcap_alloc(MEMCAP * mc, unsigned nbytes);
+void   * sfmemcap_alloc(MEMCAP * mc, unsigned int nbytes);
 void     sfmemcap_showmem(MEMCAP * mc );
 void     sfmemcap_free( MEMCAP * mc, void * memory);
 char   * sfmemcap_strdup(MEMCAP * mc, const char *str);

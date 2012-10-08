@@ -31,7 +31,7 @@
 #include "sfprimetable.h"
 /* 0-8K, increments=8 */
 static 
-unsigned prime_table0[1024]={
+unsigned int prime_table0[1024]={
  3, /* 1 */ 
  7, /* 9 */ 
  17, /* 17 */ 
@@ -1059,7 +1059,7 @@ unsigned prime_table0[1024]={
 };
 /* 0-64K, increments=64 */
 static 
-unsigned prime_table1[]={
+unsigned int prime_table1[]={
  1, /* 1 */ 
  61, /* 65 */ 
  127, /* 129 */ 
@@ -2087,7 +2087,7 @@ unsigned prime_table1[]={
 };
 /* 0-1M, increments=1024 */
 static 
-unsigned prime_table2[1024]={
+unsigned int prime_table2[1024]={
   1021, /* 1024 */ 
   2039, /* 2048 */ 
   3067, /* 3072 */ 
@@ -3114,7 +3114,7 @@ unsigned prime_table2[1024]={
 };
 /* 0-128M, increments=102400 */
 static 
-unsigned prime_table3[1024]={
+unsigned int prime_table3[1024]={
  131071, /* 131072 */ 
  262139, /* 262144 */ 
  393209, /* 393216 */ 

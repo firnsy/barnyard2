@@ -46,8 +46,8 @@
 #include "mstring.h"
 #include "map.h"
 #include "unified2.h"
-
 #include "barnyard2.h"
+#include "ipv6_port.h"
 
 #define ANALYZER_CLASS "NIDS"
 #define ANALYZER_MODEL "Snort"

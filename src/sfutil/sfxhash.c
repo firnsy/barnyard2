@@ -119,7 +119,7 @@ void s_free( SFXHASH * t, void * p )
 /*
  *   User access to the memory management, do they need it ? WaitAndSee
  */
-void * sfxhash_alloc( SFXHASH * t, unsigned nbytes )
+void * sfxhash_alloc( SFXHASH * t, unsigned int nbytes )
 {
     return s_alloc( t, nbytes );
 }
@@ -130,7 +130,7 @@ void   sfxhash_free( SFXHASH * t, void * p )
 
 int sfxhash_nearest_powerof2(int nrows) 
 {
-    unsigned i;
+    unsigned int i;
 
     nrows -= 1;
     for(i=1; i<sizeof(nrows) * 8; i <<= 1)          
@@ -324,7 +324,7 @@ void sfxhash_delete_free_list(SFXHASH *t)
  */
 void sfxhash_delete( SFXHASH * h )
 {
-    unsigned    i;
+    unsigned int i;
     SFXHASH_NODE * node, * onode;
 
     if( !h ) return;
@@ -367,7 +367,7 @@ int sfxhash_make_empty(SFXHASH *h)
 {
     SFXHASH_NODE *n = NULL;
     SFXHASH_NODE *tmp = NULL;
-    unsigned i;
+    unsigned int i;
 
     if (h == NULL)
         return -1;
@@ -405,7 +405,7 @@ int sfxhash_make_empty(SFXHASH *h)
  * @param t SFXHASH table pointer
  *
  */
-unsigned sfxhash_count( SFXHASH * t )
+unsigned int sfxhash_count( SFXHASH * t )
 {
     return t->count;
 }
@@ -416,7 +416,7 @@ unsigned sfxhash_count( SFXHASH * t )
  * @param t SFXHASH table pointer
  *
  */
-unsigned sfxhash_anr_count( SFXHASH * t )
+unsigned int sfxhash_anr_count( SFXHASH * t )
 {
     return t->anr_count;
 }
@@ -427,7 +427,7 @@ unsigned sfxhash_anr_count( SFXHASH * t )
  * @param t SFXHASH table pointer
  *
  */
-unsigned sfxhash_find_total( SFXHASH * t )
+unsigned int sfxhash_find_total( SFXHASH * t )
 {
     return t->find_success + t->find_fail;
 }
@@ -438,7 +438,7 @@ unsigned sfxhash_find_total( SFXHASH * t )
  * @param t SFXHASH table pointer
  *
  */
-unsigned sfxhash_find_fail( SFXHASH * t )
+unsigned int sfxhash_find_fail( SFXHASH * t )
 {
     return t->find_fail;
 }
@@ -449,7 +449,7 @@ unsigned sfxhash_find_fail( SFXHASH * t )
  * @param t SFXHASH table pointer
  *
  */
-unsigned sfxhash_find_success( SFXHASH * t )
+unsigned int sfxhash_find_success( SFXHASH * t )
 {
     return t->find_success;
 }
@@ -463,7 +463,7 @@ unsigned sfxhash_find_success( SFXHASH * t )
  * @param t SFXHASH table pointer
  *
  */
-unsigned sfxhash_overhead_bytes( SFXHASH * t )
+unsigned int sfxhash_overhead_bytes( SFXHASH * t )
 {
     return t->overhead_bytes;
 }
@@ -474,7 +474,7 @@ unsigned sfxhash_overhead_bytes( SFXHASH * t )
  * @param t SFXHASH table pointer
  *
  */
-unsigned sfxhash_overhead_blocks( SFXHASH * t )
+unsigned int sfxhash_overhead_blocks( SFXHASH * t )
 {
     return t->overhead_blocks;
 }
@@ -712,7 +712,7 @@ SFXHASH_NODE * sfxhash_newnode( SFXHASH * t )
 static 
 SFXHASH_NODE * sfxhash_find_node_row( SFXHASH * t, void * key, int * rindex )
 {
-    unsigned       hashkey;
+    unsigned int   hashkey;
     int            index;
     SFXHASH_NODE  *hnode;
 
@@ -1070,16 +1070,16 @@ SFXHASH_NODE * sfxhash_lru_node( SFXHASH * t )
  * @return max depth of the table
  *
  */
-unsigned sfxhash_maxdepth( SFXHASH * t )
+unsigned int sfxhash_maxdepth( SFXHASH * t )
 {
-    unsigned i;
-    unsigned max_depth = 0;
+    unsigned int i;
+    unsigned int max_depth = 0;
 
     SFXHASH_NODE * hnode;
 
     for( i=0; i<t->nrows; i++ )
     {
-        unsigned cur_depth = 0;
+        unsigned int cur_depth = 0;
 
         for(hnode = t->table[i]; hnode != NULL; hnode = hnode->next)
         {
@@ -1134,7 +1134,7 @@ int sfxhash_free_node( SFXHASH * t, SFXHASH_NODE * hnode)
 int sfxhash_remove( SFXHASH * t, void * key)
 {
     SFXHASH_NODE * hnode;
-    unsigned hashkey, index;
+    unsigned int hashkey, index;
 
     hashkey = t->sfhashfcn->hash_fcn( t->sfhashfcn,
                                       (unsigned char*)key,
@@ -1253,7 +1253,7 @@ SFXHASH_NODE * sfxhash_findnext( SFXHASH * t )
  */
 
 int sfxhash_set_keyops( SFXHASH *h ,
-                        unsigned (*hash_fcn)( SFHASHFCN * p,
+                        unsigned int (*hash_fcn)( SFHASHFCN * p,
                                               unsigned char *d,
                                               int n),
                         int (*keycmp_fcn)( const void *s1,

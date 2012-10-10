@@ -39,7 +39,7 @@
 /*
 *   Set max # bytes & init other variables.
 */
-void sfmemcap_init( MEMCAP * mc, unsigned nbytes )
+void sfmemcap_init( MEMCAP * mc, unsigned int nbytes )
 {
 	mc->memcap = nbytes;
 	mc->memused= 0;
@@ -49,7 +49,7 @@ void sfmemcap_init( MEMCAP * mc, unsigned nbytes )
 /*
 *   Create and Init a MEMCAP -  use free to release it
 */
-MEMCAP * sfmemcap_new( unsigned nbytes )
+MEMCAP * sfmemcap_new( unsigned int nbytes )
 {
 	 MEMCAP * mc;
 
@@ -71,7 +71,7 @@ void sfmemcap_delete( MEMCAP * p )
 /*
 *  Allocate some memory
 */
-void * sfmemcap_alloc( MEMCAP * mc, unsigned nbytes )
+void * sfmemcap_alloc( MEMCAP * mc, unsigned int nbytes )
 {
    long * data;
 
@@ -115,7 +115,7 @@ void sfmemcap_free( MEMCAP * mc, void * p )
 
    q = (long*)p;
    q--;
-   mc->memused -= (unsigned)(*q);
+   mc->memused -= (unsigned int)(*q);
    mc->nblocks--;
 
    free(q);

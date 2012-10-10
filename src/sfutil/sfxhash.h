@@ -71,19 +71,19 @@ typedef struct _sfxhash
   int             keysize;   /// bytes in key, if <= 0 -> keys are strings 
   int             datasize;  /// bytes in key, if == 0 -> user data
   SFXHASH_NODE ** table;     /// array of node ptr's */
-  unsigned        nrows;     /// # rows int the hash table use a prime number 211, 9871 
-  unsigned        count;     /// total # nodes in table 
+  unsigned int    nrows;     /// # rows int the hash table use a prime number 211, 9871 
+  unsigned int    count;     /// total # nodes in table 
   
-  unsigned        crow;    /// findfirst/next row in table
+  unsigned int    crow;    /// findfirst/next row in table
   SFXHASH_NODE  * cnode;   /// findfirst/next node ptr
   int             splay;   /// whether to splay nodes with same hash bucket
 
-  unsigned        max_nodes; ///maximum # of nodes within a hash
+  unsigned int    max_nodes; ///maximum # of nodes within a hash
   MEMCAP          mc;
-  unsigned        overhead_bytes;  /// # of bytes that will be unavailable for nodes inside the table    
-  unsigned        overhead_blocks; /// # of blocks consumed by the table
-  unsigned        find_fail;
-  unsigned        find_success;
+  unsigned int    overhead_bytes;  /// # of bytes that will be unavailable for nodes inside the table    
+  unsigned int    overhead_blocks; /// # of blocks consumed by the table
+  unsigned int    find_fail;
+  unsigned int    find_success;
     
   SFXHASH_NODE  * ghead, * gtail;  /// global - root of all nodes allocated in table
 
@@ -92,8 +92,8 @@ typedef struct _sfxhash
   
   /**Automatic Node Recover (ANR): When number of nodes in hash is equal to max_nodes, remove the least recently 
    * used nodes and use it for the new node. anr_tries indicates # of ANR tries.*/
-  unsigned        anr_tries; 
-  unsigned        anr_count; /// # ANR ops performaed 
+  unsigned int    anr_tries; 
+  unsigned int    anr_count; /// # ANR ops performaed 
   int             anr_flag;  /// 0=off, !0=on 
 
   int (*anrfree)( void * key, void * data );
@@ -119,8 +119,8 @@ int             sfxhash_make_empty(SFXHASH *);
 int             sfxhash_add ( SFXHASH * h, void * key, void * data );
 SFXHASH_NODE * sfxhash_get_node( SFXHASH * t, void * key );
 int             sfxhash_remove( SFXHASH * h, void * key );
-unsigned        sfxhash_count( SFXHASH * h );
-unsigned        sfxhash_anr_count( SFXHASH * h );
+unsigned int    sfxhash_count( SFXHASH * h );
+unsigned int    sfxhash_anr_count( SFXHASH * h );
 
 void          * sfxhash_mru( SFXHASH * t );
 void          * sfxhash_lru( SFXHASH * t );
@@ -139,20 +139,20 @@ void sfxhash_gmovetofront( SFXHASH *t, SFXHASH_NODE * hnode );
 
 void            sfxhash_splaymode( SFXHASH * h, int mode );
 
-void          * sfxhash_alloc( SFXHASH * t, unsigned nbytes );
+void          * sfxhash_alloc( SFXHASH * t, unsigned int nbytes );
 void            sfxhash_free( SFXHASH * t, void * p );
 int             sfxhash_free_node(SFXHASH *t, SFXHASH_NODE *node);
 
-unsigned        sfxhash_maxdepth( SFXHASH * t );
-unsigned        sfxhash_overhead_bytes( SFXHASH * t );
-unsigned        sfxhash_overhead_blocks( SFXHASH * t );
-unsigned        sfxhash_find_success( SFXHASH * h );
-unsigned        sfxhash_find_fail( SFXHASH * h );
-unsigned        sfxhash_find_total( SFXHASH * h );
+unsigned int    sfxhash_maxdepth( SFXHASH * t );
+unsigned int    sfxhash_overhead_bytes( SFXHASH * t );
+unsigned int    sfxhash_overhead_blocks( SFXHASH * t );
+unsigned int    sfxhash_find_success( SFXHASH * h );
+unsigned int    sfxhash_find_fail( SFXHASH * h );
+unsigned int    sfxhash_find_total( SFXHASH * h );
 
 
 int sfxhash_set_keyops( SFXHASH *h ,
-                        unsigned (*hash_fcn)( SFHASHFCN * p,
+                        unsigned int(*hash_fcn)( SFHASHFCN * p,
                                               unsigned char *d,
                                               int n),
                         int (*keycmp_fcn)( const void *s1,

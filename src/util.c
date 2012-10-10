@@ -1795,7 +1795,10 @@ int Move(const char *source, const char *dest)
     }
     else
     {
-        unlink(source);
+        if (unlink(source) != 0) { /* oops, unlink/remove has failed */
+		LogMessage("Failed to unlink \"%s\": %s",
+			source, strerror(errno));
+	}
     }
     return 0;
 }

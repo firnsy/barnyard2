@@ -1261,7 +1261,7 @@ void ParseDatabaseArgs(DatabaseData *data)
     
     if(data->dbRH[data->dbtype_id].dbConnectionLimit == 0)
     {
-	LogMessage("WARNING database: Defaulting Reconnect/Transaction Error limit to 10 \n");
+	LogMessage("INFO database: Defaulting Reconnect/Transaction Error limit to 10 \n");
 	data->dbRH[data->dbtype_id].dbConnectionLimit = 10;
 	
 	/* Might make a different option for it but for now lets consider
@@ -1271,7 +1271,7 @@ void ParseDatabaseArgs(DatabaseData *data)
     
     if(data->dbRH[data->dbtype_id].dbReconnectSleepTime.tv_sec == 0)
     {
-	LogMessage("WARNING database: Defaulting Reconnect sleep time to 5 second \n");
+	LogMessage("INFO database: Defaulting Reconnect sleep time to 5 second \n");
 	data->dbRH[data->dbtype_id].dbReconnectSleepTime.tv_sec = 5;
     }
     
@@ -1441,7 +1441,7 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
     revision = ntohl(((Unified2EventCommon *)event)->signature_revision);
     priority = ntohl(((Unified2EventCommon *)event)->priority_id);
     classification = ntohl(((Unified2EventCommon *)event)->classification_id);
-    
+
     
     /* NOTE: elz 
        For sanity purpose the sig_class table SHOULD have internal classification id to prevent possible 
@@ -1578,7 +1578,7 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 	if(reuseSigMsg)
 	{
 	    /* The signature was not found we will have to insert it */
-	    LogMessage("WARNING [%s()]: [Event: %u] with [gid: %u] [sid: %u] [rev: %u] [classification: %u] [priority: %u] Signature Message -> \"[%s]\"\n"
+	    LogMessage("INFO [%s()]: [Event: %u] with [gid: %u] [sid: %u] [rev: %u] [classification: %u] [priority: %u] Signature Message -> \"[%s]\"\n"
 		       "\t was not found in barnyard2 signature cache, this could mean its is the first time the signature is processed, and will be inserted\n"
 		       "\t in the database with the above information, this message should only be printed once for each signature that is not  present in the database\n"
 		       "\t The new inserted signature will not have its information present in the sig_reference table,it should be present on restart\n"
@@ -1603,7 +1603,7 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
     	else
 	{
 	    /* The signature does not exist we will have to insert it */
-	    LogMessage("WARNING [%s()]: [Event: %u] with [gid: %u] [sid: %u] [rev: %u] [classification: %u] [priority: %u]\n"
+	    LogMessage("INFO [%s()]: [Event: %u] with [gid: %u] [sid: %u] [rev: %u] [classification: %u] [priority: %u]\n"
 		       "\t was not found in barnyard2 signature cache, this could lead to display inconsistency.\n"
 		       "\t To prevent this warning, make sure that your sid-msg.map and gen-msg.map file are up to date with the snort process logging to the spool file.\n"
 		       "\t The new inserted signature will not have its information present in the sig_reference table. \n"
@@ -2406,7 +2406,7 @@ void Database(Packet *p, void *event, uint32_t event_type, void *arg)
     
     if( event == NULL || p == NULL)
     {
-	LogMessage("WARNING database [%s()]: Called with Event[0x%x] Event Type [%u] (P)acket [0x%x] \n",
+	LogMessage("WARNING database [%s()]: Called with Event[0x%x] Event Type [%u] (P)acket [0x%x], information has not been outputed. \n",
 		   __FUNCTION__,
 		   event,
 		   event_type,
@@ -2414,6 +2414,40 @@ void Database(Packet *p, void *event, uint32_t event_type, void *arg)
 	return;
     }
     
+    
+    /* 
+       Check for invalid revision eg: rev==0 when people write their own testing signature and 
+       do not set a revision, in our context we will not log it to the database
+       and print a informative messsage 
+    */
+    u_int32_t sid = 0;
+    u_int32_t gid = 0;
+    u_int32_t revision = 0;
+    u_int32_t event_id = 0;
+    u_int32_t event_second = 0;
+    u_int32_t event_microsecond = 0;
+    
+    sid =  ntohl(((Unified2EventCommon *)event)->signature_id);    
+    gid =  ntohl(((Unified2EventCommon *)event)->generator_id);
+    revision = ntohl(((Unified2EventCommon *)event)->signature_revision);
+    event_id = ntohl(((Unified2EventCommon *)event)->event_id);
+    event_second = ntohl(((Unified2EventCommon *)event)->event_second);
+    event_microsecond =  ntohl(((Unified2EventCommon *)event)->event_microsecond);
+    
+    if( (gid == 1) &&
+	(revision == 0))
+    {
+	LogMessage("INFO: Current event with event_id [%u] Event Second:Microsecond [%u:%u] and signature id of [%u] was logged with a revision of [%u]\n"
+		   "      Make sure you verify your triggering  rule body so it include the snort keyword \"rev:xxx;\" Where xxx is greater than 0 \n"
+		   ">>>>>>The event has not been logged to the database<<<<<<\n",
+		   event_id,
+		   event_second,
+		   event_microsecond,
+		   sid,
+		   revision);
+	return;
+    }
+
 /*
   This has been refactored to simplify the workflow of the function 
   We separate the legacy signature entry code and the event entry code

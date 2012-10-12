@@ -87,6 +87,7 @@
 #include "util.h"
 
 #include "spo_alert_test.h"
+#include "ipv6_port.h"
 
 #define TEST_FLAG_FILE     0x01
 #define TEST_FLAG_STDOUT   0x02

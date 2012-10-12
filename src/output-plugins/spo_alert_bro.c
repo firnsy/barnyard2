@@ -51,6 +51,7 @@
 #include "plugbase.h"
 #include "unified2.h"
 #include "util.h"
+#include "ipv6_port.h"
 
 extern OptTreeNode *otn_tmp;
 

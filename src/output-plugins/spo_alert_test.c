@@ -178,7 +178,8 @@ void AlertTest(Packet *p, void *event, u_int32_t event_type, void *arg)
     if (data->flags & TEST_FLAG_MSG)
     {
 		sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-							ntohl(((Unified2EventCommon *)event)->signature_id));
+				    ntohl(((Unified2EventCommon *)event)->signature_id),
+				    ntohl(((Unified2EventCommon *)event)->signature_revision));
 
         if(sn != NULL)
         {

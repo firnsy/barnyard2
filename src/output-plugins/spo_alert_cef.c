@@ -506,7 +506,9 @@ void AlertCEF(Packet *p, void *event, u_int32_t event_type, void *arg)
 
 	data = (CEFData *)arg;
 	sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-						ntohl(((Unified2EventCommon *)event)->signature_id));
+			    ntohl(((Unified2EventCommon *)event)->signature_id),
+			    ntohl(((Unified2EventCommon *)event)->signature_revision));
+
 	cn = ClassTypeLookupById(barnyard2_conf, ntohl(((Unified2EventCommon *)event)->classification_id));
 
     /* Remove this check when we support IPv6 below. */

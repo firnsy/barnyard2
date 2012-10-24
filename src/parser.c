@@ -189,6 +189,7 @@ static const KeywordFunc barnyard2_conf_keywords[] =
 
 static const ConfigFunc config_opts[] =
 {
+    { CONFIG_OPT__DISABLE_ALERT_ON_EACH_PACKET_IN_STREAM, 0, 1, ConfigDisableAlertOnEachPacketInStream },
     { CONFIG_OPT__ALERT_ON_EACH_PACKET_IN_STREAM, 0, 1, ConfigAlertOnEachPacketInStream },
     { CONFIG_OPT__ALERT_WITH_IFACE_NAME, 0, 1, ConfigAlertWithInterfaceName },
     { CONFIG_OPT__ARCHIVE_DIR, 1, 1, ConfigArchiveDir },
@@ -1585,12 +1586,26 @@ static int ContinuationCheck(char *rule)
     return 0;
 }
 
+
 void ConfigAlertOnEachPacketInStream(Barnyard2Config *bc, char *args)
 {
     if (bc == NULL)
         return;
+    
+    LogMessage("INFO: Alerting on each packet associated with an event: is now enabled by default. \n"
+               " use: command line argument --disable-alert-on-each-packet-in-stream or \n"
+	       " configure file argument disable-alert-on-each-packet-in-stream to disable the feature \n");
+    
+    return;
+}
 
-    bc->alert_on_each_packet_in_stream_flag = 1;
+
+void ConfigDisableAlertOnEachPacketInStream(Barnyard2Config *bc, char *args)
+{
+    if (bc == NULL)
+        return;
+
+    bc->alert_on_each_packet_in_stream_flag = 0;
 }
 
 void ConfigArchiveDir(Barnyard2Config *bc, char *args)

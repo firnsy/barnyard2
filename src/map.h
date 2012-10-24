@@ -123,7 +123,7 @@ void ParseClassificationConfig(struct _Barnyard2Config *, char *args);
 
 void DeleteClassTypes();
 
-SigNode *GetSigByGidSid(uint32_t, uint32_t);
+SigNode *GetSigByGidSid(uint32_t, uint32_t, uint32_t);
 
 int ReadSidFile(struct _Barnyard2Config *, const char *);
 void ParseSidMapLine(struct _Barnyard2Config *, char *);

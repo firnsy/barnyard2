@@ -632,16 +632,16 @@ void ParseSidMapLine(Barnyard2Config *bc, char *data)
     return;
 }
 
-SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid)
+SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid,u_int32_t revision)
 {
-  /* set temp node pointer to the Sid map list head */
+    /* set temp node pointer to the Sid map list head */
     SigNode *sn = sigTypes;
-  
-  /* a snort general rule (gid=1) and a snort dynamic rule (gid=3) use the  */
-  /* the same sids and thus can be considered one in the same. */
-  if (gid == 3)
-    gid = 1;
-
+    
+    /* a snort general rule (gid=1) and a snort dynamic rule (gid=3) use the  */
+    /* the same sids and thus can be considered one in the same. */
+    if (gid == 3)
+	gid = 1;
+    
     /* find any existing Snort ID's that match */
     while (sn != NULL)
     {
@@ -649,7 +649,7 @@ SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid)
         {
             return sn;
         }
-
+	
         sn = sn->next;
     }
 
@@ -657,9 +657,9 @@ SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid)
     sn = CreateSigNode(&sigTypes);
     sn->generator = gid;
     sn->id = sid;
-    sn->rev = 0;
+    sn->rev = revision;
     sn->msg = (char *)SnortAlloc(42);
-    snprintf(sn->msg, 42, "Snort Alert [%u:%u:%u]", gid, sid, 0);
+    snprintf(sn->msg, 42, "Snort Alert [%u:%u:%u]", gid, sid, revision);
  
     return sn;
 }

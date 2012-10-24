@@ -195,7 +195,9 @@ void Platypus(Packet *p, void *event, u_int32_t event_type, void *arg)
 
     /* grab the appropriate signature and classification information */
     sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-            ntohl(((Unified2EventCommon *)event)->signature_id));
+			ntohl(((Unified2EventCommon *)event)->signature_id),
+			ntohl(((Unified2EventCommon *)event)->signature_revision));
+
     cn = ClassTypeLookupById(barnyard2_conf, ntohl(((Unified2EventCommon *)event)->classification_id));
 
     /*

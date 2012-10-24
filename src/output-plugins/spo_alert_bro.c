@@ -168,7 +168,8 @@ void AlertBro(Packet *p, void *event, u_int32_t event_type, void *arg)
     }
 
     sn = GetSigByGidSid(ntohl(uevent->generator_id),
-                        ntohl(uevent->signature_id));
+                        ntohl(uevent->signature_id),
+	                ntohl(uevent->signature_revision));
     
     if(p && IPH_IS_VALID(p))
     {

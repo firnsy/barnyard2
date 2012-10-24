@@ -60,10 +60,10 @@
 
 /*  D E F I N E S  ************************************************************/
 #define PROGRAM_NAME	"Barnyard"
-#define VER_MAJOR		"2"
-#define VER_MINOR		"1"
-#define VER_REVISION	"10"
-#define VER_BUILD		"313"
+#define VER_MAJOR	"2"
+#define VER_MINOR	"1"
+#define VER_REVISION	"11"
+#define VER_BUILD	"316"
 
 #define STD_BUF  1024
 
@@ -159,7 +159,9 @@ typedef enum _GetOptLongIds
 
     DETECTION_SEARCH_METHOD,
     CONF_ERROR_OUT,
+    DISABLE_ALERT_ON_EACH_PACKET_IN_STREAM,
     ALERT_ON_EACH_PACKET_IN_STREAM,
+    EVENT_CACHE_SIZE,
 
 #ifdef MPLS
     MAX_MPLS_LABELCHAIN_LEN,
@@ -296,22 +298,24 @@ typedef struct _Barnyard2Config
     int logging_flags;
 //    int log_tcpdump;
 //    int no_log;
+    
+    unsigned int event_cache_size;
 
     VarEntry            *var_table;
 #ifdef SUP_IP6
     vartable_t          *ip_vartable;
 #endif
 
-	/* staging - snort specific variables */
-	int					checksums_mode;
-	char				ignore_ports[0x10000];
-
+    /* staging - snort specific variables */
+    int					checksums_mode;
+    char				ignore_ports[0x10000];
+    
     /* general variables */
     char				*config_file;           /* -c */
     char				*config_dir;
-
-	char				*hostname;		        /* -h or config hostname */
-	char				*interface;		        /* -i or config interface */
+    
+    char				*hostname;		        /* -h or config hostname */
+    char				*interface;		        /* -i or config interface */
 
     char				*class_file;            /* -C or config class_map */
     char				*sid_msg_file;          /* -S or config sid_map */
@@ -328,36 +332,36 @@ typedef struct _Barnyard2Config
 
     int					quiet_flag;
     int					verbose_flag;
-	int					verbose_bytedump_flag;
-	int					show2hdr_flag;
-	int					char_data_flag;
-	int					data_flag;
-	int					obfuscation_flag;
+    int					verbose_bytedump_flag;
+    int					show2hdr_flag;
+    int					char_data_flag;
+    int					data_flag;
+    int					obfuscation_flag;
     int                 alert_on_each_packet_in_stream_flag;
-
-	int					logtosyslog_flag;
-	int					test_mode_flag;
-	
-	int					use_utc;
-	int					include_year;
-	
+    
+    int					logtosyslog_flag;
+    int					test_mode_flag;
+    
+    int					use_utc;
+    int					include_year;
+    
     int					line_buffer_flag;
     char				nostamp;
 
-
+    
     int                 user_id;
     int                 group_id;
     mode_t              file_mask;
-
+    
     /* -h and -B */
 #ifdef SUP_IP6
-	sfip_t				homenet;
-	sfip_t				obfuscation_net;
+    sfip_t				homenet;
+    sfip_t				obfuscation_net;
 #else
-	u_long				homenet;
-	u_long				netmask;
-	uint32_t			obfuscation_net;
-	uint32_t			obfuscation_mask;
+    u_long				homenet;
+    u_long				netmask;
+    uint32_t			obfuscation_net;
+    uint32_t			obfuscation_mask;
 #endif
 
 #ifdef MPLS
@@ -367,12 +371,12 @@ typedef struct _Barnyard2Config
 
 	/* batch mode options */
     int					batch_mode_flag;
-	int					batch_total_files;
-	char				**batch_filelist;
-
+    int					batch_total_files;
+    char				**batch_filelist;
+    
     /* continual mode options */
-	int					process_new_records_only_flag;
-	Waldo				waldo;
+    int					process_new_records_only_flag;
+    Waldo				waldo;
     char				*archive_dir;
     int					daemon_flag;
     int					daemon_restart_flag;

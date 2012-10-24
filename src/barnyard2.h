@@ -63,7 +63,7 @@
 #define VER_MAJOR	"2"
 #define VER_MINOR	"1"
 #define VER_REVISION	"11"
-#define VER_BUILD	"315"
+#define VER_BUILD	"317"
 
 #define STD_BUF  1024
 
@@ -161,6 +161,7 @@ typedef enum _GetOptLongIds
     CONF_ERROR_OUT,
     DISABLE_ALERT_ON_EACH_PACKET_IN_STREAM,
     ALERT_ON_EACH_PACKET_IN_STREAM,
+    EVENT_CACHE_SIZE,
 
 #ifdef MPLS
     MAX_MPLS_LABELCHAIN_LEN,
@@ -297,6 +298,8 @@ typedef struct _Barnyard2Config
     int logging_flags;
 //    int log_tcpdump;
 //    int no_log;
+    
+    unsigned int event_cache_size;
 
     VarEntry            *var_table;
 #ifdef SUP_IP6

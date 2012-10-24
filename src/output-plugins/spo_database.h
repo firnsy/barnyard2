@@ -103,16 +103,11 @@ typedef SQLCHAR   ODBC_SQLCHAR;
 #include "plugbase.h"
 
 #ifndef DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN
-#define DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN 32768 /* Should theorically be enough to escape ....alot of queries */
+#define DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN MAX_QUERY_LENGTH /* Should theorically be enough to escape ....alot of queries */
 #endif /* DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN */
 
-#ifndef MAX_QUERY_LENGTH 
-//#define MAX_QUERY_LENGTH 8192
-#define MAX_QUERY_LENGTH (65536 * 2) /* Lets add some space for payload decoding and query esaping..*/
-#endif  /* MAX_QUERY_LENGTH */
-
 #ifndef MAX_SQL_QUERY_OPS
-#define MAX_SQL_QUERY_OPS 20
+#define MAX_SQL_QUERY_OPS 50 /* In case we get a IP packet with 40 options */
 #endif  /* MAX_SQL_QUERY_OPS */
 
 

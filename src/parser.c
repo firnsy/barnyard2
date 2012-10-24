@@ -190,6 +190,7 @@ static const KeywordFunc barnyard2_conf_keywords[] =
 static const ConfigFunc config_opts[] =
 {
     { CONFIG_OPT__DISABLE_ALERT_ON_EACH_PACKET_IN_STREAM, 0, 1, ConfigDisableAlertOnEachPacketInStream },
+    { CONFIG_OPT__EVENT_CACHE_SIZE, 0, 1, ConfigSetEventCacheSize },
     { CONFIG_OPT__ALERT_ON_EACH_PACKET_IN_STREAM, 0, 1, ConfigAlertOnEachPacketInStream },
     { CONFIG_OPT__ALERT_WITH_IFACE_NAME, 0, 1, ConfigAlertWithInterfaceName },
     { CONFIG_OPT__ARCHIVE_DIR, 1, 1, ConfigArchiveDir },
@@ -1591,14 +1592,26 @@ void ConfigAlertOnEachPacketInStream(Barnyard2Config *bc, char *args)
 {
     if (bc == NULL)
         return;
-    
+
     LogMessage("INFO: Alerting on each packet associated with an event: is now enabled by default. \n"
                " use: command line argument --disable-alert-on-each-packet-in-stream or \n"
-	       " configure file argument disable-alert-on-each-packet-in-stream to disable the feature \n");
-    
+               " configure file argument disable-alert-on-each-packet-in-stream to disable the feature \n");
+
     return;
 }
 
+
+void ConfigSetEventCacheSize(Barnyard2Config *bc, char *args)
+{
+    if( (bc == NULL) ||
+        (args == NULL))
+    {
+        return;
+    }
+
+    bc->event_cache_size = strtoul(args,NULL,10);
+    return;
+}
 
 void ConfigDisableAlertOnEachPacketInStream(Barnyard2Config *bc, char *args)
 {

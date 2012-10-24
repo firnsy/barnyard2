@@ -96,11 +96,6 @@ static char _PATH_VARRUN[STD_BUF];
 #define FILE_MAX_UTIL  (PATH_MAX_UTIL + NAME_MAX_UTIL)
 
 
-#ifndef MAX_QUERY_LENGTH
-//#define MAX_QUERY_LENGTH 8192
-#define MAX_QUERY_LENGTH 65536 /* Lets add some space for payload decoding and query esaping..*/
-#endif  /* MAX_QUERY_LENGTH */
-
 
 /****************************************************************************
  *

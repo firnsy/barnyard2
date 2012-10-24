@@ -78,6 +78,12 @@
 #define DETAIL_FAST  0
 #define DETAIL_FULL  1
 
+#ifndef MAX_QUERY_LENGTH
+#define MAX_QUERY_LENGTH ((65536 * 2) + 4096) /* Lets add some space for payload decoding and query esaping..*/
+#endif  /* MAX_QUERY_LENGTH */
+
+
+
 /* Externs ********************************************************************/
 extern uint32_t *netmasks;
 

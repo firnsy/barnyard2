@@ -190,6 +190,7 @@ static struct option long_options[] =
    {"reference", LONGOPT_ARG_REQUIRED, NULL, 'R'},
    {"classification", LONGOPT_ARG_REQUIRED, NULL, 'C'},
    {"disable-alert-on-each-packet-in-stream", LONGOPT_ARG_NONE, NULL, DISABLE_ALERT_ON_EACH_PACKET_IN_STREAM},
+   {"event-cache-size", LONGOPT_ARG_REQUIRED, NULL, EVENT_CACHE_SIZE},
    {"alert-on-each-packet-in-stream", LONGOPT_ARG_NONE, NULL, ALERT_ON_EACH_PACKET_IN_STREAM},
    {"process-new-records-only", LONGOPT_ARG_NONE, NULL, 'n'},
 
@@ -502,6 +503,7 @@ static int ShowUsage(char *program_name)
 
     FPUTS_BOTH ("Longname options and their corresponding single char version\n");
     FPUTS_BOTH ("   --disable-alert-on-each-packet-in-stream  Alert once per event\n");
+    FPUTS_BOTH ("   --event-cache-size <integer>      Set Spooler MAX event cache size \n");
     FPUTS_BOTH ("   --reference <file>                Same as -R\n");
     FPUTS_BOTH ("   --classification <file>           Same as -C\n");
     FPUTS_BOTH ("   --gen-msg <file>                  Same as -G\n");
@@ -646,9 +648,13 @@ static void ParseCmdLine(int argc, char **argv)
                 ConfigDisableAlertOnEachPacketInStream(bc, NULL);
                 break;
 
+           case EVENT_CACHE_SIZE:
+                ConfigSetEventCacheSize(bc,optarg);
+                break;
+
             case ALERT_ON_EACH_PACKET_IN_STREAM:
                 ConfigAlertOnEachPacketInStream(bc, NULL);
-		break;
+                break;
 
 #ifdef MPLS
             case MAX_MPLS_LABELCHAIN_LEN:
@@ -1546,10 +1552,18 @@ static Barnyard2Config * MergeBarnyard2Confs(Barnyard2Config *cmd_line, Barnyard
 
         config_file->log_dir = SnortStrdup(cmd_line->log_dir);
     }
-
+    
     if (config_file == NULL)
         return cmd_line;
+    
 
+    if( cmd_line->event_cache_size > config_file->event_cache_size)
+    {
+	config_file->event_cache_size = cmd_line->event_cache_size;
+    }
+    
+
+    
     /* Used because of a potential chroot */
     config_file->orig_log_dir = SnortStrdup(config_file->log_dir);
 
@@ -1753,6 +1767,15 @@ static void Barnyard2Init(int argc, char **argv)
          * command line overriding config file.
          * Set the global barnyard2_conf that will be used during run time */
         barnyard2_conf = MergeBarnyard2Confs(barnyard2_cmd_line_conf, bc);
+	
+	if(barnyard2_conf->event_cache_size == 0)
+	{
+	    barnyard2_conf->event_cache_size = 2048;
+	}
+	
+	LogMessage("Barnyard2 spooler: Event cache size set to [%u] \n",
+		   barnyard2_conf->event_cache_size);
+	
     }
 
     /* pcap_snaplen is already initialized to SNAPLEN */

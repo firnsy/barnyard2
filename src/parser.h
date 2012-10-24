@@ -44,6 +44,7 @@
 
 /* Config options */
 #define CONFIG_OPT__DISABLE_ALERT_ON_EACH_PACKET_IN_STREAM  "disable_alert_on_each_packet_in_stream"
+#define CONFIG_OPT__EVENT_CACHE_SIZE                "event_cache_size"
 #define CONFIG_OPT__ALERT_ON_EACH_PACKET_IN_STREAM  "alert_on_each_packet_in_stream"
 #define CONFIG_OPT__ALERT_WITH_IFACE_NAME           "alert_with_interface_name"
 #define CONFIG_OPT__ARCHIVE_DIR                     "archivedir"
@@ -145,6 +146,7 @@ void ConfigUmask(Barnyard2Config *, char *);
 void ConfigUtc(Barnyard2Config *, char *);
 void ConfigVerbose(Barnyard2Config *, char *);
 void ConfigWaldoFile(Barnyard2Config *, char *);
+void ConfigSetEventCacheSize(Barnyard2Config *, char *);
 #ifdef MPLS
 void ConfigMaxMplsLabelChain(Barnyard2Config *, char *);
 void ConfigMplsPayloadType(Barnyard2Config *, char *);

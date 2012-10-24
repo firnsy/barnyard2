@@ -41,7 +41,7 @@
 #include "unified2.h"
 #include "util.h"
 
-#define CACHED_EVENTS_MAX 256
+
 
 /*
 ** PRIVATE FUNCTIONS
@@ -455,9 +455,11 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
 	    else
 	    {
 		/* Make sure we create a new waldo even if we did not have processed an event */
-		spooler->record_idx = 0;    
-		spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);
-			    
+		if(waldo_timestamp != extension)
+		{
+		    spooler->record_idx = 0;    
+		    spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);
+		}
 		waiting_logged = 0;
 		
 		/* set timestamp to ensure we look for a newer file next time */
@@ -875,7 +877,7 @@ int spoolerEventCacheClean(Spooler *spooler)
     ernPrev = spooler->event_cache;
     ernCurrent = spooler->event_cache;
     
-    while (ernCurrent != NULL && spooler->events_cached > CACHED_EVENTS_MAX )
+    while (ernCurrent != NULL && spooler->events_cached > barnyard2_conf->event_cache_size )
     {
 	ernNext = ernCurrent->next;
 	

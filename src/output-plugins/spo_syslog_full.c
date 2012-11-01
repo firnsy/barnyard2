@@ -70,7 +70,6 @@ static int NetTestSocket(OpSyslog_Data *op_data);
 
 extern Barnyard2Config *barnyard2_conf;
 
-int SyslogLogContext;
 char *db_proto[] = {"udp", "tcp", NULL};
 
 
@@ -85,16 +84,14 @@ void OpSyslog_Setup(void)
 /* Log Init Context wrapping function */
 void OpSyslog_InitLog(char *args)
 {
-    SyslogLogContext = OUTPUT_TYPE_FLAG__LOG;
-    OpSyslog_Init(args);
+    OpSyslog_Init(args,OUTPUT_TYPE_FLAG__LOG);
     return;
 }
 
 /* Alert Init Context wrapping function */
 void OpSyslog_InitAlert(char *args)
 {
-    SyslogLogContext = OUTPUT_TYPE_FLAG__ALERT;
-    OpSyslog_Init(args);
+    OpSyslog_Init(args,OUTPUT_TYPE_FLAG__ALERT);
     return;
 }
 
@@ -102,7 +99,7 @@ void OpSyslog_InitAlert(char *args)
  * init the output plugin, process any arguments, link the functions to
  * the output functional node
  */
-void OpSyslog_Init(char *args)
+void OpSyslog_Init(char *args,u_int8_t context)
 {
     OpSyslog_Data *syslogContext;
     
@@ -121,16 +118,18 @@ void OpSyslog_Init(char *args)
 	FatalError("OpSyslog_Init(): Error parsing output plugin arguments, bailing.\n");
     }
     
+    syslogContext->log_context = context;
+
     AddFuncToCleanExitList(OpSyslog_Exit,(void *)syslogContext);
     AddFuncToShutdownList(OpSyslog_Exit,(void *)syslogContext);
     
-    switch(SyslogLogContext)
+    switch(syslogContext->log_context)
     {
 	
     case OUTPUT_TYPE_FLAG__LOG:
 	switch(syslogContext->operation_mode)
         {
-        case OUT_MODE_FULL:
+	case OUT_MODE_FULL:
             AddFuncToOutputList(OpSyslog_Log, OUTPUT_TYPE__LOG, (void *)syslogContext);
             break;
 	    
@@ -141,6 +140,7 @@ void OpSyslog_Init(char *args)
             AddFuncToOutputList(OpSyslog_Alert, OUTPUT_TYPE__ALERT, (void *)syslogContext);
             break;
         }
+	break;
 	
     case OUTPUT_TYPE_FLAG__ALERT:
 	AddFuncToOutputList(OpSyslog_Alert, OUTPUT_TYPE__ALERT, (void *)syslogContext);
@@ -422,14 +422,16 @@ static int Syslog_FormatTrigger(OpSyslog_Data *syslogData, Unified2EventCommon *
 	     ntohl(pEvent->signature_revision));
     
     sn = GetSigByGidSid(ntohl(pEvent->generator_id),
-			ntohl(pEvent->signature_id));
+			ntohl(pEvent->signature_id),
+			ntohl(pEvent->signature_revision));
     
     cn = ClassTypeLookupById(barnyard2_conf, 
 			     ntohl(pEvent->classification_id));
     
-    if( (syslogData->format_current_pos += snprintf(syslogData->formatBuffer,SYSLOG_MAX_QUERY_SIZE,"%s%c%u%c%s", 
+    if( (syslogData->format_current_pos += snprintf(syslogData->formatBuffer,SYSLOG_MAX_QUERY_SIZE,"%s%c%u%c[%u:%u:%u]%c%s", 
 						    timestamp_string,syslogData->field_separators,
 						    ntohl(pEvent->priority_id),syslogData->field_separators,
+						    ntohl(pEvent->generator_id),ntohl(pEvent->signature_id),ntohl(pEvent->signature_revision),syslogData->field_separators,
 						    sn != NULL ? sn->msg : tSigBuf)) >=  SYSLOG_MAX_QUERY_SIZE)
     {
 	/* XXX */
@@ -522,6 +524,10 @@ static int Syslog_FormatIPHeaderLog(OpSyslog_Data *data, Packet *p)
     unsigned int s, d, proto, ver, hlen, tos, len, id, off, ttl, csum;
     s=d=proto=ver=hlen=tos=len=id=off=ttl=csum=0;
 
+    char sip[16] = {0};
+    char dip[16] = {0};
+    
+
     if(p->iph) 
     {
 	if(p->iph->ip_src.s_addr)
@@ -547,12 +553,30 @@ static int Syslog_FormatIPHeaderLog(OpSyslog_Data *data, Packet *p)
 	if(p->iph->ip_csum)
 	    ttl = htons(p->iph->ip_csum);
     }
+
+    if (strlcpy(sip, inet_ntoa(GET_SRC_ADDR(p)), sizeof(sip)) >= sizeof(sip))
+    {
+	FatalError("[%s()], strlcpy() error , bailing \n",
+		   __FUNCTION__);
+	return 1;
+    }
+
+
+    if (strlcpy(dip, inet_ntoa(GET_DST_ADDR(p)), sizeof(dip)) >= sizeof(dip))
+    {
+	FatalError("[%s()], strlcpy() error , bailing \n",
+		   __FUNCTION__);
+	return 1;
+    }
+
     
     if( (data->format_current_pos += snprintf(data->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
-					      "%u%c%u%c%u%c%u%c%u%c%u%c%u%c%u%c%u%c%u%c%u%c%u",
+					      "%u%c%s%c%s%c%u%c%u%c%u%c%u%c%u%c%u%c%u%c%u%c%u",
 					      proto,data->field_separators, 
-					      s, data->field_separators, 
-					      d, data->field_separators, 
+					      sip, data->field_separators, 
+                                              //s, data->field_separators, 
+					      dip, data->field_separators, 
+                                              //d, data->field_separators, 					      
 					      ver, data->field_separators, 
 					      hlen, data->field_separators, 
 					      tos, data->field_separators, 
@@ -880,7 +904,8 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	}
 	
 	sn = GetSigByGidSid(ntohl(iEvent->generator_id),
-			    ntohl(iEvent->signature_id));
+			    ntohl(iEvent->signature_id),
+			    ntohl(iEvent->signature_revision));
 	
 	cn = ClassTypeLookupById(barnyard2_conf,
 				 ntohl(iEvent->classification_id));
@@ -888,8 +913,8 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
 							   "[%u:%u:%u] ",
 							   ntohl(iEvent->generator_id),
-							ntohl(iEvent->signature_id),
-							ntohl(iEvent->signature_revision))) >=  SYSLOG_MAX_QUERY_SIZE)
+							   ntohl(iEvent->signature_id),
+							   ntohl(iEvent->signature_revision))) >=  SYSLOG_MAX_QUERY_SIZE)
 	{
 	    /* XXX */
 	    FatalError("[%s()], failed call to snprintf \n",

@@ -574,7 +574,9 @@ static int event_to_reference(void *event, idmef_classification_t *class)
      * return if we have no information about the rule.
      */
 	sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-						ntohl(((Unified2EventCommon *)event)->signature_id));
+			    ntohl(((Unified2EventCommon *)event)->signature_id),
+			    ntohl(((Unified2EventCommon *)event)->signature_revision));
+			 
 
 	if (sn == NULL)
         return 0;
@@ -623,7 +625,8 @@ void snort_alert_prelude(Packet *p, void *event, u_int32_t event_type, void *dat
             return;
 
 		sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-							ntohl(((Unified2EventCommon *)event)->signature_id));
+				    ntohl(((Unified2EventCommon *)event)->signature_id),
+				    ntohl(((Unified2EventCommon *)event)->signature_revision));
 
 		if (sn == NULL)
 			return;

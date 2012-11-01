@@ -41,7 +41,7 @@
 #include "unified2.h"
 #include "util.h"
 
-#define CACHED_EVENTS_MAX 256
+
 
 /*
 ** PRIVATE FUNCTIONS
@@ -875,7 +875,7 @@ int spoolerEventCacheClean(Spooler *spooler)
     ernPrev = spooler->event_cache;
     ernCurrent = spooler->event_cache;
     
-    while (ernCurrent != NULL && spooler->events_cached > CACHED_EVENTS_MAX )
+    while (ernCurrent != NULL && spooler->events_cached > barnyard2_conf->event_cache_size )
     {
 	ernNext = ernCurrent->next;
 	

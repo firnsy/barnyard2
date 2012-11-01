@@ -54,6 +54,8 @@ typedef struct _OpSyslog_Data
 {
     char *server;
     char *sensor_name;
+
+    u_int8_t log_context;
     
     u_int8_t operation_mode;
     u_int8_t local_logging;
@@ -83,7 +85,7 @@ typedef struct _OpSyslog_Data
 } OpSyslog_Data;
 
 void OpSyslog_Setup(void);
-void OpSyslog_Init(char *args);
+void OpSyslog_Init(char *args,u_int8_t context);
 
 #define SYSLOG_MAX_QUERY_SIZE 65535   /* This could be easely filled in log mode with  the full packet payload, 
 				         we issue a warning if payload is truncated in log mode 

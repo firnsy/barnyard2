@@ -251,7 +251,9 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
 
 	/* grab the appropriate signature and classification information */
 	sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-						ntohl(((Unified2EventCommon *)event)->signature_id));
+			    ntohl(((Unified2EventCommon *)event)->signature_id),
+			    ntohl(((Unified2EventCommon *)event)->signature_revision));
+
 	cn = ClassTypeLookupById(barnyard2_conf, ntohl(((Unified2EventCommon *)event)->classification_id));
 
     /* Here we build our RT event to send to sguild. The event is built with a

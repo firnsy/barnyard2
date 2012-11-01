@@ -1442,6 +1442,15 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
     priority = ntohl(((Unified2EventCommon *)event)->priority_id);
     classification = ntohl(((Unified2EventCommon *)event)->classification_id);
 
+    /* Originaly forgot about this, since 
+       those signature messages will be put in sid-msg.map by programs like pulledpork */
+    /* map.c
+       a snort general rule (gid=1) and a snort dynamic rule (gid=3) use the  
+       the same sids and thus can be considered one in the same. */
+    if (gid == 3)
+    {
+	gid = 1;
+    }
     
     /* NOTE: elz 
        For sanity purpose the sig_class table SHOULD have internal classification id to prevent possible 

@@ -149,7 +149,9 @@ static void AlertFull(Packet *p, void *event, uint32_t event_type, void *arg)
 
     data = (SpoAlertFullData *)arg;
 	sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-						ntohl(((Unified2EventCommon *)event)->signature_id));
+			    ntohl(((Unified2EventCommon *)event)->signature_id),
+			    ntohl(((Unified2EventCommon *)event)->signature_revision));
+
 
 
     if(sn != NULL)

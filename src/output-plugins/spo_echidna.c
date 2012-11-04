@@ -404,8 +404,11 @@ void Echidna(Packet *p, void *event, u_int32_t event_type, void *arg)
     data = (SpoEchidnaData *)arg;
 
     /* grab the appropriate signature and classification information */
-    sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-            ntohl(((Unified2EventCommon *)event)->signature_id));
+    sn = GetSigByGidSid(
+            ntohl(((Unified2EventCommon *)event)->generator_id),
+            ntohl(((Unified2EventCommon *)event)->signature_id),
+            ntohl(((Unified2EventCommon *)event)->signature_revision)
+            );
     cn = ClassTypeLookupById(barnyard2_conf, ntohl(((Unified2EventCommon *)event)->classification_id));
 
     /* initialise our json object */
@@ -586,7 +589,7 @@ int EchidnaEventUDPDataAppend(json_object *json, Packet *p)
 
 int EchidnaNodeConnect(SpoEchidnaData *spd_data)
 {
-    int ws_ret;
+    int ws_ret = 0;
     int tries = 10;
 
     DEBUG_WRAP(DebugMessage(DEBUG_PLUGIN, "echidna: creating context ... \n"););

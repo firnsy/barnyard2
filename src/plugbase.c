@@ -70,7 +70,7 @@
 #include "output-plugins/spo_log_ascii.h"
 #include "output-plugins/spo_log_null.h"
 #include "output-plugins/spo_log_tcpdump.h"
-#include "output-plugins/spo_platypus.h"
+#include "output-plugins/spo_echidna.h"
 #include "output-plugins/spo_sguil.h"
 #include "output-plugins/spo_syslog_full.h"
 
@@ -355,7 +355,10 @@ void RegisterOutputPlugins(void)
 
     AlertTestSetup();
 
-    PlatypusSetup();
+#ifdef ENABLE_PLUGIN_ECHIDNA
+    EchidnaSetup();
+#endif
+
     SguilSetup();
 
     OpSyslog_Setup();

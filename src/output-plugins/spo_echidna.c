@@ -45,7 +45,7 @@
 #include <curl/curl.h>
 #include <json/json.h>
 #include <json/json_tokener.h>
-
+#include <openssl/sha.h>
 
 #include "barnyard2.h"
 #include "debug.h"
@@ -389,10 +389,28 @@ void Echidna(Packet *p, void *event, u_int32_t event_type, void *arg)
 
     char *data_msg;
 
+    char id_hash_text[512];
+    char evt_corr_id_hash_text[512];
+    char ssn_corr_id_hash_text[512];
+
+    uint8_t id_hash[SHA256_DIGEST_LENGTH];
+    uint8_t evt_corr_id_hash[SHA256_DIGEST_LENGTH];
+    uint8_t ssn_corr_id_hash[SHA256_DIGEST_LENGTH];
+
+    char id_hash_hex[64];
+    char evt_corr_id_hash_hex[64];
+    char ssn_corr_id_hash_hex[64];
+
+    SHA256_CTX ctx;
+
     char sip4[INET_ADDRSTRLEN];
     char dip4[INET_ADDRSTRLEN];
     char sip6[INET6_ADDRSTRLEN];
     char dip6[INET6_ADDRSTRLEN];
+    uint16_t sport;
+    uint16_t dport;
+
+    int i;
 
     SpoEchidnaData *data;
     SigNode *sn = NULL;
@@ -414,34 +432,9 @@ void Echidna(Packet *p, void *event, u_int32_t event_type, void *arg)
     /* initialise our json object */
     json = json_object_new_object();
 
+
     json_object_object_add(json, "node_id", json_object_new_string(node_id));
     json_object_object_add(json, "meta_u2_event_id", json_object_new_int( ntohl(((Unified2EventCommon *)event)->event_id) ));
-
-    /* snort event reference time */
-    json_object_object_add(json, "timestamp", json_object_new_string(
-        EchidnaTimestamp(
-            ntohl(((Unified2EventCommon *)event)->event_second),
-            ntohl(((Unified2EventCommon *)event)->event_microsecond)
-        )
-    ));
-
-    /* generator ID */
-    json_object_object_add(json, "sig_type", json_object_new_int( ntohl(((Unified2EventCommon *)event)->generator_id) ));
-
-    /* signature ID */
-    json_object_object_add(json, "sig_id,", json_object_new_int( ntohl(((Unified2EventCommon *)event)->signature_id) ));
-
-    /* signature revision */
-    json_object_object_add(json, "sig_rev", json_object_new_int( ntohl(((Unified2EventCommon *)event)->signature_revision) ));
-
-    /* signature message */
-    json_object_object_add(json, "sig_message", json_object_new_string( sn->msg ));
-
-    /* alert priority */
-    json_object_object_add(json, "sig_priority", json_object_new_int( ntohl(((Unified2EventCommon *)event)->priority_id) ));
-
-    /* alert classification */
-    json_object_object_add(json, "sig_category", json_object_new_string(  cn != NULL ? cn->type : "unknown" ));
 
     /* IP version, addresses, ports and protocol */
     switch( event_type )
@@ -451,28 +444,77 @@ void Echidna(Packet *p, void *event, u_int32_t event_type, void *arg)
         case UNIFIED2_IDS_EVENT_VLAN:
             inet_ntop(AF_INET, &((Unified2IDSEvent*)event)->ip_source, sip4, INET_ADDRSTRLEN);
             inet_ntop(AF_INET, &((Unified2IDSEvent*)event)->ip_destination, dip4, INET_ADDRSTRLEN);
+            sport = ntohs(((Unified2IDSEvent *)event)->sport_itype);
+            dport = ntohs(((Unified2IDSEvent *)event)->dport_icode);
 
             json_object_object_add(json, "net_version", json_object_new_int( 4 ));
             json_object_object_add(json, "net_src_ip", json_object_new_string( sip4 ));
-            json_object_object_add(json, "net_src_port", json_object_new_int( ntohs(((Unified2IDSEvent *)event)->sport_itype) ));
+            json_object_object_add(json, "net_src_port", json_object_new_int( sport ));
             json_object_object_add(json, "net_dst_ip", json_object_new_string( sip4 ));
-            json_object_object_add(json, "net_dst_port", json_object_new_int( ntohs(((Unified2IDSEvent *)event)->dport_icode) ));
-            json_object_object_add(json, "net_version", json_object_new_int( ((Unified2IDSEvent *)event)->protocol ));
+            json_object_object_add(json, "net_dst_port", json_object_new_int( dport ));
+            json_object_object_add(json, "net_protocol", json_object_new_int(  ((Unified2IDSEvent *)event)->protocol));
+
+            SnortSnprintfAppend(ssn_corr_id_hash_text, 512, "%s%d%s%d%d", sip4, sport, dip4, dport, ((Unified2IDSEvent *)event)->protocol);
             break;
         case UNIFIED2_IDS_EVENT_IPV6:
         case UNIFIED2_IDS_EVENT_IPV6_MPLS:
         case UNIFIED2_IDS_EVENT_IPV6_VLAN:
             inet_ntop(AF_INET6, &((Unified2IDSEventIPv6 *)event)->ip_source, sip6, INET6_ADDRSTRLEN);
             inet_ntop(AF_INET6, &((Unified2IDSEventIPv6 *)event)->ip_destination, dip6, INET6_ADDRSTRLEN);
+            sport = ntohs(((Unified2IDSEventIPv6 *)event)->sport_itype);
+            dport = ntohs(((Unified2IDSEventIPv6 *)event)->dport_icode);
 
             json_object_object_add(json, "net_version", json_object_new_int( 6 ));
             json_object_object_add(json, "net_src_ip", json_object_new_string( sip6 ));
-            json_object_object_add(json, "net_src_port", json_object_new_int( ntohs(((Unified2IDSEventIPv6 *)event)->sport_itype) ));
+            json_object_object_add(json, "net_src_port", json_object_new_int( sport ));
             json_object_object_add(json, "net_dst_ip", json_object_new_string( sip6 ));
-            json_object_object_add(json, "net_dst_port", json_object_new_int( ntohs(((Unified2IDSEventIPv6 *)event)->dport_icode) ));
-            json_object_object_add(json, "net_version", json_object_new_int( ((Unified2IDSEventIPv6 *)event)->protocol ));
+            json_object_object_add(json, "net_dst_port", json_object_new_int( dport ));
+            json_object_object_add(json, "net_protocol", json_object_new_int( ((Unified2IDSEventIPv6 *)event)->protocol ));
+
+            SnortSnprintfAppend(ssn_corr_id_hash_text, 512, "%s%d%s%d%d", sip6, sport, dip6, dport, ((Unified2IDSEventIPv6 *)event)->protocol);
             break;
     }
+
+    /* snort event reference time */
+    json_object_object_add(json, "timestamp", json_object_new_string(
+        EchidnaTimestamp(
+            ntohl(((Unified2EventCommon *)event)->event_second),
+            ntohl(((Unified2EventCommon *)event)->event_microsecond)
+        )
+    ));
+
+    SnortSnprintfAppend(id_hash_text, 512, "%s%s",
+        ssn_corr_id_hash_text,
+        EchidnaTimestamp(
+            ntohl(((Unified2EventCommon *)event)->event_second),
+            ntohl(((Unified2EventCommon *)event)->event_microsecond)
+        )
+    );
+
+    /* generator ID */
+    json_object_object_add(json, "sig_type", json_object_new_int( ntohl(((Unified2EventCommon *)event)->generator_id) ));
+
+    /* signature ID */
+    json_object_object_add(json, "sig_id", json_object_new_int( ntohl(((Unified2EventCommon *)event)->signature_id) ));
+
+    /* signature revision */
+    json_object_object_add(json, "sig_revision", json_object_new_int( ntohl(((Unified2EventCommon *)event)->signature_revision) ));
+
+    SnortSnprintfAppend(evt_corr_id_hash_text, 512, "%s%d%d%d",
+        ssn_corr_id_hash_text,
+        ntohl(((Unified2EventCommon *)event)->generator_id),
+        ntohl(((Unified2EventCommon *)event)->signature_id),
+        ntohl(((Unified2EventCommon *)event)->signature_revision)
+      );
+
+    /* signature message */
+    json_object_object_add(json, "sig_message", json_object_new_string( sn->msg ));
+
+    /* alert priority */
+    json_object_object_add(json, "sig_priority", json_object_new_int( ntohl(((Unified2EventCommon *)event)->priority_id) ));
+
+    /* alert classification */
+    json_object_object_add(json, "sig_category", json_object_new_string(  cn != NULL ? cn->type : "unknown" ));
 
     /* pull decoded info from the packet */
     if( p != NULL )
@@ -516,6 +558,37 @@ void Echidna(Packet *p, void *event, u_int32_t event_type, void *arg)
             }
         }
     }
+
+    /* construct id hash */
+    SHA256_Init(&ctx);
+    SHA256_Update(&ctx, id_hash_text, strlen(id_hash_text));
+    SHA256_Final(id_hash, &ctx);
+    for( i=0; i<SHA256_DIGEST_LENGTH; i++)
+    {
+      sprintf(id_hash_hex+(i*2), "%02x", id_hash[i]);
+    }
+    json_object_object_add(json, "id", json_object_new_string(id_hash_hex));
+
+    /* construct session correlation id hash */
+    SHA256_Init(&ctx);
+    SHA256_Update(&ctx, ssn_corr_id_hash_text, strlen(ssn_corr_id_hash_text));
+    SHA256_Final(ssn_corr_id_hash, &ctx);
+    for( i=0; i<SHA256_DIGEST_LENGTH; i++)
+    {
+      sprintf(ssn_corr_id_hash_hex+(i*2), "%02x", ssn_corr_id_hash[i]);
+    }
+
+    json_object_object_add(json, "ssn_corr_id", json_object_new_string(ssn_corr_id_hash_hex));
+
+    /* construct event correlation id hash */
+    SHA256_Init(&ctx);
+    SHA256_Update(&ctx, evt_corr_id_hash_text, strlen(evt_corr_id_hash_text));
+    SHA256_Final(evt_corr_id_hash, &ctx);
+    for( i=0; i<SHA256_DIGEST_LENGTH; i++)
+    {
+      sprintf(evt_corr_id_hash_hex+(i*2), "%02x", evt_corr_id_hash[i]);
+    }
+    json_object_object_add(json, "evt_corr_id", json_object_new_string(evt_corr_id_hash_hex));
 
     /* send msg to sensor_agent */
     EchidnaEventSubmit(data, json);

@@ -815,7 +815,8 @@ if test "x$with_postgresql" != "xno"; then
     postgresql_fail="no"
   fi
 
-  AC_MSG_CHECKING(for postgresql)
+
+    AC_MSG_CHECKING([for postgresql])
 
   if test "x$with_pgsql_includes" != "xno"; then
     for i in $with_pgsql_includes $postgresql_directory; do
@@ -861,6 +862,7 @@ if test "x$with_postgresql" != "xno"; then
     fi
   fi
 
+
   if test -z "$POSTGRESQL_DIR"; then
     for dir in $postgresql_directory; do
        for i in "lib" "lib/pgsql"; do
@@ -898,6 +900,36 @@ if test "x$with_postgresql" != "xno"; then
         exit 1
      fi
   fi
+
+AC_DEFUN([AC_CHECK_PGSQL_PQPING],
+[
+AC_MSG_CHECKING([PGSQL_API_VERSION for PQping support])
+AC_LINK_IFELSE([
+AC_LANG_SOURCE(
+[[
+#include <$2/pg_config.h>
+int main()
+{
+#ifdef PG_VERSION_NUM
+if(PG_VERSION_NUM >= $1)
+{
+return 0;
+}
+#endif
+return 1;
+}]])],
+[
+AC_DEFINE([HAVE_PQPING], 1,[libpq support PQping()])
+AC_MSG_RESULT([yes])
+],
+[
+AC_DEFINE([HAVE_PQPING],[0],[libpq does not support PQping()])
+AC_MSG_RESULT([no])
+])
+])
+
+AC_CHECK_PGSQL_PQPING([90100],[$POSTGRESQL_INC_DIR])
+
 fi
 
 AC_ARG_WITH(oracle, 

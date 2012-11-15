@@ -3950,6 +3950,21 @@ void Connect(DatabaseData * data)
 	
 #ifdef ENABLE_POSTGRESQL
     case DB_POSTGRESQL:
+
+#ifdef HAVE_PQPING
+	/* Set PQPing String */
+	memset(data->p_pingString,'\0',1024);
+	if(SnortSnprintf(data->p_pingString,1024,"host='%s' port='%s' user='%s' dbname='%s'",
+			 data->host,
+			 data->port == NULL ? "5432" : data->port,
+			 data->user,
+			 data->dbname))
+	{
+	    /* XXX */
+	    FatalError("[%s()],unable to create PQPing connection string.. bailing \n",
+		       __FUNCTION__);
+	}
+#endif
 	
         if (data->use_ssl == 1)
         {
@@ -5039,6 +5054,8 @@ u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH)
 {
     DatabaseData *data = NULL;
     
+    int PQpingRet = 0;
+
     if( (pdbRH == NULL) ||
         (pdbRH->dbdata == NULL))
     {
@@ -5051,6 +5068,40 @@ u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH)
 conn_test:
     if(data->p_connection != NULL)
     {
+	
+#ifdef HAVE_PQPING
+	switch( (PQpingRet = PQping(data->p_pingString)))
+        {
+        case PQPING_OK:
+            break;
+
+        case PQPING_NO_ATTEMPT:
+	    LogMessage("[%s()], PQPing call assumed [PQPING_NO_ATTEMPT] using connection string [%s], continuing \n",
+		       __FUNCTION__,
+		       data->p_pingString);
+	    break;
+
+        case PQPING_REJECT:
+        case PQPING_NO_RESPONSE:
+        default:
+
+            LogMessage("[%s()], PQPing call retval[%d] seem's to indicate unreacheable server, assuming connection is dead \n",
+                       __FUNCTION__,
+		       PQpingRet);
+
+            if(checkTransactionState(pdbRH))
+            {
+                /* ResetState for the caller */
+                setReconnectState(pdbRH,1);
+                setTransactionCallFail(pdbRH);
+                setTransactionState(pdbRH);
+            }
+
+            PQreset(data->p_connection);
+            break;
+        }
+#endif
+	
 	switch(PQstatus(data->p_connection))
 	{
 	case CONNECTION_OK:

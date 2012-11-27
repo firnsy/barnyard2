@@ -450,7 +450,7 @@ void Echidna(Packet *p, void *event, u_int32_t event_type, void *arg)
             json_object_object_add(json, "net_version", json_object_new_int( 4 ));
             json_object_object_add(json, "net_src_ip", json_object_new_string( sip4 ));
             json_object_object_add(json, "net_src_port", json_object_new_int( sport ));
-            json_object_object_add(json, "net_dst_ip", json_object_new_string( sip4 ));
+            json_object_object_add(json, "net_dst_ip", json_object_new_string( dip4 ));
             json_object_object_add(json, "net_dst_port", json_object_new_int( dport ));
             json_object_object_add(json, "net_protocol", json_object_new_int(  ((Unified2IDSEvent *)event)->protocol));
 
@@ -467,7 +467,7 @@ void Echidna(Packet *p, void *event, u_int32_t event_type, void *arg)
             json_object_object_add(json, "net_version", json_object_new_int( 6 ));
             json_object_object_add(json, "net_src_ip", json_object_new_string( sip6 ));
             json_object_object_add(json, "net_src_port", json_object_new_int( sport ));
-            json_object_object_add(json, "net_dst_ip", json_object_new_string( sip6 ));
+            json_object_object_add(json, "net_dst_ip", json_object_new_string( dip6 ));
             json_object_object_add(json, "net_dst_port", json_object_new_int( dport ));
             json_object_object_add(json, "net_protocol", json_object_new_int( ((Unified2IDSEventIPv6 *)event)->protocol ));
 

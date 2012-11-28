@@ -1585,8 +1585,17 @@ static Barnyard2Config * MergeBarnyard2Confs(Barnyard2Config *cmd_line, Barnyard
 
     if (cmd_line->pid_path[0] != '\0')
         ConfigPidPath(config_file, cmd_line->pid_path);
-
-    config_file->alert_on_each_packet_in_stream_flag = cmd_line->alert_on_each_packet_in_stream_flag;
+    
+    if( (config_file->alert_on_each_packet_in_stream_flag == 0) &&
+	(cmd_line->alert_on_each_packet_in_stream_flag == 1))
+    {
+	config_file->alert_on_each_packet_in_stream_flag = 0;
+    }
+    else
+    {
+	config_file->alert_on_each_packet_in_stream_flag  = cmd_line->alert_on_each_packet_in_stream_flag;
+    }
+    
     config_file->process_new_records_only_flag = cmd_line->process_new_records_only_flag;
 
 #ifdef SUP_IP6

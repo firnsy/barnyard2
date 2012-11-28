@@ -422,6 +422,10 @@ typedef struct _DatabaseData
 #ifdef ENABLE_POSTGRESQL
     PGconn * p_connection;
     PGresult * p_result;
+
+#ifdef HAVE_PQPING
+    char p_pingString[1024];
+#endif
 #endif
 #ifdef ENABLE_MYSQL
     MYSQL * m_sock;

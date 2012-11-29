@@ -72,6 +72,10 @@ typedef struct _SpoEchidnaData
     u_int16_t node_port;
 
     int use_ssl;
+
+
+
+    CURL *curl;
 } SpoEchidnaData;
 
 static int session_state = 0;
@@ -141,7 +145,7 @@ callback_lws_mirror(struct libwebsocket_context *this, struct libwebsocket *wsi,
     switch (reason) {
 
       case LWS_CALLBACK_CLOSED:
-          fprintf(stderr, "echidna: LWS_CALLBACK_CLOSED\n");
+          //fprintf(stderr, "echidna: LWS_CALLBACK_CLOSED\n");
           wsi_echidna = NULL;
 
           /* session key is invalidated */
@@ -157,13 +161,13 @@ callback_lws_mirror(struct libwebsocket_context *this, struct libwebsocket *wsi,
            * start the ball rolling,
            * LWS_CALLBACK_CLIENT_WRITEABLE will come next service
            */
-          fprintf(stderr, "Connection established ...\n");
+          //fprintf(stderr, "Connection established ...\n");
 
           libwebsocket_callback_on_writable(this, wsi);
           break;
 
       case LWS_CALLBACK_CLIENT_RECEIVE:
-          fprintf(stderr, "rx %d '%s'\n", (int)len, (char *)in);
+          //fprintf(stderr, "rx %d '%s'\n", (int)len, (char *)in);
 
 
           json = json_tokener_parse( in );
@@ -183,7 +187,7 @@ callback_lws_mirror(struct libwebsocket_context *this, struct libwebsocket *wsi,
 
                       node_id = SnortStrdup( json_object_get_string(val) );
 
-                      fprintf(stderr, "NODE ID: %s\n", node_id);
+                      DEBUG_WRAP(DebugMessage(DEBUG_PLUGIN, "NODE ID: %s\n", node_id););
                   }
                   else if( strncmp( key, "session_key", 11 ) == 0 && ( type == json_type_string ) )
                   {
@@ -192,7 +196,7 @@ callback_lws_mirror(struct libwebsocket_context *this, struct libwebsocket *wsi,
                         free(session_key);
 
                       session_key = SnortStrdup( json_object_get_string(val) );
-                      fprintf(stderr, "SESSION KEY: %s\n", session_key);
+                      DEBUG_WRAP(DebugMessage(DEBUG_PLUGIN, "SESSION KEY: %s\n", session_key););
                   }
                   else if( strncmp( key, "session_uri", 11 ) == 0 && ( type == json_type_string ) )
                   {
@@ -201,7 +205,7 @@ callback_lws_mirror(struct libwebsocket_context *this, struct libwebsocket *wsi,
                         free(session_uri);
 
                       session_uri = SnortStrdup( json_object_get_string(val) );
-                      fprintf(stderr, "SESSION URI: %s\n", session_uri);
+                      DEBUG_WRAP(DebugMessage(DEBUG_PLUGIN, "SESSION URI: %s\n", session_uri););
                   }
               }
 
@@ -233,49 +237,49 @@ callback_lws_mirror(struct libwebsocket_context *this, struct libwebsocket *wsi,
           break;
 
       case LWS_CALLBACK_ESTABLISHED:
-        fprintf(stderr, " LWS_CALLBACK_ESTABLISHED\n");
+        //fprintf(stderr, " LWS_CALLBACK_ESTABLISHED\n");
         break;
       case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
-        fprintf(stderr, " LWS_CALLBACK_CLIENT_CONNECTION_ERROR\n");
+        //fprintf(stderr, " LWS_CALLBACK_CLIENT_CONNECTION_ERROR\n");
         break;
       case LWS_CALLBACK_RECEIVE:
-        fprintf(stderr, " LWS_CALLBACK_RECEIVE\n");
+        //fprintf(stderr, " LWS_CALLBACK_RECEIVE\n");
         break;
       case LWS_CALLBACK_CLIENT_RECEIVE_PONG:
-        fprintf(stderr, " LWS_CALLBACK_CLIENT_RECEIVE_PONG\n");
+        //fprintf(stderr, " LWS_CALLBACK_CLIENT_RECEIVE_PONG\n");
         break;
       case LWS_CALLBACK_SERVER_WRITEABLE:
-        fprintf(stderr, " LWS_CALLBACK_SERVER_WRITEABLE\n");
+        //fprintf(stderr, " LWS_CALLBACK_SERVER_WRITEABLE\n");
         break;
       case LWS_CALLBACK_HTTP:
-        fprintf(stderr, " LWS_CALLBACK_HTTP\n");
+        //fprintf(stderr, " LWS_CALLBACK_HTTP\n");
         break;
       case LWS_CALLBACK_BROADCAST:
-        fprintf(stderr, " LWS_CALLBACK_BROADCAST\n");
+        //fprintf(stderr, " LWS_CALLBACK_BROADCAST\n");
         break;
       case LWS_CALLBACK_FILTER_NETWORK_CONNECTION:
-        fprintf(stderr, " LWS_CALLBACK_FILTER_NETWORK_CONNECTION\n");
+        //fprintf(stderr, " LWS_CALLBACK_FILTER_NETWORK_CONNECTION\n");
         break;
       case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
-        fprintf(stderr, " LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION\n");
+        //fprintf(stderr, " LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION\n");
         break;
       case LWS_CALLBACK_OPENSSL_LOAD_EXTRA_CLIENT_VERIFY_CERTS:
-        fprintf(stderr, " LWS_CALLBACK_OPENSSL_LOAD_EXTRA_CLIENT_VERIFY_CERTS\n");
+        //fprintf(stderr, " LWS_CALLBACK_OPENSSL_LOAD_EXTRA_CLIENT_VERIFY_CERTS\n");
         break;
       case LWS_CALLBACK_OPENSSL_LOAD_EXTRA_SERVER_VERIFY_CERTS:
-        fprintf(stderr, " LWS_CALLBACK_OPENSSL_LOAD_EXTRA_SERVER_VERIFY_CERTS\n");
+        //fprintf(stderr, " LWS_CALLBACK_OPENSSL_LOAD_EXTRA_SERVER_VERIFY_CERTS\n");
         break;
       case LWS_CALLBACK_OPENSSL_PERFORM_CLIENT_CERT_VERIFICATION:
-        fprintf(stderr, " LWS_CALLBACK_OPENSSL_PERFORM_CLIENT_CERT_VERIFICATION\n");
+        //fprintf(stderr, " LWS_CALLBACK_OPENSSL_PERFORM_CLIENT_CERT_VERIFICATION\n");
         break;
       case LWS_CALLBACK_CLIENT_APPEND_HANDSHAKE_HEADER:
-        fprintf(stderr, " LWS_CALLBACK_CLIENT_APPEND_HANDSHAKE_HEADER\n");
+        //fprintf(stderr, " LWS_CALLBACK_CLIENT_APPEND_HANDSHAKE_HEADER\n");
         break;
       case LWS_CALLBACK_CONFIRM_EXTENSION_OKAY:
-        fprintf(stderr, " LWS_CALLBACK_CONFIRM_EXTENSION_OKAY\n");
+        //fprintf(stderr, " LWS_CALLBACK_CONFIRM_EXTENSION_OKAY\n");
         break;
       case LWS_CALLBACK_CLIENT_CONFIRM_EXTENSION_SUPPORTED:
-        fprintf(stderr, " LWS_CALLBACK_CLIENT_CONFIRM_EXTENSION_SUPPORTED\n");
+        //fprintf(stderr, " LWS_CALLBACK_CLIENT_CONFIRM_EXTENSION_SUPPORTED\n");
         break;
 
       case LWS_CALLBACK_ADD_POLL_FD:
@@ -325,6 +329,9 @@ void EchidnaInit(char *args)
     spd_data = InitEchidnaData(args);
 
     AddFuncToPostConfigList(EchidnaInitFinalize, spd_data);
+
+    // TODO: 
+//    AddFuncToIdleList(EchidnaIdle, spd_data);
 }
 
 SpoEchidnaData *InitEchidnaData(char *args)
@@ -387,11 +394,13 @@ void Echidna(Packet *p, void *event, u_int32_t event_type, void *arg)
 {
     json_object *json;
 
+    char *timestamp;
+
     char *data_msg;
 
-    char id_hash_text[512];
-    char evt_corr_id_hash_text[512];
-    char ssn_corr_id_hash_text[512];
+    char id_hash_text[512] = {0};
+    char evt_corr_id_hash_text[512] = {0};
+    char ssn_corr_id_hash_text[512] = {0};
 
     uint8_t id_hash[SHA256_DIGEST_LENGTH];
     uint8_t evt_corr_id_hash[SHA256_DIGEST_LENGTH];
@@ -421,6 +430,11 @@ void Echidna(Packet *p, void *event, u_int32_t event_type, void *arg)
 
     data = (SpoEchidnaData *)arg;
 
+    timestamp = EchidnaTimestamp(
+        ntohl(((Unified2EventCommon *)event)->event_second),
+        ntohl(((Unified2EventCommon *)event)->event_microsecond)
+    );
+
     /* grab the appropriate signature and classification information */
     sn = GetSigByGidSid(
             ntohl(((Unified2EventCommon *)event)->generator_id),
@@ -434,6 +448,10 @@ void Echidna(Packet *p, void *event, u_int32_t event_type, void *arg)
 
 
     json_object_object_add(json, "node_id", json_object_new_string(node_id));
+
+    /* not yet classified */
+    json_object_object_add(json, "classification", json_object_new_int(0));
+
     json_object_object_add(json, "meta_u2_event_id", json_object_new_int( ntohl(((Unified2EventCommon *)event)->event_id) ));
 
     /* IP version, addresses, ports and protocol */
@@ -476,20 +494,9 @@ void Echidna(Packet *p, void *event, u_int32_t event_type, void *arg)
     }
 
     /* snort event reference time */
-    json_object_object_add(json, "timestamp", json_object_new_string(
-        EchidnaTimestamp(
-            ntohl(((Unified2EventCommon *)event)->event_second),
-            ntohl(((Unified2EventCommon *)event)->event_microsecond)
-        )
-    ));
+    json_object_object_add(json, "timestamp", json_object_new_string( timestamp ));
 
-    SnortSnprintfAppend(id_hash_text, 512, "%s%s",
-        ssn_corr_id_hash_text,
-        EchidnaTimestamp(
-            ntohl(((Unified2EventCommon *)event)->event_second),
-            ntohl(((Unified2EventCommon *)event)->event_microsecond)
-        )
-    );
+    SnortSnprintfAppend(id_hash_text, 512, "%s%s", ssn_corr_id_hash_text, timestamp);
 
     /* generator ID */
     json_object_object_add(json, "sig_type", json_object_new_int( ntohl(((Unified2EventCommon *)event)->generator_id) ));
@@ -515,6 +522,37 @@ void Echidna(Packet *p, void *event, u_int32_t event_type, void *arg)
 
     /* alert classification */
     json_object_object_add(json, "sig_category", json_object_new_string(  cn != NULL ? cn->type : "unknown" ));
+
+    /* IP version, addresses, ports and protocol */
+    switch( event_type )
+    {
+        case UNIFIED2_IDS_EVENT:
+        case UNIFIED2_IDS_EVENT_MPLS:
+        case UNIFIED2_IDS_EVENT_VLAN:
+            inet_ntop(AF_INET, &((Unified2IDSEvent*)event)->ip_source, sip4, INET_ADDRSTRLEN);
+            inet_ntop(AF_INET, &((Unified2IDSEvent*)event)->ip_destination, dip4, INET_ADDRSTRLEN);
+
+            json_object_object_add(json, "net_version", json_object_new_int( 4 ));
+            json_object_object_add(json, "net_src_ip", json_object_new_string( sip4 ));
+            json_object_object_add(json, "net_src_port", json_object_new_int( ntohs(((Unified2IDSEvent *)event)->sport_itype) ));
+            json_object_object_add(json, "net_dst_ip", json_object_new_string( sip4 ));
+            json_object_object_add(json, "net_dst_port", json_object_new_int( ntohs(((Unified2IDSEvent *)event)->dport_icode) ));
+            json_object_object_add(json, "net_protocol", json_object_new_int( ((Unified2IDSEvent *)event)->protocol ));
+            break;
+        case UNIFIED2_IDS_EVENT_IPV6:
+        case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+        case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+            inet_ntop(AF_INET6, &((Unified2IDSEventIPv6 *)event)->ip_source, sip6, INET6_ADDRSTRLEN);
+            inet_ntop(AF_INET6, &((Unified2IDSEventIPv6 *)event)->ip_destination, dip6, INET6_ADDRSTRLEN);
+
+            json_object_object_add(json, "net_version", json_object_new_int( 6 ));
+            json_object_object_add(json, "net_src_ip", json_object_new_string( sip6 ));
+            json_object_object_add(json, "net_src_port", json_object_new_int( ntohs(((Unified2IDSEventIPv6 *)event)->sport_itype) ));
+            json_object_object_add(json, "net_dst_ip", json_object_new_string( sip6 ));
+            json_object_object_add(json, "net_dst_port", json_object_new_int( ntohs(((Unified2IDSEventIPv6 *)event)->dport_icode) ));
+            json_object_object_add(json, "net_protocol", json_object_new_int( ((Unified2IDSEventIPv6 *)event)->protocol ));
+            break;
+    }
 
     /* pull decoded info from the packet */
     if( p != NULL )
@@ -593,6 +631,8 @@ void Echidna(Packet *p, void *event, u_int32_t event_type, void *arg)
     /* send msg to sensor_agent */
     EchidnaEventSubmit(data, json);
     json_object_put( json );
+
+    free(timestamp);
 }
 
 int EchidnaEventIPHeaderDataAppend(json_object *json, Packet *p)
@@ -748,45 +788,49 @@ size_t _curl_dummy_write(char *ptr, size_t size, size_t nmemb, void *userdata)
  */
 void EchidnaEventSubmit(SpoEchidnaData *spd_data, json_object *json)
 {
-   CURL *curl;
-   CURLcode res;
-   long rc = 0;
+    CURLcode res;
+    char uri[2048];
+    long rc = 0;
 
-   /* get a curl handle */
-   curl = curl_easy_init();
-
-    if(curl)
+    if( spd_data->curl == NULL )
     {
-        fprintf(stderr, "submitting %s => %s failed\n", session_uri, json_object_to_json_string( json ));
+        spd_data->curl = curl_easy_init();
 
-        curl_easy_setopt(curl, CURLOPT_URL, session_uri);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_object_to_json_string( json ) );
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, &_curl_dummy_write);
-
-        while( rc != 200 )
+        if( spd_data->curl )
         {
-            if( ( res = curl_easy_perform(curl) ) == CURLE_OK )
-            {
-                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &rc);
-                fprintf(stderr, "RC: %lu\n", rc);
-            }
-            else if( rc == 403 )
-            {
-                fprintf(stderr, "forbidden. TODO: reconnect\n");
-            }
-            else
-            {
-                fprintf(stderr, "curl_easy_perform() failed: %s\n",
-                                  curl_easy_strerror(res));
-            }
+            snprintf(uri, 2048, "%s?session=%s", session_uri, session_key);
 
-            sleep(15);
+            curl_easy_setopt(spd_data->curl, CURLOPT_URL, uri);
+            curl_easy_setopt(spd_data->curl, CURLOPT_WRITEFUNCTION, &_curl_dummy_write);
         }
+        else
+        {
+            FatalError("echidna: unable to allocate a CURL structure.\n");
+        }
+    }
 
-        fprintf(stderr, "cleaning up curl\n");
+    DEBUG_WRAP(DebugMessage(DEBUG_PLUGIN, "submitting: %s\n", json_object_to_json_string( json )););
 
-        /* always cleanup */
-        curl_easy_cleanup(curl);
+    curl_easy_setopt(spd_data->curl, CURLOPT_POSTFIELDS, json_object_to_json_string( json ) );
+
+    while( rc != 200 )
+    {
+        if( ( res = curl_easy_perform(spd_data->curl) ) == CURLE_OK )
+        {
+            curl_easy_getinfo(spd_data->curl, CURLINFO_RESPONSE_CODE, &rc);
+            DEBUG_WRAP(DebugMessage(DEBUG_PLUGIN, "RC: %lu\n", rc););
+
+            if( rc == 403 )
+            {
+                DEBUG_WRAP(DebugMessage(DEBUG_PLUGIN, "forbidden. TODO: request new session key\n"););
+                sleep(15);
+            }
+            else if( rc != 200 )
+            {
+                DEBUG_WRAP(DebugMessage(DEBUG_PLUGIN, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res)););
+                sleep(15);
+            }
+        }
     }
 }
 
@@ -895,16 +939,14 @@ void EchidnaClose(void *arg)
     /* free allocated memory from SpoEchidnaData */
     if( spd_data != NULL )
     {
-
-        fprintf(stderr, "Exiting\n");
-
-
-
         if( spd_data->agent_name )
             free(spd_data->agent_name);
 
         if( spd_data->args )
             free(spd_data->args);
+
+        if( spd_data->curl )
+            curl_easy_cleanup(spd_data->curl);
 
         free(spd_data);
     }

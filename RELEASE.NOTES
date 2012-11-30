@@ -1,3 +1,17 @@
+2012-11-29 - Barnyard 2.1.11
+  [*] Improvements
+     * spo_database. Keep-alive (via ping) for postgresql databases.
+
+     * Updated RPM spec file to support alternative pcap libraries and cleaned
+       some existing cruft. Thanks to Brent Woodruff.
+
+     * spo_alert_unixsock. Supports synchronisation, multiple connections and
+       improved error reporting. Thanks to Martijn van Oosterhaut.
+
+     * Many other general bug fixes and clean ups. Thanks to Jason Ish,
+       Thorsten Fischer, Brad Voth and Bill Parker.
+
+
 2012-10-24 - Barnyard 2.1.10
   [*] Additions
      * spo_database. Support of encrypted connections to postgresql is now

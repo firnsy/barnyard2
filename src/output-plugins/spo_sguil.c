@@ -213,7 +213,12 @@ void SguilInitFinalize(int unused, void *arg)
     if(BcLogVerbose())
         LogMessage("sguil: Waiting for sid and cid from sensor_agent.\n");
 
-    SguilSensorAgentInit(ssd_data);
+    /* try to connect, if we are not getting retval 0 it timed out
+     * so we try again, and again, and again... */
+    do {
+        if (SguilSensorAgentInit(ssd_data) == 0)
+            break;
+    } while (1);
 
     /* set the preprocessor function into the function list */
     AddFuncToOutputList(Sguil, OUTPUT_TYPE__ALERT, ssd_data);
@@ -984,7 +989,10 @@ int SguilSensorAgentConnect(SpoSguilData *ssd_data)
 	return 1;
 }
 
-/* Request sensor ID (sid) and next cid from sensor_agent */
+/* Request sensor ID (sid) and next cid from sensor_agent
+ * return 0 on success
+ * return 1 on timeout
+ */
 int SguilSensorAgentInit(SpoSguilData *ssd_data)
 {
     char tmpSendMsg[MAX_MSG_LEN];
@@ -1005,7 +1013,7 @@ int SguilSensorAgentInit(SpoSguilData *ssd_data)
         sguil_agent_setup_timeouts++;
 
         /* timeout, resend */
-        SguilSensorAgentInit(ssd_data);
+        return 1;
     }
     else
     {

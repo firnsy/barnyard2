@@ -901,34 +901,8 @@ if test "x$with_postgresql" != "xno"; then
      fi
   fi
 
-AC_DEFUN([AC_CHECK_PGSQL_PQPING],
-[
-AC_MSG_CHECKING([PGSQL_API_VERSION for PQping support])
-AC_LINK_IFELSE([
-AC_LANG_SOURCE(
-[[
-#include <$2/pg_config.h>
-int main()
-{
-#ifdef PG_VERSION_NUM
-if(PG_VERSION_NUM >= $1)
-{
-return 0;
-}
-#endif
-return 1;
-}]])],
-[
-AC_DEFINE([HAVE_PQPING], 1,[libpq support PQping()])
-AC_MSG_RESULT([yes])
-],
-[
-AC_DEFINE([HAVE_PQPING],[0],[libpq does not support PQping()])
-AC_MSG_RESULT([no])
-])
-])
-
-AC_CHECK_PGSQL_PQPING([90100],[$POSTGRESQL_INC_DIR])
+AC_CHECK_FUNC([PQping], [AC_DEFINE([HAVE_PQPING], [1],
+			[Define if PQping exists.])])
 
 fi
 

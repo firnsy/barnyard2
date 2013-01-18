@@ -3683,6 +3683,8 @@ Select_reconnect:
                     ErrorMessage("ERROR database: Query [%s] returned more than one result\n",
                                  query);
                     result = 0;
+		    PQclear(data->p_result);
+		    data->p_result = NULL;
 		    return 1;
                 }
                 else
@@ -3690,6 +3692,12 @@ Select_reconnect:
                     *rval = atoi(PQgetvalue(data->p_result,0,0));
                 }
             }
+	    else
+	    {
+		PQclear(data->p_result);
+		data->p_result = NULL;
+		return 1;
+	    }
         }
 
         if(!result)

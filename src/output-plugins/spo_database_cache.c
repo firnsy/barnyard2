@@ -897,7 +897,7 @@ u_int32_t ConvertReferenceCache(ReferenceNode *iHead,MasterCache *iMasterCache,c
 		refFound = 0;
 		for(tItr=0; tItr < cSobj->obj.ref_count; tItr++)
 		{
-		    if( (memcmp(&cSobj->obj.ref[tItr]->obj,&retRefLookupNode->obj,sizeof(dbReferenceObj))) )
+		    if( (memcmp(&cSobj->obj.ref[tItr]->obj,&retRefLookupNode->obj,sizeof(dbReferenceObj))) == 0)
 		    {
 			refFound = 1;
 			break;
@@ -5345,7 +5345,7 @@ f_err:
  */
 u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureReferenceObj *cacheHead)
 {
-    u_int32_t row_validate;
+    u_int32_t row_validate = 0;
 
     if( (data == NULL))
     {
@@ -5380,6 +5380,7 @@ u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureRe
     {
         if(cacheHead->flag & CACHE_INTERNAL_ONLY)
         {
+	    row_validate = 0;
 
 #if DEBUG
             inserted_sigref_object_count++;

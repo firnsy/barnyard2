@@ -1917,14 +1917,14 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 		
 	    case IPPROTO_ICMP:
 
-		if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
-		{
-		    goto bad_query;
-		}
-
 		/* IPPROTO_ICMP */
 		if(p->icmph)
 		{
+		    if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
+		    {
+			goto bad_query;
+		    }
+		    
 		    /*** Build a query for the ICMP Header ***/
 		    if(data->detail)
 		    {
@@ -1961,10 +1961,11 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 		}
 		else
 		{
-		    LogMessage("[%s()], unable to build query, IP header tell's us its an ICMP packet but "
-			       "there is not icmp header in the decoded packet ... \n",
-			       __FUNCTION__);
-		    goto bad_query;
+
+		    DEBUG_WRAP(DebugMessage(DB_DEBUG,
+					    "[%s()], unable to build query, IP header tell's us its an ICMP packet but "
+					    "there is not ICMP header in the decoded packet ... \n",
+					    __FUNCTION__));
 		}
 		break;
 		/* IPPROTO_ICMP */
@@ -1973,176 +1974,195 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 		/* IPPROTO_TCP */
 	    case IPPROTO_TCP:
 
-		if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
+		if(p->tcph)
 		{
-		    goto bad_query;
-		}
-
-                /*** Build a query for the TCP Header ***/
-                if(data->detail)
-                {
-                    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-				       "INSERT INTO "
-				       "tcphdr (sid, cid, tcp_sport, tcp_dport, "
-				       "tcp_seq, tcp_ack, tcp_off, tcp_res, "
-				       "tcp_flags, tcp_win, tcp_csum, tcp_urp) "
-				       "VALUES (%u,%u,%u,%u,%lu,%lu,%u,%u,%u,%u,%u,%u);",
-				       data->sid,
-				       data->cid,
-				       ntohs(p->tcph->th_sport),
-				       ntohs(p->tcph->th_dport),
-				       (u_long)ntohl(p->tcph->th_seq),
-				       (u_long)ntohl(p->tcph->th_ack),
-				       TCP_OFFSET(p->tcph),
-				       TCP_X2(p->tcph),
-				       p->tcph->th_flags,
-				       ntohs(p->tcph->th_win),
-				       ntohs(p->tcph->th_sum),
-				       ntohs(p->tcph->th_urp))) != SNORT_SNPRINTF_SUCCESS)
+		    if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
 		    {
 			goto bad_query;
 		    }
-                }
-                else
-                {
-                    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-				       "INSERT INTO "
-				       "tcphdr (sid,cid,tcp_sport,tcp_dport,tcp_flags) "
-				       "VALUES (%u,%u,%u,%u,%u);",
-				       data->sid,
-				       data->cid,
-				       ntohs(p->tcph->th_sport),
-				       ntohs(p->tcph->th_dport),
-				       p->tcph->th_flags))  != SNORT_SNPRINTF_SUCCESS)
+		    
+		    /*** Build a query for the TCP Header ***/
+		    if(data->detail)
 		    {
-                        goto bad_query;
-		    }
-                }
-		
-                if(data->detail)
-                {
-                    /*** Build the query for TCP Options ***/
-                    for(i=0; i < (int)(p->tcp_option_count); i++)
-                    {
-
-			if( p->tcp_options[i].len > 0)
+			if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
+					   "INSERT INTO "
+					   "tcphdr (sid, cid, tcp_sport, tcp_dport, "
+					   "tcp_seq, tcp_ack, tcp_off, tcp_res, "
+					   "tcp_flags, tcp_win, tcp_csum, tcp_urp) "
+					   "VALUES (%u,%u,%u,%u,%lu,%lu,%u,%u,%u,%u,%u,%u);",
+					   data->sid,
+					   data->cid,
+					   ntohs(p->tcph->th_sport),
+					   ntohs(p->tcph->th_dport),
+					   (u_long)ntohl(p->tcph->th_seq),
+					   (u_long)ntohl(p->tcph->th_ack),
+					   TCP_OFFSET(p->tcph),
+					   TCP_X2(p->tcph),
+					   p->tcph->th_flags,
+					   ntohs(p->tcph->th_win),
+					   ntohs(p->tcph->th_sum),
+					   ntohs(p->tcph->th_urp))) != SNORT_SNPRINTF_SUCCESS)
 			{
-			    if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
+			    goto bad_query;
+			}
+		    }
+		    else
+		    {
+			if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
+					   "INSERT INTO "
+					   "tcphdr (sid,cid,tcp_sport,tcp_dport,tcp_flags) "
+					   "VALUES (%u,%u,%u,%u,%u);",
+					   data->sid,
+					   data->cid,
+					   ntohs(p->tcph->th_sport),
+					   ntohs(p->tcph->th_dport),
+					   p->tcph->th_flags))  != SNORT_SNPRINTF_SUCCESS)
+			{
+			    goto bad_query;
+			}
+		    }
+		    
+		    if(data->detail)
+		    {
+                    /*** Build the query for TCP Options ***/
+			for(i=0; i < (int)(p->tcp_option_count); i++)
+			{
+
+			    if( p->tcp_options[i].len > 0)
 			    {
-				goto bad_query;
-			    }
-			    
-			    if((data->encoding == ENCODING_HEX) || (data->encoding == ENCODING_ASCII))
-			    {
-				//packet_data = fasthex(p->tcp_options[i].data, p->tcp_options[i].len);
-				if( fasthex_STATIC(p->tcp_options[i].data, p->tcp_options[i].len,data->PacketData))
-				{
-				    /* XXX */
-				    goto bad_query;
-				}
-			    }
-			    else
-			    {
-				//packet_data = base64(p->tcp_options[i].data, p->tcp_options[i].len);
-				if( base64_STATIC(p->tcp_options[i].data, p->tcp_options[i].len,data->PacketData))
-				{
-				    /* XXX */
-				    goto bad_query;
-				}
-			    }
-			    
-			    
-			    if(data->dbtype_id == DB_ORACLE)
-			    {
-				/* Oracle field BLOB type case. We append unescaped
-				 * opt_data data after query, which later in Insert()
-				 * will be cut off and uploaded with OCIBindByPos().
-				 */
-				if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-						   "INSERT INTO "
-						   "opt (sid,cid,optid,opt_proto,opt_code,opt_len,opt_data) "
-						   "VALUES (%u,%u,%u,%u,%u,%u,:1);|%s",
-						   data->sid,
-						   data->cid,
-						   i,
-						   6,
-						   p->tcp_options[i].code,
-						   p->tcp_options[i].len,
-						   //packet_data))  != SNORT_SNPRINTF_SUCCESS)
-						   data->PacketData))  != SNORT_SNPRINTF_SUCCESS)
+				if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
 				{
 				    goto bad_query;
 				}
 				
-				
-			    }
-			    else
-			    {
-				if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-						   "INSERT INTO "
-					       "opt (sid,cid,optid,opt_proto,opt_code,opt_len,opt_data) "
-						   "VALUES (%u,%u,%u,%u,%u,%u,'%s');",
-						   data->sid,
-						   data->cid,
-						   i,
-						   6,
-						   p->tcp_options[i].code,
-						   p->tcp_options[i].len,
-						   //packet_data))  != SNORT_SNPRINTF_SUCCESS)
-						   data->PacketData))  != SNORT_SNPRINTF_SUCCESS)
+				if((data->encoding == ENCODING_HEX) || (data->encoding == ENCODING_ASCII))
 				{
-				    goto bad_query;
+				    //packet_data = fasthex(p->tcp_options[i].data, p->tcp_options[i].len);
+				    if( fasthex_STATIC(p->tcp_options[i].data, p->tcp_options[i].len,data->PacketData))
+				    {
+				    /* XXX */
+					goto bad_query;
+				    }
+				}
+				else
+				{
+				    //packet_data = base64(p->tcp_options[i].data, p->tcp_options[i].len);
+				    if( base64_STATIC(p->tcp_options[i].data, p->tcp_options[i].len,data->PacketData))
+				    {
+				    /* XXX */
+					goto bad_query;
+				    }
+			    }
+				
+				
+				if(data->dbtype_id == DB_ORACLE)
+				{
+				    /* Oracle field BLOB type case. We append unescaped
+				     * opt_data data after query, which later in Insert()
+				     * will be cut off and uploaded with OCIBindByPos().
+				     */
+				    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
+						       "INSERT INTO "
+						       "opt (sid,cid,optid,opt_proto,opt_code,opt_len,opt_data) "
+						       "VALUES (%u,%u,%u,%u,%u,%u,:1);|%s",
+						       data->sid,
+						       data->cid,
+						       i,
+						       6,
+						       p->tcp_options[i].code,
+						       p->tcp_options[i].len,
+						       //packet_data))  != SNORT_SNPRINTF_SUCCESS)
+						       data->PacketData))  != SNORT_SNPRINTF_SUCCESS)
+				    {
+					goto bad_query;
+				    }
+				}
+				else
+				{
+				    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
+						       "INSERT INTO "
+						       "opt (sid,cid,optid,opt_proto,opt_code,opt_len,opt_data) "
+						       "VALUES (%u,%u,%u,%u,%u,%u,'%s');",
+						       data->sid,
+						       data->cid,
+						       i,
+						       6,
+						       p->tcp_options[i].code,
+						       p->tcp_options[i].len,
+						       //packet_data))  != SNORT_SNPRINTF_SUCCESS)
+						       data->PacketData))  != SNORT_SNPRINTF_SUCCESS)
+				    {
+					goto bad_query;
+				    }
 				}
 			    }
 			}
 		    }
-                }
+		}
+		else
+                {
+                    DEBUG_WRAP(DebugMessage(DB_DEBUG,
+                                            "[%s()], unable to build query, IP header tell's us its an TCP  packet but "
+					    "there is not TCP header in the decoded packet ... \n",
+					    __FUNCTION__));
+		}
+		
 		break;		
 		/* IPPROTO_TCP */
 
 		
 		/* IPPROTO_UDP */
 	    case IPPROTO_UDP:
-		
-                /*** Build the query for the UDP Header ***/
-		if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
+
+		if(p->udph)
 		{
-		    goto bad_query;
-		}
-				
-                if(data->detail)
-		{
-		    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-				       "INSERT INTO "
-				       "udphdr (sid, cid, udp_sport, udp_dport, udp_len, udp_csum) "
-				       "VALUES (%u, %u, %u, %u, %u, %u);",
-				       data->sid,
-				       data->cid,
-				       ntohs(p->udph->uh_sport),
-				       ntohs(p->udph->uh_dport),
-				       ntohs(p->udph->uh_len),
-				       ntohs(p->udph->uh_chk)))  != SNORT_SNPRINTF_SUCCESS)
+		    /*** Build the query for the UDP Header ***/
+		    if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
 		    {
 			goto bad_query;
+		    }
+		    
+		    if(data->detail)
+		    {
+			if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
+					   "INSERT INTO "
+					   "udphdr (sid, cid, udp_sport, udp_dport, udp_len, udp_csum) "
+					   "VALUES (%u, %u, %u, %u, %u, %u);",
+					   data->sid,
+					   data->cid,
+					   ntohs(p->udph->uh_sport),
+					   ntohs(p->udph->uh_dport),
+					   ntohs(p->udph->uh_len),
+					   ntohs(p->udph->uh_chk)))  != SNORT_SNPRINTF_SUCCESS)
+			{
+			    goto bad_query;
+			}
+		    }
+		    else
+		    {
+			if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
+					   "INSERT INTO "
+					   "udphdr (sid, cid, udp_sport, udp_dport) "
+					   "VALUES (%u, %u, %u, %u);",
+					   data->sid,
+					   data->cid,
+					   ntohs(p->udph->uh_sport),
+					   ntohs(p->udph->uh_dport)))  != SNORT_SNPRINTF_SUCCESS)
+			{
+			    goto bad_query;
+			}
 		    }
 		}
 		else
 		{
-		    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-					"INSERT INTO "
-					"udphdr (sid, cid, udp_sport, udp_dport) "
-					"VALUES (%u, %u, %u, %u);",
-					data->sid,
-					data->cid,
-					ntohs(p->udph->uh_sport),
-				       ntohs(p->udph->uh_dport)))  != SNORT_SNPRINTF_SUCCESS)
-		    {
-			goto bad_query;
-		    }
+		    DEBUG_WRAP(DebugMessage(DB_DEBUG,
+					    "[%s()], unable to build query, IP header tell's us its an UDP packet but "
+					    "there is not UDP header in the decoded packet ... \n",
+					    __FUNCTION__));
 		}
 		break;
 		/* IPPROTO_UDP */
-		
+		    
 		
 		/* DEFAULT */
 	    default:

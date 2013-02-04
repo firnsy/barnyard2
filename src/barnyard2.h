@@ -63,7 +63,7 @@
 #define VER_MAJOR	"2"
 #define VER_MINOR	"1"
 #define VER_REVISION	"11"
-#define VER_BUILD	"318"
+#define VER_BUILD	"319"
 
 #define STD_BUF  1024
 

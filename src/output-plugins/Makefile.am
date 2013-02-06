@@ -23,6 +23,7 @@ spo_sguil.c spo_sguil.h \
 spo_echidna.c spo_echidna.h \
 spo_syslog_full.c spo_syslog.full.h \
 spo_database.c spo_database.h \
-spo_database_cache.c spo_database_cache.h
+spo_database_cache.c spo_database_cache.h \
+spo_alert_unified2.c spo_alert_unified2.h
 
 INCLUDES = -I.. -I ../sfutil

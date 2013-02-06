@@ -375,6 +375,8 @@ spo_u2_reload(spo_u2_t * u2) {
 
     u2->fp = new_fp;
 
+    free(outfile);
+
     return 0;
 } /* spo_u2_reload */
 

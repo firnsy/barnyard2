@@ -206,9 +206,7 @@ unified2_spo_cfg_parse(const char * args) {
         key = tok;
 
         if (!(val = strchr(tok, '='))) {
-            /* TODO: error here */
-            tok = strtok_r(NULL, " ", &saveptr);
-            continue;
+            FatalError("unified2_output error parsing config\n");
         }
 
         /* skip past the '=' and \0 terminate it so we can parse the key */
@@ -233,7 +231,7 @@ unified2_spo_cfg_parse(const char * args) {
         } else if (strcasecmp(key, "max_size") == 0) {
             cfg->max_size = (size_t)atoll(val);
         } else {
-            /* TODO: error here */
+            FatalError("unified2_output error parsing config (unknown variable)\n");
         }
 
         tok = strtok_r(NULL, " ", &saveptr);
@@ -283,26 +281,36 @@ spo_u2_free(spo_u2_t * u2) {
 }
 
 static void
+unified2_spo_clean_exit(int signal, void * arg) {
+    spo_u2_free((spo_u2_t *)arg);
+}
+
+static void
+unified2_spo_restart(int signal, void * arg) {
+    spo_u2_free((spo_u2_t *)arg);
+}
+
+static void
 unified2_spo_init(char * args) {
     spo_u2_cfg_t * config;
     spo_u2_t     * u2;
 
     if (!(config = unified2_spo_cfg_parse(args))) {
-        /* TODO: OMG ERROR */
-        return;
+        FatalError("alert_unified config parse error\n");
     }
 
     if (!(u2 = spo_u2_new(config))) {
-        spo_u2_cfg_free(config);
-        /* TODO: OMG ERROR */
-        return;
+        FatalError("alert_unified create error\n");
     }
 
     if (spo_u2_reload(u2) == -1) {
-        /* TODO: OMG ERROR */
+        FatalError("alert_unified unable to reload output: %s\n",
+                   strerror(errno));
     }
 
     AddFuncToOutputList(unified2_spo_alert, OUTPUT_TYPE__ALERT, u2);
+    AddFuncToCleanExitList(unified2_spo_clean_exit, u2);
+    AddFuncToRestartList(unified2_spo_restart, u2);
 
     DEBUG_WRAP(DebugMessage(DEBUG_PLUGIN, "Output: Unified2 initialized\n"); );
 }
@@ -345,25 +353,20 @@ spo_u2_reload(spo_u2_t * u2) {
     outsz = strlen(u2->config->basedir) + 1 + strlen(fname) + 1;
 
     if (!(outfile = malloc(outsz))) {
-        /* TODO: error here, don't rotate for now */
-        return 0;
+        FatalError("unified2_output error %s\n", strerror(errno));
     }
 
     sres = snprintf(outfile, outsz, "%s/%s", u2->config->basedir, fname);
 
     if (sres >= outsz || sres < 0) {
-        /* TODO error here, just don't rotate for now */
-        free(outfile);
-        return -1;
+        FatalError("unified2_output error: overflow detected\n");
     }
 
     old_fp = u2->fp;
     new_fp = fopen(outfile, "a");
 
     if (new_fp == NULL) {
-        /* TODO error here, just don't rotate for now */
-        free(outfile);
-        return -1;
+        FatalError("unified2_output error: unablle to open new file: %s\n", strerror(errno));
     }
 
     if (old_fp) {

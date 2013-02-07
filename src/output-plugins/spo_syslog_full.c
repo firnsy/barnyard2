@@ -35,6 +35,7 @@
 #      operation_mode $operaion_mode    - default | complete : default mode is compatible with default snort syslog message, complete prints more information such as the raw packet (hexed)
 #      log_priority   $log_priority     - used by local option for syslog priority call. (man syslog(3) for supported options) (default: LOG_INFO)
 #      log_facility  $log_facility      - used by local option for syslog facility call. (man syslog(3) for supported options) (default: LOG_USER)
+#      payload_encoding                 - (default: hex)  support hex/ascii/base64 for log_syslog_full using operation_mode complete only.
 
 # Usage Examples:
 # output alert_syslog_full: sensor_name snortIds1-eth2, server xxx.xxx.xxx.xxx, protocol udp, port 514, operation_mode default
@@ -521,19 +522,23 @@ static int Syslog_FormatIPHeaderAlert(OpSyslog_Data *data, Packet *p)
 static int Syslog_FormatIPHeaderLog(OpSyslog_Data *data, Packet *p) 
 {
 
-    unsigned int s, d, proto, ver, hlen, tos, len, id, off, ttl, csum;
-    s=d=proto=ver=hlen=tos=len=id=off=ttl=csum=0;
+    //unsigned int s, d, 
+    unsigned int proto, ver, hlen, tos, len, id, off, ttl, csum;
+    //s=d=...;
+    proto=ver=hlen=tos=len=id=off=ttl=csum=0;
 
     char sip[16] = {0};
     char dip[16] = {0};
-    
 
     if(p->iph) 
     {
-	if(p->iph->ip_src.s_addr)
-	    s = ntohl( p->iph->ip_src.s_addr);
-	if(p->iph->ip_dst.s_addr)
-	    d = ntohl( p->iph->ip_dst.s_addr);
+	/*
+	  if(p->iph->ip_src.s_addr)
+	  s = ntohl( p->iph->ip_src.s_addr);
+	  if(p->iph->ip_dst.s_addr)
+	  d = ntohl( p->iph->ip_dst.s_addr);
+	*/
+
 	if(p->iph->ip_proto)
 	    proto = p->iph->ip_proto;
 	if(IP_VER(p->iph))
@@ -804,8 +809,6 @@ static int Syslog_FormatICMPHeaderLog(OpSyslog_Data *data, Packet *p)
 
 int Syslog_FormatPayload(OpSyslog_Data *data, Packet *p) {
     
-    char *hex_payload = NULL;
-    
     if( (data == NULL) ||
         (p == NULL) ||
 	(p->pkt == NULL))
@@ -817,22 +820,54 @@ int Syslog_FormatPayload(OpSyslog_Data *data, Packet *p) {
     
     if(p->pkth->len > 0) 
     {
-	if( (hex_payload = fasthex(p->pkt, p->pkth->len)) ==  NULL)
+	memset(data->payload_escape_buffer,'\0',MAX_QUERY_LENGTH);
+
+	switch(data->payload_encoding)
 	{
-	    /* XXX */
-	    return 1;
+	    
+	case ENCODE_HEX:
+	    if( (fasthex_STATIC(p->pkt, p->pkth->len,
+				data->payload_escape_buffer)))
+	    {
+		/* XXX */
+		return 1;
+	    }
+	    break;
+	    
+	case ENCODE_ASCII:
+	    if( (ascii_STATIC(p->pkt,p->pkth->len,
+			      data->payload_escape_buffer)))
+	    {
+		/* XXX */
+		return 1;
+	    }
+	    break;
+
+	case ENCODE_BASE64:
+	    if( (base64_STATIC(p->pkt,p->pkth->len,
+			      data->payload_escape_buffer)))
+	    {
+		/* XXX */
+		return 1;
+	    }
+	    break;
+
+	default:
+	    FatalError("[%s()]: Unknown encoding payload scheme [%d] \n",
+		       __FUNCTION__,
+		       data->payload_encoding);
+	    break;
 	}
+	
 	if( (data->format_current_pos +=  snprintf(data->formatBuffer, SYSLOG_MAX_QUERY_SIZE,
 						   "%u%c%s",
 						   p->pkth->len,data->field_separators, 
-						   hex_payload)) >= SYSLOG_MAX_QUERY_SIZE)
+						   data->payload_escape_buffer)) >= SYSLOG_MAX_QUERY_SIZE)
 	{
 	    /* XXX */
-	    free(hex_payload);
 	    return 1;
 	}
 	
-	free(hex_payload);	
     }
     
     return OpSyslog_Concat(data);
@@ -1374,6 +1409,34 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
 		}
 		
 	    }
+	    else if(strcasecmp("payload_encoding", stoks[0]) == 0)
+            {
+                if(num_stoks >=1)
+                {
+                    if(strcasecmp("hex",stoks[1]) == 0)
+                    {
+                        op_data->payload_encoding = ENCODE_HEX;
+                    }
+                    else if(strcasecmp("ascii",stoks[1]) == 0)
+                    {
+                        op_data->payload_encoding = ENCODE_ASCII;
+                    }
+                    else if(strcasecmp("base64",stoks[1]) == 0)
+                    {
+                        op_data->payload_encoding = ENCODE_BASE64;
+                    }
+		    else
+                    {
+                        LogMessage("Invalid payload_encoding defined [%s], will use HEX encoding by default \n",stoks[1]);
+                        op_data->payload_encoding = ENCODE_HEX;
+                    }
+                }
+                else
+                {
+                    LogMessage("Invalid payload_encoding defined, will use HEX encoding by default \n");
+		    op_data->payload_encoding = ENCODE_HEX;
+                }
+            }
 	    else if(strcasecmp("local", stoks[0]) == 0)
 	    {
 		op_data->local_logging = 1;
@@ -1844,6 +1907,7 @@ int NetSend(OpSyslog_Data *op_data)
     if(op_data->local_logging == 1)
     {
 	syslog(op_data->syslog_priority,
+	       "%s",
 	       op_data->payload);
 	return 0;
     }
@@ -1854,7 +1918,7 @@ int NetSend(OpSyslog_Data *op_data)
 	
     case LOG_UDP: 
 	/* UDP */
-	if(sendto(op_data->socket,op_data->payload, strlen(op_data->payload), 0 , (struct sockaddr *)&op_data->sockaddr, sizeof(struct sockaddr)) <= 0) 
+	if(sendto(op_data->socket,op_data->payload, strlen(op_data->payload)+1, 0 , (struct sockaddr *)&op_data->sockaddr, sizeof(struct sockaddr)) <= 0) 
 	{
 	    /* XXX */
 	    close(op_data->socket);
@@ -1866,7 +1930,7 @@ int NetSend(OpSyslog_Data *op_data)
     case LOG_TCP: 
 	/* TCP */ 
 	
-	sendRetVal = send(op_data->socket, op_data->payload, strlen(op_data->payload),0);
+	sendRetVal = send(op_data->socket, op_data->payload, strlen(op_data->payload)+1,0);
 	
 	if((sendRetVal < sendSize) ||
 	   (sendRetVal < 0) )

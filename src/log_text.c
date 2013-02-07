@@ -92,7 +92,7 @@ void LogPriorityData(TextLog* log, uint32_t classification_id, uint32_t priority
     else
     {
         TextLog_Print(
-            log, "[Classification ID: %s] [Priority ID: %d] ", 
+            log, "[Classification ID: %d] [Priority ID: %d] ", 
             classification_id, priority_id
         );
     }

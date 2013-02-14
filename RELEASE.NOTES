@@ -1,3 +1,11 @@
+2013-02-15 - Barnyard 2.1.12
+  [*] Improvements
+     * spo_syslog_full. Added both ascii and base64 support.
+
+     * spo_database. Many tweaks and fixes.
+
+     * Fixed PQping detection on build.
+
 2012-11-29 - Barnyard 2.1.11
   [*] Improvements
      * spo_database. Keep-alive (via ping) for postgresql databases.

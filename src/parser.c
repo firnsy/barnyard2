@@ -179,11 +179,11 @@ static void AddVarToTable(Barnyard2Config *, char *, char *);
 static const KeywordFunc barnyard2_conf_keywords[] =
 {
     /* Non-rule keywords */
+    { BARNYARD2_CONF_KEYWORD__VAR,               KEYWORD_TYPE__MAIN, 0, ParseVar },
     { BARNYARD2_CONF_KEYWORD__CONFIG,            KEYWORD_TYPE__MAIN, 1, ParseConfig },
     { BARNYARD2_CONF_KEYWORD__IPVAR,             KEYWORD_TYPE__MAIN, 0, ParseIpVar },
     { BARNYARD2_CONF_KEYWORD__INPUT,             KEYWORD_TYPE__MAIN, 1, ParseInput },
     { BARNYARD2_CONF_KEYWORD__OUTPUT,            KEYWORD_TYPE__MAIN, 1, ParseOutput },
-    { BARNYARD2_CONF_KEYWORD__VAR,               KEYWORD_TYPE__MAIN, 0, ParseVar },
     { NULL, 0, 0, NULL }   /* Marks end of array */
 };
 
@@ -207,6 +207,7 @@ static const ConfigFunc config_opts[] =
     { CONFIG_OPT__INTERFACE, 1, 1, ConfigInterface },
     { CONFIG_OPT__LOG_DIR, 1, 1, ConfigLogDir },
     { CONFIG_OPT__OBFUSCATE, 0, 1, ConfigObfuscate },
+    { CONFIG_OPT__SIGSUPPRESS,0,0,ConfigSigSuppress},
     /* XXX We can configure this on the command line - why not in config file ??? */
 #ifdef NOT_UNTIL_WE_DAEMONIZE_AFTER_READING_CONFFILE
     { CONFIG_OPT__PID_PATH, 1, 1, ConfigPidPath },
@@ -1787,8 +1788,9 @@ void ConfigGenFile(Barnyard2Config *bc, char *args)
 {
     if ((args == NULL) || (bc == NULL) )
         return;
-
-    ReadGenFile(bc, args);
+    
+    bc->gen_msg_file = strndup(args,PATH_MAX);
+    return;
 }
 
 void ConfigHostname(Barnyard2Config *bc, char *args)
@@ -1941,6 +1943,7 @@ void ConfigReference(Barnyard2Config *bc, char *args)
 
     /* 2 tokens: name <url> */
     toks = mSplit(args, " \t", 0, &num_toks, 0);
+
     if (num_toks > 2)
     {
         ParseError("Reference config requires at most two arguments: "
@@ -1949,7 +1952,7 @@ void ConfigReference(Barnyard2Config *bc, char *args)
 
     if (num_toks == 2)
         url = toks[1];
-
+    
     ReferenceSystemAdd(&bc->references, toks[0], url);
 
     mSplitFree(&toks, num_toks);
@@ -2152,7 +2155,7 @@ void ConfigSidFile(Barnyard2Config *bc, char *args)
     if ((args == NULL) || (bc == NULL) )
         return;
 
-    ReadSidFile(bc, args);
+    bc->sid_msg_file = strndup(args,PATH_MAX);
 }
 
 void ConfigUmask(Barnyard2Config *bc, char *args)
@@ -2231,6 +2234,456 @@ void ConfigWaldoFile(Barnyard2Config *bc, char *args)
 
     bc->waldo.state |= WALDO_STATE_ENABLED;
 }
+
+
+void DisplaySigSuppress(SigSuppress_list **sHead)
+{
+    if(sHead == NULL)
+    {
+	return;
+    }
+    SigSuppress_list *cNode = *sHead;
+
+    LogMessage("\n\n+[ Signature Suppress list ]+\n"
+	            "----------------------------\n");
+
+    if(cNode)
+    {
+	while(cNode)
+	{
+	    LogMessage("-- Element type:[%s] gid:[%d] sid min:[%d] sid max:[%d] \n",
+		       (cNode->ss_type & SS_SINGLE) ? "SINGLE" : "RANGE ",
+		       cNode->gid,
+		       cNode->ss_min,
+		       cNode->ss_max);
+	    
+	    cNode = cNode->next;
+	}
+    }
+    else
+    {
+	LogMessage("+[No entry in Signature Suppress List]+\n");
+    }
+    LogMessage("----------------------------\n"
+	       "+[ Signature Suppress list ]+\n\n");
+    return;
+}
+
+int SigSuppressUnlinkNode(SigSuppress_list **sHead,SigSuppress_list **cNode,SigSuppress_list **pNode)
+{
+    SigSuppress_list *nNode = NULL;
+
+    if( ((sHead == NULL) || (*sHead == NULL)) ||
+	((cNode == NULL) || (*cNode == NULL)) ||
+	((pNode == NULL) || (*pNode == NULL)))
+    {
+	return 1;
+    }
+    
+    nNode =(SigSuppress_list *)(*cNode)->next;
+
+    if( *cNode == *sHead)
+    {
+	*sHead = nNode;
+	free(*cNode);
+	*cNode = nNode;
+	*pNode = *cNode;
+    }
+    else
+    {
+	(*(SigSuppress_list **)(pNode))->next = nNode;
+	free(*cNode);
+	*cNode = nNode;
+    }
+
+    return 0;
+}
+
+int SigSuppressAddElement(SigSuppress_list **sHead,SigSuppress_list *sElement)
+{
+    SigSuppress_list *cNode = NULL;
+    SigSuppress_list *pNode = NULL;
+    SigSuppress_list *newNode = NULL;
+    
+    u_int8_t comp_set[4] = {0};
+    
+    int has_flag = 0;
+    int no_add = 0;
+
+    if( (sHead == NULL) ||
+	(sElement == NULL))
+    {
+	return 1;
+    }
+    
+    if(*sHead == NULL)
+    {
+	if( (newNode = calloc(1,sizeof(SigSuppress_list))) == NULL)
+	{
+	    return 1;
+	}
+
+	memcpy(newNode,sElement,sizeof(SigSuppress_list));
+	*sHead = newNode;
+    }
+    else
+    {
+	cNode = *sHead;
+	pNode = cNode;
+
+	has_flag = 0;
+	no_add = 0;
+	
+	while(cNode != NULL)
+	{
+	    memset(&comp_set,'\0',(sizeof(u_int8_t)*4));
+	    
+	    if( (cNode->gid == sElement->gid))
+	    {
+		switch(sElement->ss_type)
+		{
+		case SS_SINGLE:
+		    switch(cNode->ss_type)
+		    {
+		    case SS_SINGLE:
+			if( ((cNode->ss_min == sElement->ss_min)  &&
+			     (cNode->ss_max == sElement->ss_max)))
+			{
+			    DEBUG_WRAP(DebugMessage(DEBUG_SID_SUPPRESS,"[%s()], Signature Suppress configuration entry type:[SINGLE] gid:[%d] sid:[%d] was not added because it is already in present.\n",
+						    __FUNCTION__,
+						    sElement->gid,
+						    sElement->ss_min););
+			    return 0;
+			}
+			break;
+			
+		    case SS_RANGE:
+			if( ((cNode->ss_min <= sElement->ss_min) &&
+                             (cNode->ss_max >= sElement->ss_max)))
+                        {
+			    DEBUG_WRAP(DebugMessage(DEBUG_SID_SUPPRESS,
+						    "[%s()], Signature Suppress configuration entry gid:[%d] sid[%d] already covered by\n"
+						    "Signature Suppress configuration list element type:[RANGE] gid:[%d] sid min:[%d] sid max:[%d].\n",
+						    __FUNCTION__,
+						    sElement->gid,
+						    sElement->ss_min,
+						    cNode->gid,
+						    cNode->ss_min,
+						    cNode->ss_max););
+			    return 0;
+			}
+			break;
+
+		    default:
+			/* XXX */
+			return 1;
+			break;
+		    }
+		    break;
+		    
+		case SS_RANGE:
+		    switch(cNode->ss_type)
+                    {
+		    case SS_SINGLE:
+			if( ((sElement->ss_min <= cNode->ss_min) &&
+			     (sElement->ss_max >= cNode->ss_max)))
+			{
+			    DEBUG_WRAP(DebugMessage(DEBUG_SID_SUPPRESS,
+						    "[%s()], Signature Suppress configuration gid:[%d] sid:[%d] flagged for deletion from list,\n"
+						    "Element is intersecting with Signature Suppress list  range gid[%d] sid min:[%d] sid max:[%d]\n\n",
+						    __FUNCTION__,
+						    cNode->gid,
+						    cNode->ss_min,
+						    sElement->gid,
+						    sElement->ss_min,
+						    sElement->ss_max););
+			    cNode->flag = 1;
+			    has_flag = 1;
+			}
+			break;
+			
+		    case SS_RANGE:
+			if(sElement->ss_min <= cNode->ss_min)
+			    comp_set[0] = 1;
+			
+			if(sElement->ss_min >= cNode->ss_max)
+			    comp_set[1] = 1;
+			
+			if(sElement->ss_max >= cNode->ss_min)
+			    comp_set[2] = 1;
+			
+			if(sElement->ss_max <= cNode->ss_max)
+			    comp_set[3] = 1;
+			
+			DEBUG_WRAP(DebugMessage(DEBUG_SID_SUPPRESS,
+						"[%s()]: Comparing Signature intersection comp0:[%d] comp1:[%d] comp2:[%d] comp3:[%d]\n"
+						"Signature Suppress configuration entry: gid:[%d] sid min:[%d] sid max:[%d]\n"
+                                                "Signature Suppress list entry:          gid:[%d] sid min:[%d] sid max:[%d]\n\n",
+						__FUNCTION__,
+						comp_set[0],comp_set[1],comp_set[2],comp_set[3],
+						sElement->gid,sElement->ss_min,sElement->ss_max,
+						cNode->gid,cNode->ss_min,cNode->ss_max););
+			
+			if( (comp_set[0] && !comp_set[1] && comp_set[2] && comp_set[3]) ||
+			    (!comp_set[0] && !comp_set[1] && comp_set[2] && comp_set[3]))
+			{
+			    DEBUG_WRAP(DebugMessage(DEBUG_SID_SUPPRESS,
+						    "[%s()]: Signature Suppress configuration entry  gid:[%d] sid min:[%d] sid max:[%d] is INCLUDED in \n"
+						    "Signature Suppress list entry gid:[%d] sid min:[%d] sid max:[%d]\n\n",
+						    __FUNCTION__,
+						    sElement->gid,sElement->ss_min,sElement->ss_max,
+						    cNode->gid,cNode->ss_min,cNode->ss_max););
+			    
+			    no_add = 1;
+			}
+			else if( (comp_set[0] && comp_set[1] && !comp_set[2] && comp_set[3]) || 
+				 (!comp_set[0] && !comp_set[1] && comp_set[2] && !comp_set[3]))
+			{
+			    
+			    DEBUG_WRAP(DebugMessage(DEBUG_SID_SUPPRESS,
+						    "[%s()]: Signature Suppress list entry  gid:[%d] sid min:[%d] sid max:[%d] and\n"
+						    "Signature Suppress configuration entry  gid:[%d] sid min:[%d] sid max:[%d] share some intesection, altering list entry. \n\n",
+						    __FUNCTION__,
+						    cNode->gid,cNode->ss_min,cNode->ss_max,
+						    sElement->gid,sElement->ss_min,sElement->ss_max););
+			    
+			    if(sElement->ss_min <= cNode->ss_min)
+			    {
+				cNode->ss_min = sElement->ss_min;
+			    }
+
+			    if(sElement->ss_max >= cNode->ss_max)
+			    {
+				cNode->ss_max = sElement->ss_max;
+			    }
+
+			    DEBUG_WRAP(DebugMessage(DEBUG_SID_SUPPRESS,
+						    "[%s()]: Modified Signature Suppress list entry gid:[%d] sid min:[%d] sid max:[%d] \n",
+						    __FUNCTION__,
+						    cNode->gid,cNode->ss_min,cNode->ss_max););
+				       
+			    no_add = 1;
+			}
+			break;
+			
+		    default:
+			FatalError("[%s()]: Unknown type[%d] for Signature Suppress configuration entry gid:[%d] sid min:[%d] max sid:[%d] \n",
+				   __FUNCTION__,
+				   cNode->ss_type,
+				   cNode->gid,
+				   cNode->ss_min,
+				   cNode->ss_max);
+			return 1;
+			break;
+			
+		    }
+		    break;
+		    
+		default:
+		    FatalError("[%s()]: Unknown type[%d] for Signature Suppress configuration entry gid:[%d] sid min:[%d] max sid:[%d] \n",
+			       __FUNCTION__,
+			       sElement->ss_type,
+			       sElement->gid,
+			       sElement->ss_min,
+			       sElement->ss_max);
+		    return 1;
+		    break;
+		}
+	    }
+	    
+	    pNode = cNode;	    
+	    cNode = cNode->next;
+	}
+	
+	/* We could keep an index, but rolling is way faster isin't ;) */
+	if(has_flag)
+	{
+	    cNode = *sHead;
+	    pNode = cNode;
+	    
+	    while(cNode)
+	    {
+		if(cNode->flag)
+		{
+		    DEBUG_WRAP(DebugMessage(DEBUG_SID_SUPPRESS,
+					    "[%s(), unlinking Signature Suppress list entry type:[%d] gid:[%d] sid_min:[%d] sid_max:[%d] \n",
+					    __FUNCTION__,
+					    cNode->ss_type,
+					    cNode->gid,
+					    cNode->ss_min,
+					    cNode->ss_max););
+			       
+		    if( SigSuppressUnlinkNode(sHead,&cNode,&pNode))
+		    {
+			return 1;
+		    }
+		}
+		
+		if(cNode)
+		{
+		    pNode = cNode;
+		    cNode = cNode->next;
+		}
+	    }
+	}
+	
+	if(!no_add)
+	{
+	    if( (newNode = calloc(1,sizeof(SigSuppress_list))) == NULL)
+	    {
+		return 1;
+	    }
+	    
+	    memcpy(newNode,sElement,sizeof(SigSuppress_list));
+	    
+	    pNode->next = newNode;
+	    
+	    DEBUG_WRAP(DebugMessage(DEBUG_SID_SUPPRESS,
+				    "[%s()], Signature Suppress configuration entry type:[%s] gid:[%d] sid min:[%d] sid max:[%d] added to Signature Suppress list.\n",
+				    __FUNCTION__,
+				    (newNode->ss_type & SS_SINGLE) ? "SINGLE" : "RANGE",		       
+				    newNode->gid,
+				    newNode->ss_min,
+				    newNode->ss_max););
+	}
+    }    
+    
+
+    return 0;
+}
+
+void ConfigSigSuppress(Barnyard2Config *bc, char *args)
+{
+    char **toks = NULL;
+    int num_toks = 0;
+    int ptoks = 0;
+    
+    char gid_string[256] = {0};
+
+    char **range_toks = NULL;
+    int range_num_toks = 0;
+    
+    char **gid_toks = NULL;
+    char *gid_sup_toks = NULL;
+    int gid_num_toks = 0;
+    
+    SigSuppress_list t_supp_elem = {0};
+
+    if( (bc == NULL) || (args == NULL))
+    {
+	return;
+    }
+
+    toks = mSplit(args, ",", 0, &num_toks, 0);
+    
+    while(ptoks < num_toks)
+    {
+	memset(gid_string,'\0',256);
+	
+	gid_toks = mSplit(toks[ptoks], ":", 2, &gid_num_toks, 0);
+	
+	if(gid_num_toks == 1)
+	{
+	    DEBUG_WRAP(DebugMessage(DEBUG_SID_SUPPRESS_PARSE,"Defaulting gid 1 for toks [%s]\n",
+				    toks[ptoks]););
+	    t_supp_elem.gid = 1;    
+	    gid_sup_toks = toks[ptoks];
+	}
+	else if(gid_num_toks == 2)
+	{
+	    memcpy(gid_string,gid_toks[0],strlen(gid_toks[0]));
+	    
+	    if( BY2Strtoul(gid_string,&t_supp_elem.gid))
+	    {
+		FatalError("[%s] \n",__FUNCTION__);
+	    }
+	    
+	    DEBUG_WRAP(DebugMessage(DEBUG_SID_SUPPRESS_PARSE,"Using gid [%d] for toks [%s]\n",
+				    t_supp_elem.gid,
+				    toks[ptoks]););
+	    
+	    gid_sup_toks = gid_toks[1];
+	}
+	else
+	{
+	    FatalError("[%s()]: Invalid gid split value for [%s]\n",
+		       __FUNCTION__,
+		       toks[ptoks]);
+	}
+	
+	range_toks = mSplit(gid_sup_toks, "-", 0, &range_num_toks, 0);
+	
+	if(range_num_toks == 1)
+	{
+	    t_supp_elem.ss_type = SS_SINGLE;
+	    
+	    if( BY2Strtoul(gid_sup_toks,&t_supp_elem.ss_min))
+            {
+                FatalError("[%s] \n",__FUNCTION__);
+            }
+
+	    t_supp_elem.ss_max = t_supp_elem.ss_min;
+	    
+	    DEBUG_WRAP(DebugMessage(DEBUG_SID_SUPPRESS_PARSE,"Single element gid[%d] sid[%d] \n",
+				    t_supp_elem.gid,
+				    t_supp_elem.ss_min););
+	}
+	else if(range_num_toks == 2)
+	{
+	    DEBUG_WRAP(DebugMessage(DEBUG_SID_SUPPRESS_PARSE,"Got range [%s] : [%s] [%s] \n",
+				    gid_sup_toks,
+				    range_toks[0],
+				    range_toks[1]););
+	    
+	    t_supp_elem.ss_type = SS_RANGE;
+	    
+	    if( BY2Strtoul(range_toks[0],&t_supp_elem.ss_min))
+            {
+                FatalError("[%s] \n",__FUNCTION__);
+            }
+	    
+	    if( BY2Strtoul(range_toks[1],&t_supp_elem.ss_max))
+            {
+                FatalError("[%s] \n",__FUNCTION__);
+            }
+	    
+	    if(t_supp_elem.ss_min > t_supp_elem.ss_max)
+	    {
+		FatalError("[%s()], Min greater than max, invalid range [%s] \n",
+			   __FUNCTION__,
+			   gid_sup_toks);
+	    }
+	    
+	    if(t_supp_elem.ss_min == t_supp_elem.ss_max)
+	    {
+		FatalError("[%s()], Min equal than max, invalid range [%s] \n",
+			   __FUNCTION__,
+			   gid_sup_toks);
+	    }
+	}
+	else
+	{
+	    FatalError("element[%s] is an invalid range \n",gid_sup_toks);
+	}
+	
+       	mSplitFree(&range_toks, range_num_toks);
+	mSplitFree(&gid_toks, gid_num_toks);
+	
+	if(SigSuppressAddElement(BCGetSigSuppressHead(),&t_supp_elem))
+	{
+	    FatalError("[%s()], unrecoverable call to SigSuppressAddElement() \n",
+		       __FUNCTION__);
+	}
+	
+	ptoks++;
+    }
+    
+    mSplitFree(&toks, num_toks);
+    return;
+}
+
+
+
 
 #ifdef MPLS
 void ConfigMaxMplsLabelChain(Barnyard2Config *bc, char *args)

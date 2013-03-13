@@ -533,6 +533,29 @@ static void RealAlertCSV(Packet * p, void *event, uint32_t event_type,
                 TextLog_Print(log, "%s", tcpFlags);
             }
         }
+	else if(!strncasecmp("interface",type,strlen("interface")))
+        {
+	    if( barnyard2_conf->interface )
+	    {
+		TextLog_Print(log, "%s", barnyard2_conf->interface);
+	    }
+	    else
+	    {
+		TextLog_Print(log, "%s", "by2_no_interface_configured");
+	    }
+	}
+	else if(!strncasecmp("hostname",type,strlen("hostname")))
+        {
+	    if( barnyard2_conf->hostname)
+	    {
+		TextLog_Print(log, "%s", barnyard2_conf->hostname);
+	    }
+	    else
+	    {
+		TextLog_Print(log, "%s", "by2_no_hostname_configured");
+	    }
+	}
+
 
         DEBUG_WRAP(DebugMessage(DEBUG_LOG, "WOOT!\n"););
 

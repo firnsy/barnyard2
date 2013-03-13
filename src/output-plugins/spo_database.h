@@ -342,7 +342,8 @@ typedef struct _dbReliabilityHandle
     u_int8_t transactionCallFail; /* if(checkTransaction) && error set ! */
     u_int8_t transactionErrorCount; /* Number of transaction fail for a single transaction (Reset by sucessfull commit)*/
     u_int8_t transactionErrorThreshold; /* Consider the transaction threshold to be the same as reconnection maxiumum */
-        
+     
+    u_int8_t disablesigref; /* Allow user to prevent generation and creation of signature reference table */
     
     struct _DatabaseData *dbdata; /* Pointer to parent structure used for call clarity */
     
@@ -495,9 +496,9 @@ typedef struct _DatabaseData
 #define KEYWORD_IGNOREBPF_YES  "yes"
 #define KEYWORD_IGNOREBPF_ONE  "1"
 
-
 #define KEYWORD_CONNECTION_LIMIT "connection_limit"
 #define KEYWORD_RECONNECT_SLEEP_TIME "reconnect_sleep_time"
+#define KEYWORD_DISABLE_SIGREFTABLE "disable_signature_reference_table"
 
 #define KEYWORD_MYSQL_RECONNECT "mysql_reconnect"
 

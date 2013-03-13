@@ -51,6 +51,8 @@
 #include "debug.h"
 #include "util.h"
 
+#include "unified2.h"
+
 /* built-in input plugins */
 #include "input-plugins/spi_unified2.h"
 
@@ -554,9 +556,74 @@ void AppendOutputFuncList(OutputFunc func, void *arg, OutputFuncNode **list)
     node->arg = arg;
 }
 
+int pbCheckSignatureSuppression(void *event)
+{
+    Unified2EventCommon *uCommon = (Unified2EventCommon *)event;
+    SigSuppress_list **sHead = BCGetSigSuppressHead();
+    SigSuppress_list *cNode = NULL;
+    u_int32_t gid = 0;
+    u_int32_t sid = 0;
+    
+    if( (uCommon == NULL) ||
+	(sHead == NULL))
+    {
+	return 0;
+    }
+    
+    cNode = *sHead;
+
+    gid = ntohl(uCommon->generator_id);
+    sid = ntohl(uCommon->signature_id);
+
+    while(cNode)
+    {
+	if(cNode->gid == gid)
+	{
+	    switch(cNode->ss_type)
+	    {
+	    case SS_SINGLE:
+		if(cNode->ss_min == sid)
+		{
+		    SigSuppressCount();
+		    return 1;
+		}
+		break;
+		
+	    case SS_RANGE:
+		if( (cNode->ss_min >= sid) &&
+		    (cNode->ss_max <= sid))
+		{
+		    SigSuppressCount();
+		    return 1;
+		}
+		break;
+
+	    default:
+		FatalError("[%s()], Unknown Signature suppress type \n",
+			   __FUNCTION__);
+		break;
+	    }
+
+	}
+	cNode = cNode->next;
+    }
+    
+    return 0;
+}
+
+
+
 void CallOutputPlugins(OutputType out_type, Packet *packet, void *event, uint32_t event_type)
 {
     OutputFuncNode *idx = NULL;
+
+    /* Plug for sid suppression */
+    if(event)
+    {
+	if(pbCheckSignatureSuppression(event))
+	    return;
+    }
+
 
     if (out_type == OUTPUT_TYPE__SPECIAL)
     {

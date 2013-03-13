@@ -248,4 +248,5 @@ long int xatol(const char *, const char *);
 unsigned long int xatou(const char *, const char *);
 unsigned long int xatoup(const char *, const char *); // return > 0
 
+int BY2Strtoul(char *,unsigned long *);
 #endif /*__UTIL_H__*/

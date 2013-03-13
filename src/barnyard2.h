@@ -62,8 +62,8 @@
 #define PROGRAM_NAME	"Barnyard"
 #define VER_MAJOR	"2"
 #define VER_MINOR	"1"
-#define VER_REVISION	"12"
-#define VER_BUILD	"321"
+#define VER_REVISION	"13-BETA"
+#define VER_BUILD	"325"
 
 #define STD_BUF  1024
 
@@ -88,6 +88,15 @@
 #endif    
 
 #define TIMEBUF_SIZE    26
+
+
+#ifndef ULONG_MAX
+#  if __WORDSIZE == 64
+#   define ULONG_MAX    18446744073709551615UL
+#  else
+#   define ULONG_MAX    4294967295UL
+#  endif
+#endif
 
 #define DO_IP_CHECKSUMS		0x00000001
 #define DO_TCP_CHECKSUMS	0x00000002
@@ -120,6 +129,14 @@
 # define DEFAULT_MPLS_PAYLOADTYPE      MPLS_PAYLOADTYPE_IPV4
 # define DEFAULT_LABELCHAIN_LENGTH    -1
 #endif
+
+
+/* SIDMAP V2 */
+#define SIDMAPV2STRING "v2\n"
+#define SIDMAPV1 0x01
+#define SIDMAPV2 0x02
+/* SIDMAP V2 */
+
 
 /* This macro helps to simplify the differences between Win32 and
    non-Win32 code when printing out the name of the interface */
@@ -288,6 +305,20 @@ typedef struct _VarNode
 
 } VarNode;
 
+
+#define SS_SINGLE 0x0001
+#define SS_RANGE  0x0002
+
+typedef struct _SigSuppress_list
+{
+    u_int8_t  ss_type;  /* Single or Range */
+    u_int8_t  flag;     /* Flagged for deletion */
+    unsigned long gid;  /* Generator id */
+    unsigned long ss_min; /* VAL for SS_SINGLE, MIN VAL for RANGE */
+    unsigned long ss_max; /* VAL for SS_SINGLE, MAX VAL for RANGE */
+    struct _SigSuppress_list *next;
+} SigSuppress_list;
+
 /* struct to contain the program variables and command line args */
 typedef struct _Barnyard2Config
 {
@@ -296,9 +327,7 @@ typedef struct _Barnyard2Config
     int run_flags;
     int output_flags;
     int logging_flags;
-//    int log_tcpdump;
-//    int no_log;
-    
+
     unsigned int event_cache_size;
 
     VarEntry            *var_table;
@@ -319,7 +348,9 @@ typedef struct _Barnyard2Config
 
     char				*class_file;            /* -C or config class_map */
     char				*sid_msg_file;          /* -S or config sid_map */
+    short                               sidmap_version;         /* Set by ReadSidFile () */
     char				*gen_msg_file;          /* -G or config gen_map */
+
     char				*reference_file;        /* -R or config reference_map */
     char				*log_dir;               /* -l or config log_dir */
     char				*orig_log_dir;          /* set in case of chroot */
@@ -394,9 +425,13 @@ typedef struct _Barnyard2Config
     int print_version;
     int usr_signal;
     int cant_hup_signal;
+    
+    SigSuppress_list *ssHead;
 
     ClassType *classifications;
     ReferenceSystemNode *references;
+
+    SigNode *sigHead;  /* Signature list Head */
 
     /* plugin active flags*/
     InputConfig         *input_configs;
@@ -414,6 +449,7 @@ typedef struct _PacketCount
     uint64_t total_packets;
     uint64_t total_processed;
     uint64_t total_unknown;
+    uint64_t total_suppressed;
 
     uint64_t s5tcp1;
     uint64_t s5tcp2;
@@ -727,5 +763,54 @@ static INLINE long int BcMplsPayloadType(void)
 {
     return barnyard2_conf->mpls_payload_type;
 }
+
 #endif
+
+static INLINE short BcSidMapVersion(void)
+{
+    return barnyard2_conf->sidmap_version;
+}
+
+static INLINE SigNode ** BcGetSigNodeHead(void)
+{
+    return &barnyard2_conf->sigHead;
+}
+
+static INLINE Barnyard2Config * BcGetConfig(void)
+{
+    return barnyard2_conf;
+}
+
+static INLINE char * BcGetSourceFile(u_int8_t source_file)
+{
+    switch(source_file)
+    {
+
+    case SOURCE_SID_MSG:
+       	return barnyard2_conf->sid_msg_file;
+	break;
+
+
+    case SOURCE_GEN_MSG:
+	return barnyard2_conf->gen_msg_file;
+	break;
+	
+    default:
+	return "UKNOWN FILE\n";
+	break;
+    }
+}
+
+static INLINE SigSuppress_list ** BCGetSigSuppressHead(void)
+{
+    return &barnyard2_conf->ssHead;
+}
+
+static INLINE void SigSuppressCount(void)
+{
+    pc.total_suppressed++;
+    return;
+}
+
+
 #endif  /* __BARNYARD2_H__ */

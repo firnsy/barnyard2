@@ -210,6 +210,8 @@ extern int optind;
 extern int opterr;
 extern int optopt;
 
+
+
 /* Private function prototypes ************************************************/
 static void InitNetmasks(void);
 static void InitProtoNames(void);
@@ -719,9 +721,7 @@ static void ParseCmdLine(int argc, char **argv)
                 ConfigSetGid(bc, optarg);
                 break;
 
-            case 'G':  /* snort loG identifier */
-                ConfigGenFile(bc, optarg);
-                break;
+
 
             case 'h':
                 ConfigHostname(bc, optarg);
@@ -790,9 +790,13 @@ static void ParseCmdLine(int argc, char **argv)
 #endif
                 break;
 
-            case 'S':  /* set a rules file variable */
-                ConfigSidFile(bc, optarg);
-                break;
+     	    case 'S':  /* set a rules file variable */
+		bc->sid_msg_file = strndup(optarg,PATH_MAX);
+		break;
+		
+   	    case 'G':  /* snort preprocessor identifier */
+		bc->gen_msg_file = strndup(optarg,PATH_MAX);
+		break;
 
             case 't':  /* chroot to the user specified directory */
                 ConfigChrootDir(bc, optarg);
@@ -1533,7 +1537,7 @@ static Barnyard2Config * MergeBarnyard2Confs(Barnyard2Config *cmd_line, Barnyard
         FatalError("%s(%d) Merging barnyard2 configs: barnyard2 conf is NULL.\n",
                    __FILE__, __LINE__);
     }
-
+   
     ResolveOutputPlugins(cmd_line, config_file);
 
     if (config_file == NULL)
@@ -1555,13 +1559,53 @@ static Barnyard2Config * MergeBarnyard2Confs(Barnyard2Config *cmd_line, Barnyard
     
     if (config_file == NULL)
         return cmd_line;
+
+    if(cmd_line->ssHead)
+	config_file->ssHead = cmd_line->ssHead;
     
+    if( (cmd_line->sid_msg_file) &&
+	(config_file->sid_msg_file))
+    {
+	FatalError("The sid map file was included two times command line (-S) [%s] and in the configuration file (config sid_map) [%s].\n"
+		   "It only need to be defined once.\n",
+		   cmd_line->sid_msg_file,
+		   config_file->sid_msg_file);
+    }    
+
+    if( (cmd_line->gen_msg_file) &&
+	(config_file->gen_msg_file))
+    {
+	FatalError("The gen map file was included two times command line (-G) [%s] and in the configuration file (config gen_map) [%s].\n"
+		   "It only need to be defined once.\n",
+		   cmd_line->gen_msg_file,
+		   config_file->gen_msg_file);
+    }
+
+    if( (cmd_line->sid_msg_file != NULL) &&
+	(config_file->sid_msg_file == NULL))
+    {
+	config_file->sid_msg_file = cmd_line->sid_msg_file;
+	cmd_line->sid_msg_file = NULL;
+    }
+    
+    if( (cmd_line->gen_msg_file != NULL) &&
+        (config_file->gen_msg_file == NULL))
+    {
+        config_file->gen_msg_file = cmd_line->gen_msg_file;
+        cmd_line->gen_msg_file = NULL;
+    }
+
 
     if( cmd_line->event_cache_size > config_file->event_cache_size)
     {
 	config_file->event_cache_size = cmd_line->event_cache_size;
     }
     
+    /* In case */
+    if(cmd_line->sidmap_version > config_file->sidmap_version)
+    {
+	config_file->sidmap_version = cmd_line->sidmap_version;
+    }
 
     
     /* Used because of a potential chroot */
@@ -1777,6 +1821,22 @@ static void Barnyard2Init(int argc, char **argv)
          * Set the global barnyard2_conf that will be used during run time */
         barnyard2_conf = MergeBarnyard2Confs(barnyard2_cmd_line_conf, bc);
 	
+	DisplaySigSuppress(BCGetSigSuppressHead());
+
+	if(ReadSidFile(barnyard2_conf))
+	{
+	    FatalError("[%s()], failed while processing [%s] \n",
+		       __FUNCTION__,
+		       bc->sid_msg_file);
+	}
+	
+	if(ReadGenFile(barnyard2_conf))
+	{
+	    FatalError("[%s()], failed while processing [%s] \n",
+		       __FUNCTION__,
+		       bc->gen_msg_file);
+	}
+
 	if(barnyard2_conf->event_cache_size == 0)
 	{
 	    barnyard2_conf->event_cache_size = 2048;
@@ -1787,9 +1847,22 @@ static void Barnyard2Init(int argc, char **argv)
 	
     }
 
+    /* Resolve classification integer for signature and free some memory */
+    if(barnyard2_conf->sidmap_version == SIDMAPV2)
+    {
+	if(SignatureResolveClassification(barnyard2_conf->classifications,
+					  (SigNode *)*BcGetSigNodeHead(),
+					  barnyard2_conf->sid_msg_file,
+					  barnyard2_conf->class_file))
+	{
+	    FatalError("[%s()], Call to SignatureResolveClassification failed \n",
+		       __FUNCTION__);
+	}
+    }
+
     /* pcap_snaplen is already initialized to SNAPLEN */
-//  if (barnyard2_conf->pkt_snaplen != -1)
-//      pcap_snaplen = (uint32_t)snort_conf->pkt_snaplen;
+    //  if (barnyard2_conf->pkt_snaplen != -1)
+    //      pcap_snaplen = (uint32_t)snort_conf->pkt_snaplen;
 
     /* Display barnyard2 version information here so that we can also show dynamic
      * plugin versions, if loaded.  */

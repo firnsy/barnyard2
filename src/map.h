@@ -56,6 +56,11 @@
 
 #define BUFFER_SIZE  1024
 
+
+#define SOURCE_SID_MSG     0x0001
+#define SOURCE_GEN_MSG     0x0002
+#define SOURCE_GEN_RUNTIME 0x0004
+
 struct _Barnyard2Config;
 
 /* this contains a list of the URLs for various reference systems */
@@ -101,15 +106,17 @@ typedef struct _ClassType
 
 typedef struct _SigNode
 {
+    struct _SigNode		*next;
     uint32_t			generator;	/* generator ID */
-    uint32_t			id;			/* Snort ID */
+    uint32_t			id;		/* Snort ID */
     uint32_t			rev;		/* revision (for future expansion) */
     uint32_t			class_id;
-    uint32_t			priority;			
+    uint32_t			priority;	
+    u_int8_t                    source_file;     /* where was it parsed from */
+    char                        *classLiteral;  /* sid-msg.map v2 type only */
     char			*msg;		/* messages */
     ClassType			*classType;
     ReferenceNode		*refs;		/* references (eg bugtraq) */
-    struct _SigNode		*next;
 
 } SigNode;
 
@@ -125,15 +132,16 @@ void DeleteClassTypes();
 
 SigNode *GetSigByGidSid(uint32_t, uint32_t, uint32_t);
 
-int ReadSidFile(struct _Barnyard2Config *, const char *);
-void ParseSidMapLine(struct _Barnyard2Config *, char *);
 
-int ReadGenFile(struct _Barnyard2Config *, const char *);
+int ReadSidFile(struct _Barnyard2Config *);
+int ReadGenFile(struct _Barnyard2Config *);
+
+void ParseSidMapLine(struct _Barnyard2Config *, char *);
 void ParseGenMapLine(char *);
 
+
 void DeleteSigNodes();
-
-SigNode *CreateSigNode(SigNode **);
-
+SigNode *CreateSigNode(SigNode **,u_int8_t);
+int SignatureResolveClassification(ClassType *class,SigNode *sig,char *sid_map_file,char *classification_file);
 
 #endif  /* __MAP_H__ */

@@ -344,20 +344,19 @@ u_int32_t SynchronizeEventId(DatabaseData *data)
 	
 	if(Select(data->SQL_SELECT,data,(u_int32_t *)&c_cid))
 	{
-	    LogMessage("database: [%s()]: Problems executing [%s] \n",
-		       __FUNCTION__,
-		       data->SQL_SELECT);
+	    DEBUG_WRAP(DebugMessage(DB_DEBUG,"database: [%s()]: Problems executing [%s], (there is probably no row in the table for sensor id [%d] \n",
+				    __FUNCTION__,
+				    data->SQL_SELECT,
+			            data->sid););
 	}
 	
 	if(c_cid > data->cid)
 	{
-	    LogMessage("INFO database: Table [%s] had a more rescent cid [%u] using it. \n",
-		       table_array[itr],
-		       c_cid);
-	    
-	    LogMessage("\t Using cid [%u] instead of [%u]\n",
-		       c_cid,
-		       data->cid);
+	    DEBUG_WRAP(DebugMessage(DB_DEBUG,"INFO database: Table [%s] had a more recent cid [%u], using cid [%u] instead of [%u] \n",
+				    table_array[itr],
+				    c_cid,
+				    c_cid,
+				    data->cid););
 	    
 	    data->cid = c_cid;
 	}
@@ -1150,6 +1149,10 @@ void ParseDatabaseArgs(DatabaseData *data)
 	{
 	    data->dbRH[data->dbtype_id].dbReconnectSleepTime.tv_sec = strtoul(a1,NULL,10);
 	}
+	if(!strncasecmp(dbarg,KEYWORD_DISABLE_SIGREFTABLE,strlen(KEYWORD_DISABLE_SIGREFTABLE)))
+	{
+	    data->dbRH[data->dbtype_id].disablesigref = 1;
+	}
 
 #ifdef ENABLE_MYSQL
 	/* Option declared here should be forced to dbRH[DB_MYSQL] */
@@ -1441,17 +1444,20 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
     revision = ntohl(((Unified2EventCommon *)event)->signature_revision);
     priority = ntohl(((Unified2EventCommon *)event)->priority_id);
     classification = ntohl(((Unified2EventCommon *)event)->classification_id);
-
-    /* Originaly forgot about this, since 
-       those signature messages will be put in sid-msg.map by programs like pulledpork */
-    /* map.c
-       a snort general rule (gid=1) and a snort dynamic rule (gid=3) use the  
-       the same sids and thus can be considered one in the same. */
-    if (gid == 3)
+    
+    /* 
+       This is now only needed for backward compatible with old sid-msg.map file.
+       new version has gid || sid || revision || msg || etc.. 
+    */
+    if( BcSidMapVersion() == SIDMAPV1)
     {
-	gid = 1;
+	if (gid == 3)
+	{
+	    gid = 1;
+	}
     }
     
+
     /* NOTE: elz 
        For sanity purpose the sig_class table SHOULD have internal classification id to prevent possible 
        miss classification tagging ... but this is not happening with the old schema.
@@ -2028,7 +2034,8 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 			for(i=0; i < (int)(p->tcp_option_count); i++)
 			{
 
-			    if( p->tcp_options[i].len > 0)
+			    if( (&p->tcp_options[i]) &&
+				(p->tcp_options[i].len > 0))
 			    {
 				if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
 				{
@@ -2228,7 +2235,8 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 		{
 		    for(i=0 ; i < (int)(p->ip_option_count); i++)
 		    {
-			if(&p->ip_options[i])
+			if( (&p->ip_options[i]) &&
+			    (p->ip_options[i].len > 0))
 			{
 			    if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
 			    {

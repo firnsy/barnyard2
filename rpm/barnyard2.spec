@@ -42,7 +42,7 @@
 
 
 Summary: Snort Log Backend 
-Name: barnyard2-2
+Name: barnyard2
 Version: 1.12
 Release: 1%{?dist}
 License: GPL
@@ -102,7 +102,7 @@ EXPERIMENTAL!!  I don't have a way to test this, so let me know if it works!
 ORACLE_HOME=%{OracleHome}
 
 %prep
-%setup -q
+%setup -q -n barnyard2-2-%{version}
 
 
 %build

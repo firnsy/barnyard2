@@ -21,17 +21,17 @@
 
 /* $Id$ */
 
-/* spo_csv
+/* spo_json
  *
- * Purpose:  output plugin for csv alerting
+ * Purpose:  output plugin for json alerting
  *
  * Arguments:  alert file (eventually)
  *
  * Effect:
  *
- * Alerts are written to a file in the snort csv alert format
+ * Alerts are written to a file in the snort json alert format
  *
- * Comments:   Allows use of csv alerts with other output plugin types
+ * Comments:   Allows use of json alerts with other output plugin types
  *
  */
 
@@ -68,35 +68,35 @@
 #include "log_text.h"
 #include "ipv6_port.h"
 
-#define DEFAULT_CSV "timestamp,sig_generator,sig_id,sig_rev,msg,proto,src,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcpln,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON "timestamp,sig_generator,sig_id,sig_rev,msg,proto,src,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcpln,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
-#define DEFAULT_FILE  "alert.csv"
+#define DEFAULT_FILE  "alert.json"
 #define DEFAULT_LIMIT (128*M_BYTES)
 #define LOG_BUFFER    (4*K_BYTES)
 
-typedef struct _AlertCSVConfig
+typedef struct _AlertJSONConfig
 {
     char *type;
-    struct _AlertCSVConfig *next;
-} AlertCSVConfig;
+    struct _AlertJSONConfig *next;
+} AlertJSONConfig;
 
-typedef struct _AlertCSVData
+typedef struct _AlertJSONData
 {
     TextLog* log;
-    char * csvargs;
+    char * jsonargs;
     char ** args;
     int numargs;
-    AlertCSVConfig *config;
-} AlertCSVData;
+    AlertJSONConfig *config;
+} AlertJSONData;
 
 
 /* list of function prototypes for this preprocessor */
 static void AlertJSONInit(char *);
-static AlertCSVData *AlertCSVParseArgs(char *);
-static void AlertCSV(Packet *, void *, uint32_t, void *);
-static void AlertCSVCleanExit(int, void *);
-static void AlertCSVRestart(int, void *);
-static void RealAlertCSV(
+static AlertJSONData *AlertJSONParseArgs(char *);
+static void AlertJSON(Packet *, void *, uint32_t, void *);
+static void AlertJSONCleanExit(int, void *);
+static void AlertRestart(int, void *);
+static void RealAlertJSON(
     Packet*, void*, uint32_t, char **args, int numargs, TextLog*
 );
 
@@ -135,25 +135,25 @@ void AlertJSONSetup(void)
  */
 static void AlertJSONInit(char *args)
 {
-    AlertCSVData *data;
-    DEBUG_WRAP(DebugMessage(DEBUG_INIT, "Output: CSV Initialized\n"););
+    AlertJSONData *data;
+    DEBUG_WRAP(DebugMessage(DEBUG_INIT, "Output: JSON Initialized\n"););
 
     /* parse the argument list from the rules file */
-    data = AlertCSVParseArgs(args);
+    data = AlertJSONParseArgs(args);
 
-    DEBUG_WRAP(DebugMessage(DEBUG_INIT, "Linking CSV functions to call lists...\n"););
+    DEBUG_WRAP(DebugMessage(DEBUG_INIT, "Linking JSON functions to call lists...\n"););
 
     /* Set the preprocessor function into the function list */
-    AddFuncToOutputList(AlertCSV, OUTPUT_TYPE__ALERT, data);
-    AddFuncToCleanExitList(AlertCSVCleanExit, data);
-    AddFuncToRestartList(AlertCSVRestart, data);
+    AddFuncToOutputList(AlertJSON, OUTPUT_TYPE__ALERT, data);
+    AddFuncToCleanExitList(AlertJSONCleanExit, data);
+    AddFuncToRestartList(AlertRestart, data);
 }
 
 /*
- * Function: ParseCSVArgs(char *)
+ * Function: ParseJSONArgs(char *)
  *
  * Purpose: Process positional args, if any.  Syntax is:
- * output alert_csv: [<logpath> ["default"|<list> [<limit>]]]
+ * output alert_json: [<logpath> ["default"|<list> [<limit>]]]
  * list ::= <field>(,<field>)*
  * field ::= "dst"|"src"|"ttl" ...
  * limit ::= <number>('G'|'M'|K')
@@ -162,21 +162,21 @@ static void AlertJSONInit(char *args)
  *
  * Returns: void function
  */
-static AlertCSVData *AlertCSVParseArgs(char *args)
+static AlertJSONData *AlertJSONParseArgs(char *args)
 {
     char **toks;
     int num_toks;
-    AlertCSVData *data;
+    AlertJSONData *data;
     char* filename = NULL;
     unsigned long limit = DEFAULT_LIMIT;
     int i;
 
-    DEBUG_WRAP(DebugMessage(DEBUG_INIT, "ParseCSVArgs: %s\n", args););
-    data = (AlertCSVData *)SnortAlloc(sizeof(AlertCSVData));
+    DEBUG_WRAP(DebugMessage(DEBUG_INIT, "ParseJSONArgs: %s\n", args););
+    data = (AlertJSONData *)SnortAlloc(sizeof(AlertJSONData));
 
     if ( !data )
     {
-        FatalError("alert_csv: unable to allocate memory!\n");
+        FatalError("alert_json: unable to allocate memory!\n");
     }
     if ( !args ) args = "";
     toks = mSplit((char *)args, " \t", 4, &num_toks, '\\');
@@ -199,11 +199,11 @@ static AlertCSVData *AlertCSVParseArgs(char *args)
             case 1:
                 if ( !strcasecmp("default", tok) )
                 {
-                data->csvargs = strdup(DEFAULT_CSV);
+                data->jsonargs = strdup(DEFAULT_JSON);
                 }
                 else
                 {
-                data->csvargs = strdup(toks[1]);
+                data->jsonargs = strdup(toks[1]);
                 }
                 break;
 
@@ -211,7 +211,7 @@ static AlertCSVData *AlertCSVParseArgs(char *args)
                 limit = strtol(tok, &end, 10);
 
                 if ( tok == end )
-                    FatalError("alert_csv error in %s(%i): %s\n",
+                    FatalError("alert_json error in %s(%i): %s\n",
                         file_name, file_line, tok);
 
                 if ( end && toupper(*end) == 'G' )
@@ -225,22 +225,22 @@ static AlertCSVData *AlertCSVParseArgs(char *args)
                 break;
 
             case 3:
-                FatalError("alert_csv: error in %s(%i): %s\n",
+                FatalError("alert_json: error in %s(%i): %s\n",
                     file_name, file_line, tok);
                 break;
         }
     }
-    if ( !data->csvargs ) data->csvargs = strdup(DEFAULT_CSV);
+    if ( !data->jsonargs ) data->jsonargs = strdup(DEFAULT_JSON);
     if ( !filename ) filename = ProcessFileOption(barnyard2_conf_for_parsing, DEFAULT_FILE);
 
     mSplitFree(&toks, num_toks);
-    toks = mSplit(data->csvargs, ",", 128, &num_toks, 0);
+    toks = mSplit(data->jsonargs, ",", 128, &num_toks, 0);
 
     data->args = toks;
     data->numargs = num_toks;
 
     DEBUG_WRAP(DebugMessage(
-        DEBUG_INIT, "alert_csv: '%s' '%s' %ld\n", filename, data->csvargs, limit
+        DEBUG_INIT, "alert_json: '%s' '%s' %ld\n", filename, data->jsonargs, limit
     ););
     data->log = TextLog_Init(filename, LOG_BUFFER, limit);
     if ( filename ) free(filename);
@@ -248,9 +248,9 @@ static AlertCSVData *AlertCSVParseArgs(char *args)
     return data;
 }
 
-static void AlertCSVCleanup(int signal, void *arg, const char* msg)
+static void AlertJSONCleanup(int signal, void *arg, const char* msg)
 {
-    AlertCSVData *data = (AlertCSVData *)arg;
+    AlertJSONData *data = (AlertJSONData *)arg;
     /* close alert file */
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"%s\n", msg););
 
@@ -258,44 +258,44 @@ static void AlertCSVCleanup(int signal, void *arg, const char* msg)
     {
         mSplitFree(&data->args, data->numargs);
         if (data->log) TextLog_Term(data->log);
-        free(data->csvargs);
-        /* free memory from SpoCSVData */
+        free(data->jsonargs);
+        /* free memory from SpoJSONData */
         free(data);
     }
 }
 
-static void AlertCSVCleanExit(int signal, void *arg)
+static void AlertJSONCleanExit(int signal, void *arg)
 {
-    AlertCSVCleanup(signal, arg, "AlertCSVCleanExit");
+    AlertJSONCleanup(signal, arg, "AlertJSONCleanExit");
 }
 
-static void AlertCSVRestart(int signal, void *arg)
+static void AlertRestart(int signal, void *arg)
 {
-    AlertCSVCleanup(signal, arg, "AlertCSVRestart");
+    AlertJSONCleanup(signal, arg, "AlertRestart");
 }
 
 
-static void AlertCSV(Packet *p, void *event, uint32_t event_type, void *arg)
+static void AlertJSON(Packet *p, void *event, uint32_t event_type, void *arg)
 {
-    AlertCSVData *data = (AlertCSVData *)arg;
-    RealAlertCSV(p, event, event_type, data->args, data->numargs, data->log);
+    AlertJSONData *data = (AlertJSONData *)arg;
+    RealAlertJSON(p, event, event_type, data->args, data->numargs, data->log);
 }
 
 /*
  *
- * Function: RealAlertCSV(Packet *, char *, FILE *, char *, numargs const int)
+ * Function: RealAlertJSON(Packet *, char *, FILE *, char *, numargs const int)
  *
- * Purpose: Write a user defined CSV message
+ * Purpose: Write a user defined JSON message
  *
  * Arguments:     p => packet. (could be NULL)
  *              msg => the message to send
- *             args => CSV output arguements
+ *             args => JSON output arguements
  *          numargs => number of arguements
  *             log => Log
  * Returns: void function
  *
  */
-static void RealAlertCSV(Packet * p, void *event, uint32_t event_type,
+static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         char **args, int numargs, TextLog* log)
 {
     int num;
@@ -306,13 +306,13 @@ static void RealAlertCSV(Packet * p, void *event, uint32_t event_type,
     if(p == NULL)
         return;
 
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Logging CSV Alert data\n"););
+    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Logging JSON Alert data\n"););
 
     for (num = 0; num < numargs; num++)
     {
         type = args[num];
 
-        DEBUG_WRAP(DebugMessage(DEBUG_LOG, "CSV Got type %s %d\n", type, num););
+        DEBUG_WRAP(DebugMessage(DEBUG_LOG, "JSON Got type %s %d\n", type, num););
 
         if(!strncasecmp("timestamp", type, 9))
         {

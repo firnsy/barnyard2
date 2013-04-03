@@ -74,7 +74,8 @@
 #define DEFAULT_LIMIT (128*M_BYTES)
 #define LOG_BUFFER    (4*K_BYTES)
 
-#define FIELD_VALUE_SEPARATOR ": "
+#define FIELD_NAME_VALUE_SEPARATOR ": "
+#define JSON_FIELDS_SEPARATOR ","
 
 #define JSON_TIMESTAMP_NAME "event_timestamp"
 #define JSON_SIG_GENERATOR_NAME "sig_generator"
@@ -319,7 +320,7 @@ static bool PrintJSONFieldName(TextLog * log,const char *fieldName){
     bool aok = TextLog_Quote(log,fieldName);
     
     if(aok){
-        TextLog_Puts(log,FIELD_VALUE_SEPARATOR);
+        TextLog_Puts(log,FIELD_NAME_VALUE_SEPARATOR);
     }
     return aok;
 }
@@ -373,6 +374,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             //LogTimeStamp(log, p); // CVS log
             if(!LogJSON_i64(log,JSON_TIMESTAMP_NAME,p->pkth->ts.tv_sec*1000 + p->pkth->ts.tv_usec/1000))
                 FatalError("Not enough buffer space to escape msg string\n");
+            if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
         }
         else if(!strncasecmp("sig_generator ",type,13))
         {
@@ -382,7 +385,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 //    (unsigned long) ntohl(((Unified2EventCommon *)event)->generator_id));
                 if(!LogJSON_i64(log,JSON_SIG_GENERATOR_NAME,ntohl(((Unified2EventCommon *)event)->generator_id)))
                     FatalError("Not enough buffer space to escape msg string\n");
-
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("sig_id",type,6))
@@ -393,6 +397,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 //    (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_id));
                 if(!LogJSON_i64(log,JSON_SIG_ID_NAME,ntohl(((Unified2EventCommon *)event)->signature_id)))
                     FatalError("Not enough buffer space to escape msg string\n");
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("sig_rev",type,7))
@@ -403,6 +409,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 //    (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_revision));
                 if(!LogJSON_i64(log,JSON_SIG_REV_NAME,ntohl(((Unified2EventCommon *)event)->signature_revision)))
                     FatalError("Not enough buffer space to escape msg string\n");
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("msg", type, 3))
@@ -419,6 +427,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                     {
                         FatalError("Not enough buffer space to escape msg string\n");
                     }
+                    if (num < numargs - 1)
+                        TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
                 }
             }
         }
@@ -441,6 +451,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                         LogJSON_a(log,JSON_PROTO_NAME,"ICMP");
                         break;
                 }
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("ethsrc", type, 6))
@@ -451,6 +463,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 TextLog_Print(log,  "%X:%X:%X:%X:%X:%X", p->eh->ether_src[0],
                     p->eh->ether_src[1], p->eh->ether_src[2], p->eh->ether_src[3],
                     p->eh->ether_src[4], p->eh->ether_src[5]);
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("ethdst", type, 6))
@@ -461,6 +475,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 TextLog_Print(log,  "%X:%X:%X:%X:%X:%X", p->eh->ether_dst[0],
                 p->eh->ether_dst[1], p->eh->ether_dst[2], p->eh->ether_dst[3],
                 p->eh->ether_dst[4], p->eh->ether_dst[5]);
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("ethtype", type, 7))
@@ -469,6 +485,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             {
                 PrintJSONFieldName(log,JSON_ETHTYPE_NAME);
                 TextLog_Print(log, "0x%X",ntohs(p->eh->ether_type));
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("udplength", type, 9))
@@ -476,6 +494,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(p->udph){
                 PrintJSONFieldName(log,JSON_UDPLENGTH_NAME);
                 TextLog_Print(log, "%d",ntohs(p->udph->uh_len));
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("ethlen", type, 6))
@@ -483,6 +503,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(p->eh){
                 PrintJSONFieldName(log,JSON_ETHLENGTH_NAME);
                 TextLog_Print(log, "0x%X",p->pkth->len);
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
 #ifndef NO_NON_ETHER_DECODER
@@ -491,6 +513,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(p->trh){
                 PrintJSONFieldName(log,JSON_TRHEADER_NAME);
                 LogTrHeader(log, p);
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
 #endif
@@ -504,6 +528,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                     case IPPROTO_TCP:
                         PrintJSONFieldName(log,JSON_SRCPORT_NAME);
                         TextLog_Print(log,  "%d", p->sp);
+                        if (num < numargs - 1)
+                            TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
                         break;
                 }
             }
@@ -518,6 +544,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                     case IPPROTO_TCP:
                         PrintJSONFieldName(log,JSON_DSTPORT_NAME);
                         TextLog_Print(log,  "%d", p->dp);
+                        if (num < numargs - 1)
+                            TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
                         break;
                 }
             }
@@ -527,6 +555,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(IPH_IS_VALID(p)){
                 PrintJSONFieldName(log,JSON_SRC_NAME);
                 TextLog_Puts(log, inet_ntoa(GET_SRC_ADDR(p)));
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("dst", type, 3))
@@ -534,6 +564,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(IPH_IS_VALID(p)){
                 PrintJSONFieldName(log,JSON_DST_NAME);
                 TextLog_Puts(log, inet_ntoa(GET_DST_ADDR(p)));
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("icmptype",type,8))
@@ -542,6 +574,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             {
                 PrintJSONFieldName(log,JSON_ICMPTYPE_NAME);
                 TextLog_Print(log, "%d",p->icmph->type);
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("icmpcode",type,8))
@@ -550,6 +584,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             {
                 PrintJSONFieldName(log,JSON_ICMPCODE_NAME);
                 TextLog_Print(log, "%d",p->icmph->code);
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("icmpid",type,6))
@@ -557,6 +593,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(p->icmph){
                 PrintJSONFieldName(log,JSON_ICMPID_NAME);
                 TextLog_Print(log, "%d",ntohs(p->icmph->s_icmp_id));
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("icmpseq",type,7))
@@ -564,6 +602,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(p->icmph){
                 PrintJSONFieldName(log,JSON_ICMPSEQ_NAME);
                 TextLog_Print(log, "%d",ntohs(p->icmph->s_icmp_seq));
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("ttl",type,3))
@@ -571,6 +611,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(IPH_IS_VALID(p)){
                 PrintJSONFieldName(log,JSON_TTL_NAME);
                 TextLog_Print(log, "%d",GET_IPH_TTL(p));
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("tos",type,3))
@@ -578,6 +620,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(IPH_IS_VALID(p)){
                 PrintJSONFieldName(log,JSON_TOS_NAME);
                 TextLog_Print(log, "%d",GET_IPH_TOS(p));
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("id",type,2))
@@ -585,6 +629,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(IPH_IS_VALID(p)){
                 PrintJSONFieldName(log,JSON_ID_NAME);
                 TextLog_Print(log, "%u", IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)));
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("iplen",type,5))
@@ -592,6 +638,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(IPH_IS_VALID(p)){
                 PrintJSONFieldName(log,JSON_IPLEN_NAME);
                 TextLog_Print(log, "%d",GET_IPH_LEN(p) << 2);
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("dgmlen",type,6))
@@ -600,6 +648,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 PrintJSONFieldName(log,JSON_DGMLEN_NAME);
                 // XXX might cause a bug when IPv6 is printed?
                 TextLog_Print(log, "%d",ntohs(GET_IPH_LEN(p)));
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("tcpseq",type,6))
@@ -607,6 +657,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(p->tcph){
                 PrintJSONFieldName(log,JSON_TCPSEQ_NAME);
                 TextLog_Print(log, "0x%lX",(u_long) ntohl(p->tcph->th_seq));
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("tcpack",type,6))
@@ -614,6 +666,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(p->tcph){
                 PrintJSONFieldName(log,JSON_TCPACK_NAME);
                 TextLog_Print(log, "0x%lX",(u_long) ntohl(p->tcph->th_ack));
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("tcplen",type,6))
@@ -621,6 +675,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(p->tcph){
                 PrintJSONFieldName(log,JSON_TCPLEN_NAME);
                 TextLog_Print(log, "%d",TCP_OFFSET(p->tcph) << 2);
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("tcpwindow",type,9))
@@ -628,6 +684,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(p->tcph){
                 PrintJSONFieldName(log,JSON_DST_NAME);
                 TextLog_Print(log, "0x%X",ntohs(p->tcph->th_win));
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("tcpflags",type,8))
@@ -637,13 +695,12 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 CreateTCPFlagString(p, tcpFlags);
                 PrintJSONFieldName(log,JSON_TCPFLAGS_NAME);
                 TextLog_Print(log, "%s", tcpFlags);
+                if (num < numargs - 1)
+                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
 
         DEBUG_WRAP(DebugMessage(DEBUG_LOG, "WOOT!\n"););
-
-        if (num < numargs - 1)
-            TextLog_Putc(log, ',');
 
     }
 

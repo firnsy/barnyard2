@@ -74,6 +74,10 @@
 #define DEFAULT_LIMIT (128*M_BYTES)
 #define LOG_BUFFER    (4*K_BYTES)
 
+ #define FIELD_VALUE_SEPARATOR ':'
+
+ #define JSON_TIMESTAMP_NAME "event_timestamp"
+
 typedef struct _AlertJSONConfig
 {
     char *type;
@@ -281,9 +285,14 @@ static void AlertJSON(Packet *p, void *event, uint32_t event_type, void *arg)
     RealAlertJSON(p, event, event_type, data->args, data->numargs, data->log);
 }
 
+static void LogJSON_i64(TextLog *log,const char *fieldName,uint64_t fieldValue){
+    TextLog_Quote(log,fieldName);
+    TextLog_Putc(log,FIELD_VALUE_SEPARATOR);
+    TextLog_Print(log,"%"PRIu64,fieldValue);
+}
+
 /*
- *
- * Function: RealAlertJSON(Packet *, char *, FILE *, char *, numargs const int)
+  * Function: RealAlertJSON(Packet *, char *, FILE *, char *, numargs const int)
  *
  * Purpose: Write a user defined JSON message
  *
@@ -308,6 +317,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
 
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Logging JSON Alert data\n"););
 
+    TextLog_Putc(log,'{');
     for (num = 0; num < numargs; num++)
     {
         type = args[num];
@@ -316,7 +326,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
 
         if(!strncasecmp("timestamp", type, 9))
         {
-            LogTimeStamp(log, p);
+            //LogTimeStamp(log, p); // CVS log
+            LogJSON_i64(log,JSON_TIMESTAMP_NAME,p->pkth->ts.tv_sec*1000 + p->pkth->ts.tv_usec/1000);
         }
         else if(!strncasecmp("sig_generator",type,13))
         {
@@ -540,7 +551,9 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             TextLog_Putc(log, ',');
 
     }
-    TextLog_NewLine(log);
+
+    TextLog_Putc(log,'}');
+    //TextLog_NewLine(log); // Newline not needed.
     TextLog_Flush(log);
 }
 

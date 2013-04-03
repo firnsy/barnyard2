@@ -74,9 +74,39 @@
 #define DEFAULT_LIMIT (128*M_BYTES)
 #define LOG_BUFFER    (4*K_BYTES)
 
- #define FIELD_VALUE_SEPARATOR ':'
+#define FIELD_VALUE_SEPARATOR ": "
 
- #define JSON_TIMESTAMP_NAME "event_timestamp"
+#define JSON_TIMESTAMP_NAME "event_timestamp"
+#define JSON_SIG_GENERATOR_NAME "sig_generator"
+#define JSON_SIG_ID_NAME "sig_id"
+#define JSON_SIG_REV_NAME "rev"
+#define JSON_MSG_NAME "msg"
+#define JSON_PROTO_NAME "proto"
+#define JSON_ETHSRC_NAME "ethsrc"
+#define JSON_ETHDST_NAME "ethdst"
+#define JSON_ETHTYPE_NAME "ethtype"
+#define JSON_UDPLENGTH_NAME "udplength"
+#define JSON_ETHLENGTH_NAME "ethlength"
+#define JSON_TRHEADER_NAME "trheader"
+#define JSON_SRCPORT_NAME "secport"
+#define JSON_DSTPORT_NAME "dstport"
+#define JSON_SRC_NAME "src"
+#define JSON_DST_NAME "dst"
+#define JSON_ICMPTYPE_NAME "icmptype"
+#define JSON_ICMPCODE_NAME "icmpcode"
+#define JSON_ICMPID_NAME "icmpid"
+#define JSON_ICMPSEQ_NAME "icmpseq"
+#define JSON_TTL_NAME "ttl"
+#define JSON_TOS_NAME "tos"
+#define JSON_ID_NAME "id"
+#define JSON_IPLEN_NAME "iplen"
+#define JSON_DGMLEN_NAME "dgmlen"
+#define JSON_TCPSEQ_NAME "tcpseq"
+#define JSON_TCPACK_NAME "tcpack"
+#define JSON_TCPLEN_NAME "tcplen"
+#define JSON_TCPFLAGS_NAME "tcpflags"
+
+
 
 typedef struct _AlertJSONConfig
 {
@@ -285,10 +315,24 @@ static void AlertJSON(Packet *p, void *event, uint32_t event_type, void *arg)
     RealAlertJSON(p, event, event_type, data->args, data->numargs, data->log);
 }
 
-static void LogJSON_i64(TextLog *log,const char *fieldName,uint64_t fieldValue){
-    TextLog_Quote(log,fieldName);
-    TextLog_Putc(log,FIELD_VALUE_SEPARATOR);
-    TextLog_Print(log,"%"PRIu64,fieldValue);
+static bool PrintJSONFieldName(TextLog * log,const char *fieldName){
+    bool aok = TextLog_Quote(log,fieldName);
+    
+    if(aok){
+        TextLog_Puts(log,FIELD_VALUE_SEPARATOR);
+    }
+    return aok;
+}
+
+static bool LogJSON_i64(TextLog *log,const char *fieldName,uint64_t fieldValue){
+    bool aok = PrintJSONFieldName(log,fieldName);
+    if(aok)
+        TextLog_Print(log,"%"PRIu64,fieldValue);
+    return aok;
+}
+
+static bool LogJSON_a(TextLog *log,const char *fieldName,const char *fieldValue){
+    return PrintJSONFieldName(log,fieldName) && TextLog_Quote(log,fieldValue);
 }
 
 /*
@@ -327,30 +371,38 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         if(!strncasecmp("timestamp", type, 9))
         {
             //LogTimeStamp(log, p); // CVS log
-            LogJSON_i64(log,JSON_TIMESTAMP_NAME,p->pkth->ts.tv_sec*1000 + p->pkth->ts.tv_usec/1000);
+            if(!LogJSON_i64(log,JSON_TIMESTAMP_NAME,p->pkth->ts.tv_sec*1000 + p->pkth->ts.tv_usec/1000))
+                FatalError("Not enough buffer space to escape msg string\n");
         }
-        else if(!strncasecmp("sig_generator",type,13))
+        else if(!strncasecmp("sig_generator ",type,13))
         {
             if(event != NULL)
             {
-                TextLog_Print(log, "%lu",
-                    (unsigned long) ntohl(((Unified2EventCommon *)event)->generator_id));
+                //TextLog_Print(log, "%lu",
+                //    (unsigned long) ntohl(((Unified2EventCommon *)event)->generator_id));
+                if(!LogJSON_i64(log,JSON_SIG_GENERATOR_NAME,ntohl(((Unified2EventCommon *)event)->generator_id)))
+                    FatalError("Not enough buffer space to escape msg string\n");
+
             }
         }
         else if(!strncasecmp("sig_id",type,6))
         {
             if(event != NULL)
             {
-                TextLog_Print(log, "%lu",
-                    (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_id));
+                //TextLog_Print(log, "%lu",
+                //    (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_id));
+                if(!LogJSON_i64(log,JSON_SIG_ID_NAME,ntohl(((Unified2EventCommon *)event)->signature_id)))
+                    FatalError("Not enough buffer space to escape msg string\n");
             }
         }
         else if(!strncasecmp("sig_rev",type,7))
         {
             if(event != NULL)
             {
-                TextLog_Print(log, "%lu",
-                    (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_revision));
+                //TextLog_Print(log, "%lu",
+                //    (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_revision));
+                if(!LogJSON_i64(log,JSON_SIG_REV_NAME,ntohl(((Unified2EventCommon *)event)->signature_revision)))
+                    FatalError("Not enough buffer space to escape msg string\n");
             }
         }
         else if(!strncasecmp("msg", type, 3))
@@ -363,7 +415,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
 
                 if (sn != NULL)
                 {
-                    if ( !TextLog_Quote(log, sn->msg) )
+                    if(!PrintJSONFieldName(log,JSON_MSG_NAME) && !TextLog_Quote(log, sn->msg) )
                     {
                         FatalError("Not enough buffer space to escape msg string\n");
                     }
@@ -377,13 +429,16 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 switch (GET_IPH_PROTO(p))
                 {
                     case IPPROTO_UDP:
-                        TextLog_Puts(log, "UDP");
+                        //TextLog_Puts(log, "UDP");
+                        LogJSON_a(log,JSON_PROTO_NAME,"UDP");
                         break;
                     case IPPROTO_TCP:
-                        TextLog_Puts(log, "TCP");
+                        //TextLog_Puts(log, "TCP");
+                        LogJSON_a(log,JSON_PROTO_NAME,"TCP");
                         break;
                     case IPPROTO_ICMP:
-                        TextLog_Puts(log, "ICMP");
+                        //TextLog_Puts(log, "ICMP");
+                        LogJSON_a(log,JSON_PROTO_NAME,"ICMP");
                         break;
                 }
             }
@@ -392,6 +447,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         {
             if(p->eh)
             {
+                PrintJSONFieldName(log,JSON_ETHSRC_NAME);
                 TextLog_Print(log,  "%X:%X:%X:%X:%X:%X", p->eh->ether_src[0],
                     p->eh->ether_src[1], p->eh->ether_src[2], p->eh->ether_src[3],
                     p->eh->ether_src[4], p->eh->ether_src[5]);
@@ -401,6 +457,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         {
             if(p->eh)
             {
+                PrintJSONFieldName(log,JSON_ETHDST_NAME);
                 TextLog_Print(log,  "%X:%X:%X:%X:%X:%X", p->eh->ether_dst[0],
                 p->eh->ether_dst[1], p->eh->ether_dst[2], p->eh->ether_dst[3],
                 p->eh->ether_dst[4], p->eh->ether_dst[5]);
@@ -410,24 +467,31 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         {
             if(p->eh)
             {
+                PrintJSONFieldName(log,JSON_ETHTYPE_NAME);
                 TextLog_Print(log, "0x%X",ntohs(p->eh->ether_type));
             }
         }
         else if(!strncasecmp("udplength", type, 9))
         {
-            if(p->udph)
+            if(p->udph){
+                PrintJSONFieldName(log,JSON_UDPLENGTH_NAME);
                 TextLog_Print(log, "%d",ntohs(p->udph->uh_len));
+            }
         }
         else if(!strncasecmp("ethlen", type, 6))
         {
-            if(p->eh)
+            if(p->eh){
+                PrintJSONFieldName(log,JSON_ETHLENGTH_NAME);
                 TextLog_Print(log, "0x%X",p->pkth->len);
+            }
         }
 #ifndef NO_NON_ETHER_DECODER
         else if(!strncasecmp("trheader", type, 8))
         {
-            if(p->trh)
+            if(p->trh){
+                PrintJSONFieldName(log,JSON_TRHEADER_NAME);
                 LogTrHeader(log, p);
+            }
         }
 #endif
         else if(!strncasecmp("srcport", type, 7))
@@ -438,6 +502,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 {
                     case IPPROTO_UDP:
                     case IPPROTO_TCP:
+                        PrintJSONFieldName(log,JSON_SRCPORT_NAME);
                         TextLog_Print(log,  "%d", p->sp);
                         break;
                 }
@@ -451,6 +516,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 {
                     case IPPROTO_UDP:
                     case IPPROTO_TCP:
+                        PrintJSONFieldName(log,JSON_DSTPORT_NAME);
                         TextLog_Print(log,  "%d", p->dp);
                         break;
                 }
@@ -458,89 +524,118 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         }
         else if(!strncasecmp("src", type, 3))
         {
-            if(IPH_IS_VALID(p))
+            if(IPH_IS_VALID(p)){
+                PrintJSONFieldName(log,JSON_SRC_NAME);
                 TextLog_Puts(log, inet_ntoa(GET_SRC_ADDR(p)));
+            }
         }
         else if(!strncasecmp("dst", type, 3))
         {
-            if(IPH_IS_VALID(p))
+            if(IPH_IS_VALID(p)){
+                PrintJSONFieldName(log,JSON_DST_NAME);
                 TextLog_Puts(log, inet_ntoa(GET_DST_ADDR(p)));
+            }
         }
         else if(!strncasecmp("icmptype",type,8))
         {
             if(p->icmph)
             {
-            TextLog_Print(log, "%d",p->icmph->type);
+                PrintJSONFieldName(log,JSON_ICMPTYPE_NAME);
+                TextLog_Print(log, "%d",p->icmph->type);
             }
         }
         else if(!strncasecmp("icmpcode",type,8))
         {
             if(p->icmph)
             {
+                PrintJSONFieldName(log,JSON_ICMPCODE_NAME);
                 TextLog_Print(log, "%d",p->icmph->code);
             }
         }
         else if(!strncasecmp("icmpid",type,6))
         {
-            if(p->icmph)
+            if(p->icmph){
+                PrintJSONFieldName(log,JSON_ICMPID_NAME);
                 TextLog_Print(log, "%d",ntohs(p->icmph->s_icmp_id));
+            }
         }
         else if(!strncasecmp("icmpseq",type,7))
         {
-            if(p->icmph)
+            if(p->icmph){
+                PrintJSONFieldName(log,JSON_ICMPSEQ_NAME);
                 TextLog_Print(log, "%d",ntohs(p->icmph->s_icmp_seq));
+            }
         }
         else if(!strncasecmp("ttl",type,3))
         {
-            if(IPH_IS_VALID(p))
-            TextLog_Print(log, "%d",GET_IPH_TTL(p));
+            if(IPH_IS_VALID(p)){
+                PrintJSONFieldName(log,JSON_TTL_NAME);
+                TextLog_Print(log, "%d",GET_IPH_TTL(p));
+            }
         }
         else if(!strncasecmp("tos",type,3))
         {
-            if(IPH_IS_VALID(p))
-            TextLog_Print(log, "%d",GET_IPH_TOS(p));
+            if(IPH_IS_VALID(p)){
+                PrintJSONFieldName(log,JSON_TOS_NAME);
+                TextLog_Print(log, "%d",GET_IPH_TOS(p));
+            }
         }
         else if(!strncasecmp("id",type,2))
         {
-            if(IPH_IS_VALID(p))
+            if(IPH_IS_VALID(p)){
+                PrintJSONFieldName(log,JSON_ID_NAME);
                 TextLog_Print(log, "%u", IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)));
+            }
         }
         else if(!strncasecmp("iplen",type,5))
         {
-            if(IPH_IS_VALID(p))
-            TextLog_Print(log, "%d",GET_IPH_LEN(p) << 2);
+            if(IPH_IS_VALID(p)){
+                PrintJSONFieldName(log,JSON_IPLEN_NAME);
+                TextLog_Print(log, "%d",GET_IPH_LEN(p) << 2);
+            }
         }
         else if(!strncasecmp("dgmlen",type,6))
         {
-            if(IPH_IS_VALID(p))
+            if(IPH_IS_VALID(p)){
+                PrintJSONFieldName(log,JSON_DGMLEN_NAME);
                 // XXX might cause a bug when IPv6 is printed?
                 TextLog_Print(log, "%d",ntohs(GET_IPH_LEN(p)));
+            }
         }
         else if(!strncasecmp("tcpseq",type,6))
         {
-            if(p->tcph)
-            TextLog_Print(log, "0x%lX",(u_long) ntohl(p->tcph->th_seq));
+            if(p->tcph){
+                PrintJSONFieldName(log,JSON_TCPSEQ_NAME);
+                TextLog_Print(log, "0x%lX",(u_long) ntohl(p->tcph->th_seq));
+            }
         }
         else if(!strncasecmp("tcpack",type,6))
             {
-            if(p->tcph)
+            if(p->tcph){
+                PrintJSONFieldName(log,JSON_TCPACK_NAME);
                 TextLog_Print(log, "0x%lX",(u_long) ntohl(p->tcph->th_ack));
+            }
         }
         else if(!strncasecmp("tcplen",type,6))
         {
-            if(p->tcph)
+            if(p->tcph){
+                PrintJSONFieldName(log,JSON_TCPLEN_NAME);
                 TextLog_Print(log, "%d",TCP_OFFSET(p->tcph) << 2);
+            }
         }
         else if(!strncasecmp("tcpwindow",type,9))
         {
-            if(p->tcph)
+            if(p->tcph){
+                PrintJSONFieldName(log,JSON_DST_NAME);
                 TextLog_Print(log, "0x%X",ntohs(p->tcph->th_win));
+            }
         }
         else if(!strncasecmp("tcpflags",type,8))
         {
             if(p->tcph)
             {
                 CreateTCPFlagString(p, tcpFlags);
+                PrintJSONFieldName(log,JSON_TCPFLAGS_NAME);
                 TextLog_Print(log, "%s", tcpFlags);
             }
         }
@@ -553,7 +648,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
     }
 
     TextLog_Putc(log,'}');
-    //TextLog_NewLine(log); // Newline not needed.
+    TextLog_NewLine(log); // Newline not needed.
     TextLog_Flush(log);
 }
 

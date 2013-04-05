@@ -8,7 +8,7 @@
 #
 # processname: barnyard2
 # config: /etc/sysconfig/barnyard2
-# config: /etc/snort/barnyard.conf
+# config: /etc/snort/barnyard2.conf
 # pidfile: /var/lock/subsys/barnyard2.pid
 
 source /etc/rc.d/init.d/functions
@@ -33,10 +33,10 @@ desc="Snort Output Processor"
 start() {
 	echo -n $"Starting $desc ($prog): "
 	for INT in $INTERFACES; do
-		PIDFILE="/var/lock/subsys/barnyard2-$INT.pid"
-		ARCHIVEDIR="$SNORTDIR/$INT/archive"
+		ARCHIVEDIR="$SNORTDIR/$INT/archive/"
+		mkdir -p $ARCHIVEDIR
 		WALDO_FILE="$SNORTDIR/$INT/barnyard2.waldo"
-		BARNYARD_OPTS="-D -c $CONF -d $SNORTDIR/${INT} -w $WALDO_FILE -L $SNORTDIR/${INT} -a $ARCHIVEDIR -f $LOG_FILE -X $PIDFILE $EXTRA_ARGS"
+		BARNYARD_OPTS="-D -c $CONF -i $INT -d $SNORTDIR/${INT}/ -w $WALDO_FILE -a $ARCHIVEDIR -f $LOG_FILE $EXTRA_ARGS"
 		daemon $prog $BARNYARD_OPTS
 	done
 	RETVAL=$?
@@ -47,7 +47,9 @@ start() {
 
 stop() {
 	echo -n $"Shutting down $desc ($prog): "
-	killproc $prog
+	for INT in $INTERFACES; do
+	  killproc "${prog}_${INT}"
+	done
 	RETVAL=$?
 	echo
 	[ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/$prog

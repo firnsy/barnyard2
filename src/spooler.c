@@ -380,6 +380,7 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
     int                 waiting_logged = 0;
     uint32_t            skipped = 0;
     uint32_t            extension = 0;
+    char                *archive_dir;
 
     u_int32_t waldo_timestamp = 0;
     waldo_timestamp = timestamp; /* fix possible bug by keeping invocated timestamp at the time of the initial call */
@@ -400,6 +401,8 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
 
         timestamp = extension;
     }
+
+    archive_dir = BcArchiveDir();
 
     /* Start the main process loop */
     while (exit_signal == 0)
@@ -486,9 +489,7 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
                             spooler->state, spooler->filepath);
 
 #ifndef WIN32
-                /* archive the spool file */
-                if (BcArchiveDir() != NULL)
-                    ArchiveFile(spooler->filepath, BcArchiveDir());
+                ArchiveFile(spooler->filepath, archive_dir);
 #endif
 
                 /* we've finished with the spooler so destroy and cleanup */
@@ -563,9 +564,7 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
                         break;
                 }
 
-                /* archive the file */
-                if (BcArchiveDir() != NULL)
-                    ArchiveFile(spooler->filepath, BcArchiveDir());
+                ArchiveFile(spooler->filepath, archive_dir);
 
                 /* close (ie. destroy and cleanup) the spooler so we can rotate */
                 spoolerClose(spooler);

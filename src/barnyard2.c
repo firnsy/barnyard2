@@ -491,7 +491,7 @@ static int ShowUsage(char *program_name)
     FPUTS_BOTH ("        -?         Show this information\n");
     FPUTS_BOTH ("\n");
     FPUTS_BOTH ("Continual Processing Options:\n");
-    FPUTS_UNIX ("        -a <dir>   Archive processed files to <dir>\n");
+    FPUTS_UNIX ("        -a <dir>   Archive processed files to <dir>, or remove if <dir> is empty\n");
     FPUTS_BOTH ("        -f <base>  Use <base> as the base filename pattern\n");
     FPUTS_BOTH ("        -d <dir>   Spool files from <dir>\n");
     FPUTS_BOTH ("        -n         Only process new events\n");

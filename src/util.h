@@ -210,7 +210,7 @@ char *StripPrefixDir(char *prefix, char *dir);
 
 void TimeStats(void);
 
-int ArchiveFile(const char *, const char *);
+void ArchiveFile(const char *, const char *);
 
 char *GetUniqueName(char *);
 char *GetIP(char *);

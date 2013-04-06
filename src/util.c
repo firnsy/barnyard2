@@ -1798,12 +1798,29 @@ int Move(const char *source, const char *dest)
     return 0;
 }
 
-int ArchiveFile(const char *filepath, const char *archive_dir)
+/****************************************************************************
+ *
+ * Function: ArchiveFile(const char *filepath, const char *archive_dir)
+ *
+ * Purpose: Move a processed file to the specified directory after processing.
+ *
+ * Arguments: const char *filepath - The file to move or delete
+ *            const char *archive_dir - The destination directory. If empty
+ *                                      file will be removed
+ *
+ ***************************************************************************/
+void ArchiveFile(const char *filepath, const char *archive_dir)
 {
     char *dest;
     size_t dest_len;
     if(!filepath || !archive_dir)
-        return -1;  /* Invalid argument */
+        return;  /* Invalid argument */
+
+    /* just remove the file if an empty string is given */
+    if (archive_dir[0] == '\0') {
+        unlink(filepath);
+        return;
+    }
 
     /* Archive the file */
     dest_len = strlen(archive_dir) + 1 + strlen(strrchr(filepath, '/') + 1);
@@ -1813,7 +1830,6 @@ int ArchiveFile(const char *filepath, const char *archive_dir)
 
     Move(filepath, dest);
     free(dest);
-    return 0;
 }
 
 /****************************************************************************

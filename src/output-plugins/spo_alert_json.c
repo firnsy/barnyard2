@@ -260,7 +260,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         switch (i)
         {
             case 0:
-                if ( !strncasecmp(tok, "stdout",strlen("stdout")) || !strncasecmp(tok, "kafka://",strlen("kafka://")))
+                if ( !strncasecmp(tok, "stdout",strlen("stdout")) || !strncasecmp(tok, KAFKA_PROT,strlen(KAFKA_PROT)))
                     filename = SnortStrdup(tok);
 
                 else
@@ -314,12 +314,23 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         DEBUG_INIT, "alert_json: '%s' '%s' %ld\n", filename, data->jsonargs, limit
     ););
 
-    const bool notfile = !strncasecmp(filename,"kafka://",strlen("kafka://"));
+    const bool notfile = !strncasecmp(filename,KAFKA_PROT,strlen(KAFKA_PROT));
     const bool stdout = notfile && !strncasecmp(filename,"stdout",strlen("stdout"));
-    const char * kafka_server = stdout?filename+strlen("stdout+") : filename; // must start with kafka://
+    const char * kafka_str = stdout?filename+strlen("stdout+") : filename; // must start with kafka://
     
-    if(!strncasecmp(kafka_server,"kafka://",strlen("kafka://")))
-        data->kafka = KafkaLog_Init(kafka_server+strlen("kafka://"),LOG_BUFFER, KAFKA_TOPIC,KAFKA_PARTITION);
+    
+    if(!strncasecmp(kafka_str,KAFKA_PROT,strlen(KAFKA_PROT))){
+        const char * at_char_pos = strchr(kafka_str,'@');
+        if(at_char_pos==NULL)
+            FatalError("alert_json: No topic specified, despite the fact a kafka server was given. Use kafka://broker@topic.");
+        const size_t broker_length = (at_char_pos-(kafka_str+strlen(KAFKA_PROT)));
+        char * kafka_server = malloc(sizeof(char)*(broker_length+1));
+        strncpy(kafka_server,kafka_str+strlen(KAFKA_PROT),broker_length);
+
+        data->kafka = KafkaLog_Init(kafka_server,LOG_BUFFER, at_char_pos+1,KAFKA_PARTITION);
+
+    }
+
     
     if(!notfile)
         data->log = TextLog_Init(stdout?"stdout":filename, LOG_BUFFER, limit);
@@ -729,7 +740,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(p->tcph){
                 LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
                 // PrintJSONFieldName(log,kafka,JSON_TCPSEQ_NAME);                          // hex format
-                // LogOrKafka_Print_M(log, kafka, "0x%lX",(u_long) ntohl(p->tcph->th_ack)); // hex format
+                // LogOrKafka_Print_M(log, kafka, "lX%0x",(u_long) ntohl(p->tcph->th_ack)); // hex format
                 LogJSON_i32(log,kafka,JSON_TCPSEQ_NAME,ntohl(p->tcph->th_seq));
             }
         }

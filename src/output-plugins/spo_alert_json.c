@@ -78,9 +78,10 @@
 #define LOG_BUFFER    (4*K_BYTES)
 
 #define KAFKA_PROT "kafka://"
-#define KAFKA_TOPIC "redBorderIPS"
 //#define KAFKA_TOPIC "rb_ips"
 #define KAFKA_PARTITION 0
+#define FILENAME_KAFKA_SEPARATOR '+'
+#define BROKER_TOPIC_SEPARATOR   '@'
 
 #define FIELD_NAME_VALUE_SEPARATOR ": "
 #define JSON_FIELDS_SEPARATOR ", "
@@ -97,7 +98,7 @@
 #define JSON_UDPLENGTH_NAME "udplength"
 #define JSON_ETHLENGTH_NAME "ethlength"
 #define JSON_TRHEADER_NAME "trheader"
-#define JSON_SRCPORT_NAME "secport"
+#define JSON_SRCPORT_NAME "srcport"
 #define JSON_DSTPORT_NAME "dstport"
 #define JSON_SRC_NAME "src"
 #define JSON_DST_NAME "dst"
@@ -314,13 +315,18 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         DEBUG_INIT, "alert_json: '%s' '%s' %ld\n", filename, data->jsonargs, limit
     ););
 
-    const bool notfile = !strncasecmp(filename,KAFKA_PROT,strlen(KAFKA_PROT));
-    const bool stdout = notfile && !strncasecmp(filename,"stdout",strlen("stdout"));
-    const char * kafka_str = stdout?filename+strlen("stdout+") : filename; // must start with kafka://
+    char * kafka_str = 0==strncasecmp(filename,KAFKA_PROT,strlen(KAFKA_PROT)) ? filename : NULL;
+    if(!kafka_str)
+        if((kafka_str = strchr(filename,FILENAME_KAFKA_SEPARATOR))){
+            *kafka_str = '\0'; // filename now ends here.
+            kafka_str++; // skip the '+'
+        }
+
+
     
     
-    if(!strncasecmp(kafka_str,KAFKA_PROT,strlen(KAFKA_PROT))){
-        const char * at_char_pos = strchr(kafka_str,'@');
+    if(kafka_str){
+        const char * at_char_pos = strchr(kafka_str,BROKER_TOPIC_SEPARATOR);
         if(at_char_pos==NULL)
             FatalError("alert_json: No topic specified, despite the fact a kafka server was given. Use kafka://broker@topic.");
         const size_t broker_length = (at_char_pos-(kafka_str+strlen(KAFKA_PROT)));
@@ -332,8 +338,8 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     }
 
     
-    if(!notfile)
-        data->log = TextLog_Init(stdout?"stdout":filename, LOG_BUFFER, limit);
+    if(strncasecmp(filename,KAFKA_PROT,strlen(KAFKA_PROT))!=0)
+        data->log = TextLog_Init(filename, LOG_BUFFER, limit);
     
     if ( filename ) free(filename);
 
@@ -376,54 +382,34 @@ static void AlertJSON(Packet *p, void *event, uint32_t event_type, void *arg)
     RealAlertJSON(p, event, event_type, data->args, data->numargs, data->log,data->kafka);
 }
 
-static bool PrintJSONFieldName(TextLog * log,KafkaLog * kafka,const char *fieldName){
-    bool aok = LogOrKafka_Quote(log,kafka,fieldName);
-
-    if(aok){
-        LogOrKafka_Puts(log,kafka,FIELD_NAME_VALUE_SEPARATOR);
-    }
-    return aok;
+static bool inline PrintJSONFieldName(TextLog * log,KafkaLog * kafka,const char *fieldName){
+    return LogOrKafka_Quote(log,kafka,fieldName) && LogOrKafka_Puts(log,kafka,FIELD_NAME_VALUE_SEPARATOR);
 }
 
-static bool LogJSON_i64(TextLog *log,KafkaLog * kafka,const char *fieldName,uint64_t fieldValue){
+static bool inline LogJSON_int(TextLog *log,KafkaLog * kafka, const char * fieldName,uint64_t fieldValue,char * fmt){
     bool aok = PrintJSONFieldName(log,kafka,fieldName);
-    if(aok){
-        if(log)
-            TextLog_Print(log,"%"PRIu64,fieldValue);
-        if(kafka)
-            KafkaLog_Print(kafka,"%"PRIu64,fieldValue);
-    }
+    if(aok)
+        aok = (log?TextLog_Print(log,fmt,fieldValue):1) && (kafka?KafkaLog_Print(kafka,fmt,fieldValue):1);
     return aok;
 }
 
-static bool LogJSON_i32(TextLog *log,KafkaLog * kafka,const char *fieldName,uint32_t fieldValue){
-    bool aok = PrintJSONFieldName(log,kafka,fieldName);
-    if(aok){
-        if(log)
-            TextLog_Print(log,"%"PRIu32,fieldValue);
-        if(kafka)
-            KafkaLog_Print(kafka,"%"PRIu32,fieldValue);
-    }
-    return aok;
+static bool inline LogJSON_i64(TextLog *log,KafkaLog * kafka,const char *fieldName,uint64_t fieldValue){
+    return LogJSON_int(log,kafka,fieldName,fieldValue,"%"PRIu64);
 }
 
-static bool LogJSON_i16(TextLog *log,KafkaLog * kafka,const char *fieldName,uint16_t fieldValue){
-    bool aok = PrintJSONFieldName(log,kafka,fieldName);
-    if(aok){
-        if(log)
-            TextLog_Print(log,"%"PRIu16,fieldValue);
-        if(kafka)
-            KafkaLog_Print(kafka,"%"PRIu16,fieldValue);
-    }
-    return aok;
+static bool inline LogJSON_i32(TextLog *log,KafkaLog * kafka,const char *fieldName,uint32_t fieldValue){
+    return LogJSON_int(log,kafka,fieldName,fieldValue,"%"PRIu32);
 }
 
-static bool LogJSON_a(TextLog *log,KafkaLog *kafka,const char *fieldName,const char *fieldValue){
+static bool inline LogJSON_i16(TextLog *log,KafkaLog * kafka,const char *fieldName,uint16_t fieldValue){
+    return LogJSON_int(log,kafka,fieldName,fieldValue,"%"PRIu16);
+}
+
+static bool inline LogJSON_a(TextLog *log,KafkaLog *kafka,const char *fieldName,const char *fieldValue){
     bool aok = 1;
-    if(aok && log)
-        aok= PrintJSONFieldName(log,kafka,fieldName) && TextLog_Quote(log,fieldValue);
-    if(aok && kafka)
-        aok = PrintJSONFieldName(log,kafka,fieldName) && KafkaLog_Quote(kafka,fieldValue);
+    if(aok) aok = LogOrKafka_Quote(log,kafka,fieldName);
+    if(aok) aok = LogOrKafka_Puts(log,kafka,FIELD_NAME_VALUE_SEPARATOR);
+    if(aok) aok = LogOrKafka_Quote(log,kafka,fieldValue);
     return aok;
 }
 
@@ -651,7 +637,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                     PrintJSONFieldName(log,kafka,JSON_DST_NAME);
                     LogOrKafka_Puts(log,kafka, inet_ntoa(GET_DST_ADDR(p)));
                 */
-                LogJSON_i32(log,kafka,JSON_SRC_NAME,ntohl(GET_SRC_ADDR(p).s_addr));
+                LogJSON_i32(log,kafka,JSON_DST_NAME,ntohl(GET_DST_ADDR(p).s_addr));
             }
         }
         else if(!strncasecmp("icmptype",type,8))
@@ -711,12 +697,15 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         {
             if(IPH_IS_VALID(p)){
                 LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
-                PrintJSONFieldName(log,kafka,JSON_ID_NAME);
+                /*
+		PrintJSONFieldName(log,kafka,JSON_ID_NAME);
                 if(log)
                     TextLog_Print(log, "%u", IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)));
-                else
+                if(kafka)
                     KafkaLog_Print(kafka,"%u", IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)));
-            }
+		*/
+		LogJSON_i16(log,kafka,JSON_ID_NAME,IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)));
+            } 
         }
         else if(!strncasecmp("iplen",type,5))
         {
@@ -789,7 +778,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         TextLog_Putc(log,'}');
         TextLog_NewLine(log);
         TextLog_Flush(log);
-    }else{
+		}
+    if(kafka){
         KafkaLog_Putc(kafka,'}');
         //KafkaLog_NewLine(kafka); // Newline not needed.
         KafkaLog_Flush(kafka);

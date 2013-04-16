@@ -65,8 +65,11 @@
 #include "barnyard2.h"
 
 #include "sfutil/sf_textlog.h"
+#include "sfutil/sf_kafka.h"
+#include "signal.h"
 #include "log_text.h"
 #include "ipv6_port.h"
+
 
 #define DEFAULT_JSON "timestamp,sig_generator,sig_id,sig_rev,msg,proto,src,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcpln,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
@@ -74,8 +77,13 @@
 #define DEFAULT_LIMIT (128*M_BYTES)
 #define LOG_BUFFER    (4*K_BYTES)
 
+#define KAFKA_PROT "kafka://"
+#define KAFKA_TOPIC "redBorderIPS"
+//#define KAFKA_TOPIC "rb_ips"
+#define KAFKA_PARTITION 0
+
 #define FIELD_NAME_VALUE_SEPARATOR ": "
-#define JSON_FIELDS_SEPARATOR ","
+#define JSON_FIELDS_SEPARATOR ", "
 
 #define JSON_TIMESTAMP_NAME "event_timestamp"
 #define JSON_SIG_GENERATOR_NAME "sig_generator"
@@ -108,7 +116,6 @@
 #define JSON_TCPFLAGS_NAME "tcpflags"
 
 
-
 typedef struct _AlertJSONConfig
 {
     char *type;
@@ -118,12 +125,38 @@ typedef struct _AlertJSONConfig
 typedef struct _AlertJSONData
 {
     TextLog* log;
+    KafkaLog * kafka;
     char * jsonargs;
     char ** args;
     int numargs;
     AlertJSONConfig *config;
 } AlertJSONData;
 
+
+// ## before ##__VA_ARGS__ will erase the comma if needed.
+#define LogOrKafka_Print_M(log,kafka,fmt, ...) \
+    do{\
+        if(log)\
+            TextLog_Print(log,  fmt, ##__VA_ARGS__);\
+        if(kafka)\
+            KafkaLog_Print(kafka,  fmt, ##__VA_ARGS__);\
+    }while(0) 
+
+static inline bool LogOrKafka_Putc(TextLog * log,KafkaLog * kafka,const char c){
+    return (log?TextLog_Putc(log,c):1) && (kafka?KafkaLog_Putc(kafka,c):1);
+}
+
+static inline bool LogOrKafka_Puts(TextLog * log,KafkaLog * kafka,const char *c){
+    return (log?TextLog_Puts(log,c):1) && (kafka?KafkaLog_Puts(kafka,c):1);
+}
+
+static inline bool LogOrKafka_Quote(TextLog * log,KafkaLog * kafka,const char * msg){
+    return (log?TextLog_Quote(log, msg):1) && (kafka?KafkaLog_Quote(kafka,msg):1);
+}
+
+static inline int LogOrKafka_Flush(TextLog * log,KafkaLog * kafka){
+    return (log?TextLog_Flush(log):1) && (kafka?KafkaLog_Flush(kafka):1);
+}
 
 /* list of function prototypes for this preprocessor */
 static void AlertJSONInit(char *);
@@ -132,7 +165,7 @@ static void AlertJSON(Packet *, void *, uint32_t, void *);
 static void AlertJSONCleanExit(int, void *);
 static void AlertRestart(int, void *);
 static void RealAlertJSON(
-    Packet*, void*, uint32_t, char **args, int numargs, TextLog*
+    Packet*, void*, uint32_t, char **args, int numargs, TextLog*,KafkaLog *
 );
 
 /*
@@ -172,6 +205,9 @@ static void AlertJSONInit(char *args)
 {
     AlertJSONData *data;
     DEBUG_WRAP(DebugMessage(DEBUG_INIT, "Output: JSON Initialized\n"););
+    DEBUG_WRAP(DebugMessage(DEBUG_INIT, "Output: Disabling SIGPIPE signal\n"););
+
+    signal(SIGPIPE,SIG_IGN);
 
     /* parse the argument list from the rules file */
     data = AlertJSONParseArgs(args);
@@ -224,7 +260,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         switch (i)
         {
             case 0:
-                if ( !strcasecmp(tok, "stdout") )
+                if ( !strncasecmp(tok, "stdout",strlen("stdout")) || !strncasecmp(tok, "kafka://",strlen("kafka://")))
                     filename = SnortStrdup(tok);
 
                 else
@@ -277,7 +313,17 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     DEBUG_WRAP(DebugMessage(
         DEBUG_INIT, "alert_json: '%s' '%s' %ld\n", filename, data->jsonargs, limit
     ););
-    data->log = TextLog_Init(filename, LOG_BUFFER, limit);
+
+    const bool notfile = !strncasecmp(filename,"kafka://",strlen("kafka://"));
+    const bool stdout = notfile && !strncasecmp(filename,"stdout",strlen("stdout"));
+    const char * kafka_server = stdout?filename+strlen("stdout+") : filename; // must start with kafka://
+    
+    if(!strncasecmp(kafka_server,"kafka://",strlen("kafka://")))
+        data->kafka = KafkaLog_Init(kafka_server+strlen("kafka://"),LOG_BUFFER, KAFKA_TOPIC,KAFKA_PARTITION);
+    
+    if(!notfile)
+        data->log = TextLog_Init(stdout?"stdout":filename, LOG_BUFFER, limit);
+    
     if ( filename ) free(filename);
 
     return data;
@@ -292,7 +338,10 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
     if(data)
     {
         mSplitFree(&data->args, data->numargs);
-        if (data->log) TextLog_Term(data->log);
+        if (data->log) 
+            TextLog_Term(data->log);
+        if(data->kafka)
+            KafkaLog_Term(data->kafka);
         free(data->jsonargs);
         /* free memory from SpoJSONData */
         free(data);
@@ -313,28 +362,60 @@ static void AlertRestart(int signal, void *arg)
 static void AlertJSON(Packet *p, void *event, uint32_t event_type, void *arg)
 {
     AlertJSONData *data = (AlertJSONData *)arg;
-    RealAlertJSON(p, event, event_type, data->args, data->numargs, data->log);
+    RealAlertJSON(p, event, event_type, data->args, data->numargs, data->log,data->kafka);
 }
 
-static bool PrintJSONFieldName(TextLog * log,const char *fieldName){
-    bool aok = TextLog_Quote(log,fieldName);
-    
+static bool PrintJSONFieldName(TextLog * log,KafkaLog * kafka,const char *fieldName){
+    bool aok = LogOrKafka_Quote(log,kafka,fieldName);
+
     if(aok){
-        TextLog_Puts(log,FIELD_NAME_VALUE_SEPARATOR);
+        LogOrKafka_Puts(log,kafka,FIELD_NAME_VALUE_SEPARATOR);
     }
     return aok;
 }
 
-static bool LogJSON_i64(TextLog *log,const char *fieldName,uint64_t fieldValue){
-    bool aok = PrintJSONFieldName(log,fieldName);
-    if(aok)
-        TextLog_Print(log,"%"PRIu64,fieldValue);
+static bool LogJSON_i64(TextLog *log,KafkaLog * kafka,const char *fieldName,uint64_t fieldValue){
+    bool aok = PrintJSONFieldName(log,kafka,fieldName);
+    if(aok){
+        if(log)
+            TextLog_Print(log,"%"PRIu64,fieldValue);
+        if(kafka)
+            KafkaLog_Print(kafka,"%"PRIu64,fieldValue);
+    }
     return aok;
 }
 
-static bool LogJSON_a(TextLog *log,const char *fieldName,const char *fieldValue){
-    return PrintJSONFieldName(log,fieldName) && TextLog_Quote(log,fieldValue);
+static bool LogJSON_i32(TextLog *log,KafkaLog * kafka,const char *fieldName,uint32_t fieldValue){
+    bool aok = PrintJSONFieldName(log,kafka,fieldName);
+    if(aok){
+        if(log)
+            TextLog_Print(log,"%"PRIu32,fieldValue);
+        if(kafka)
+            KafkaLog_Print(kafka,"%"PRIu32,fieldValue);
+    }
+    return aok;
 }
+
+static bool LogJSON_i16(TextLog *log,KafkaLog * kafka,const char *fieldName,uint16_t fieldValue){
+    bool aok = PrintJSONFieldName(log,kafka,fieldName);
+    if(aok){
+        if(log)
+            TextLog_Print(log,"%"PRIu16,fieldValue);
+        if(kafka)
+            KafkaLog_Print(kafka,"%"PRIu16,fieldValue);
+    }
+    return aok;
+}
+
+static bool LogJSON_a(TextLog *log,KafkaLog *kafka,const char *fieldName,const char *fieldValue){
+    bool aok = 1;
+    if(aok && log)
+        aok= PrintJSONFieldName(log,kafka,fieldName) && TextLog_Quote(log,fieldValue);
+    if(aok && kafka)
+        aok = PrintJSONFieldName(log,kafka,fieldName) && KafkaLog_Quote(kafka,fieldValue);
+    return aok;
+}
+
 
 /*
   * Function: RealAlertJSON(Packet *, char *, FILE *, char *, numargs const int)
@@ -350,7 +431,7 @@ static bool LogJSON_a(TextLog *log,const char *fieldName,const char *fieldValue)
  *
  */
 static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
-        char **args, int numargs, TextLog* log)
+        char **args, int numargs, TextLog* log,KafkaLog * kafka)
 {
     int num;
     SigNode             *sn;
@@ -361,8 +442,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         return;
 
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Logging JSON Alert data\n"););
-
-    TextLog_Putc(log,'{');
+    LogOrKafka_Putc(log,kafka,'{');
     for (num = 0; num < numargs; num++)
     {
         type = args[num];
@@ -371,11 +451,10 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
 
         if(!strncasecmp("timestamp", type, 9))
         {
+            // LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR" "); // Commented cause timestamp will be the first forever
             //LogTimeStamp(log, p); // CVS log
-            if(!LogJSON_i64(log,JSON_TIMESTAMP_NAME,p->pkth->ts.tv_sec*1000 + p->pkth->ts.tv_usec/1000))
+            if(!LogJSON_i64(log,kafka,JSON_TIMESTAMP_NAME,p->pkth->ts.tv_sec*1000 + p->pkth->ts.tv_usec/1000))
                 FatalError("Not enough buffer space to escape msg string\n");
-            if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
         }
         else if(!strncasecmp("sig_generator ",type,13))
         {
@@ -383,10 +462,10 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             {
                 //TextLog_Print(log, "%lu",
                 //    (unsigned long) ntohl(((Unified2EventCommon *)event)->generator_id));
-                if(!LogJSON_i64(log,JSON_SIG_GENERATOR_NAME,ntohl(((Unified2EventCommon *)event)->generator_id)))
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR" ");
+                if(!LogJSON_i64(log,kafka,JSON_SIG_GENERATOR_NAME,ntohl(((Unified2EventCommon *)event)->generator_id)))
                     FatalError("Not enough buffer space to escape msg string\n");
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                    
             }
         }
         else if(!strncasecmp("sig_id",type,6))
@@ -395,10 +474,9 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             {
                 //TextLog_Print(log, "%lu",
                 //    (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_id));
-                if(!LogJSON_i64(log,JSON_SIG_ID_NAME,ntohl(((Unified2EventCommon *)event)->signature_id)))
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                if(!LogJSON_i64(log,kafka,JSON_SIG_ID_NAME,ntohl(((Unified2EventCommon *)event)->signature_id)))
                     FatalError("Not enough buffer space to escape msg string\n");
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("sig_rev",type,7))
@@ -407,10 +485,9 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             {
                 //TextLog_Print(log, "%lu",
                 //    (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_revision));
-                if(!LogJSON_i64(log,JSON_SIG_REV_NAME,ntohl(((Unified2EventCommon *)event)->signature_revision)))
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                if(!LogJSON_i64(log,kafka,JSON_SIG_REV_NAME,ntohl(((Unified2EventCommon *)event)->signature_revision)))
                     FatalError("Not enough buffer space to escape msg string\n");
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("msg", type, 3))
@@ -423,12 +500,12 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
 
                 if (sn != NULL)
                 {
-                    if(!PrintJSONFieldName(log,JSON_MSG_NAME) && !TextLog_Quote(log, sn->msg) )
+                    LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                    //const int msglen = strlen(sn->msg);
+                    if(!LogJSON_a(log,kafka,JSON_MSG_NAME,sn->msg))
                     {
                         FatalError("Not enough buffer space to escape msg string\n");
                     }
-                    if (num < numargs - 1)
-                        TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
                 }
             }
         }
@@ -436,88 +513,82 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         {
             if(IPH_IS_VALID(p))
             {
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
                 switch (GET_IPH_PROTO(p))
                 {
                     case IPPROTO_UDP:
                         //TextLog_Puts(log, "UDP");
-                        LogJSON_a(log,JSON_PROTO_NAME,"UDP");
+                        LogJSON_a(log,kafka,JSON_PROTO_NAME,"UDP");
                         break;
                     case IPPROTO_TCP:
                         //TextLog_Puts(log, "TCP");
-                        LogJSON_a(log,JSON_PROTO_NAME,"TCP");
+                        LogJSON_a(log,kafka,JSON_PROTO_NAME,"TCP");
                         break;
                     case IPPROTO_ICMP:
                         //TextLog_Puts(log, "ICMP");
-                        LogJSON_a(log,JSON_PROTO_NAME,"ICMP");
+                        LogJSON_a(log,kafka,JSON_PROTO_NAME,"ICMP");
                         break;
                 }
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("ethsrc", type, 6))
         {
             if(p->eh)
             {
-                PrintJSONFieldName(log,JSON_ETHSRC_NAME);
-                TextLog_Print(log,  "%X:%X:%X:%X:%X:%X", p->eh->ether_src[0],
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_ETHSRC_NAME);
+                LogOrKafka_Print_M(log, kafka, "\"%X:%X:%X:%X:%X:%X\"", p->eh->ether_src[0],
                     p->eh->ether_src[1], p->eh->ether_src[2], p->eh->ether_src[3],
                     p->eh->ether_src[4], p->eh->ether_src[5]);
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("ethdst", type, 6))
         {
             if(p->eh)
             {
-                PrintJSONFieldName(log,JSON_ETHDST_NAME);
-                TextLog_Print(log,  "%X:%X:%X:%X:%X:%X", p->eh->ether_dst[0],
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_ETHDST_NAME);
+                LogOrKafka_Print_M(log, kafka, "\"%X:%X:%X:%X:%X:%X\"", p->eh->ether_dst[0],
                 p->eh->ether_dst[1], p->eh->ether_dst[2], p->eh->ether_dst[3],
                 p->eh->ether_dst[4], p->eh->ether_dst[5]);
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
             }
         }
         else if(!strncasecmp("ethtype", type, 7))
         {
             if(p->eh)
             {
-                PrintJSONFieldName(log,JSON_ETHTYPE_NAME);
-                TextLog_Print(log, "0x%X",ntohs(p->eh->ether_type));
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_ETHTYPE_NAME);
+                LogOrKafka_Print_M(log, kafka, "%"PRIu16,ntohs(p->eh->ether_type));
             }
         }
         else if(!strncasecmp("udplength", type, 9))
         {
             if(p->udph){
-                PrintJSONFieldName(log,JSON_UDPLENGTH_NAME);
-                TextLog_Print(log, "%d",ntohs(p->udph->uh_len));
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_UDPLENGTH_NAME);
+                LogOrKafka_Print_M(log, kafka, "%"PRIu16,ntohs(p->udph->uh_len));
             }
         }
         else if(!strncasecmp("ethlen", type, 6))
         {
             if(p->eh){
-                PrintJSONFieldName(log,JSON_ETHLENGTH_NAME);
-                TextLog_Print(log, "0x%X",p->pkth->len);
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_ETHLENGTH_NAME);
+                LogOrKafka_Print_M(log, kafka, "%"PRIu16,p->pkth->len);
             }
         }
 #ifndef NO_NON_ETHER_DECODER
         else if(!strncasecmp("trheader", type, 8))
         {
             if(p->trh){
-                PrintJSONFieldName(log,JSON_TRHEADER_NAME);
-                LogTrHeader(log, p);
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_TRHEADER_NAME);
+                if(log) LogTrHeader(log, p);
             }
         }
 #endif
+
         else if(!strncasecmp("srcport", type, 7))
         {
             if(IPH_IS_VALID(p))
@@ -526,10 +597,9 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 {
                     case IPPROTO_UDP:
                     case IPPROTO_TCP:
-                        PrintJSONFieldName(log,JSON_SRCPORT_NAME);
-                        TextLog_Print(log,  "%d", p->sp);
-                        if (num < numargs - 1)
-                            TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                        LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                        PrintJSONFieldName(log,kafka,JSON_SRCPORT_NAME);
+                        LogOrKafka_Print_M(log, kafka, "%d", p->sp);
                         break;
                 }
             }
@@ -542,10 +612,9 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 {
                     case IPPROTO_UDP:
                     case IPPROTO_TCP:
-                        PrintJSONFieldName(log,JSON_DSTPORT_NAME);
-                        TextLog_Print(log,  "%d", p->dp);
-                        if (num < numargs - 1)
-                            TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                        LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                        PrintJSONFieldName(log,kafka,JSON_DSTPORT_NAME);
+                        LogOrKafka_Print_M(log, kafka,  "%d", p->dp);
                         break;
                 }
             }
@@ -553,159 +622,166 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         else if(!strncasecmp("src", type, 3))
         {
             if(IPH_IS_VALID(p)){
-                PrintJSONFieldName(log,JSON_SRC_NAME);
-                TextLog_Puts(log, inet_ntoa(GET_SRC_ADDR(p)));
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                /*
+                    String version
+                    PrintJSONFieldName(log,kafka,JSON_SRC_NAME);
+                    LogOrKafka_Quote(log,kafka, inet_ntoa(GET_SRC_ADDR(p))); 
+                */
+                LogJSON_i32(log,kafka,JSON_SRC_NAME,ntohl(GET_SRC_ADDR(p).s_addr));
             }
         }
         else if(!strncasecmp("dst", type, 3))
         {
             if(IPH_IS_VALID(p)){
-                PrintJSONFieldName(log,JSON_DST_NAME);
-                TextLog_Puts(log, inet_ntoa(GET_DST_ADDR(p)));
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                /*
+                    String version
+                    PrintJSONFieldName(log,kafka,JSON_DST_NAME);
+                    LogOrKafka_Puts(log,kafka, inet_ntoa(GET_DST_ADDR(p)));
+                */
+                LogJSON_i32(log,kafka,JSON_SRC_NAME,ntohl(GET_SRC_ADDR(p).s_addr));
             }
         }
         else if(!strncasecmp("icmptype",type,8))
         {
             if(p->icmph)
             {
-                PrintJSONFieldName(log,JSON_ICMPTYPE_NAME);
-                TextLog_Print(log, "%d",p->icmph->type);
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_ICMPTYPE_NAME);
+                LogOrKafka_Print_M(log, kafka, "%d",p->icmph->type);
             }
         }
         else if(!strncasecmp("icmpcode",type,8))
         {
             if(p->icmph)
             {
-                PrintJSONFieldName(log,JSON_ICMPCODE_NAME);
-                TextLog_Print(log, "%d",p->icmph->code);
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_ICMPCODE_NAME);
+                LogOrKafka_Print_M(log, kafka, "%d",p->icmph->code);
             }
         }
         else if(!strncasecmp("icmpid",type,6))
         {
             if(p->icmph){
-                PrintJSONFieldName(log,JSON_ICMPID_NAME);
-                TextLog_Print(log, "%d",ntohs(p->icmph->s_icmp_id));
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_ICMPID_NAME);
+                LogOrKafka_Print_M(log, kafka, "%d",ntohs(p->icmph->s_icmp_id));
             }
         }
         else if(!strncasecmp("icmpseq",type,7))
         {
             if(p->icmph){
-                PrintJSONFieldName(log,JSON_ICMPSEQ_NAME);
-                TextLog_Print(log, "%d",ntohs(p->icmph->s_icmp_seq));
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                /* Doesn't work because "%d" arbitrary
+                    PrintJSONFieldName(log,kafka,JSON_ICMPSEQ_NAME);
+                    LogOrKafka_Print_M(log, kafka, "%d",ntohs(p->icmph->s_icmp_seq));
+                */
+                LogJSON_i16(log,kafka,JSON_ICMPSEQ_NAME,ntohs(p->icmph->s_icmp_seq));
             }
         }
         else if(!strncasecmp("ttl",type,3))
         {
             if(IPH_IS_VALID(p)){
-                PrintJSONFieldName(log,JSON_TTL_NAME);
-                TextLog_Print(log, "%d",GET_IPH_TTL(p));
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_TTL_NAME);
+                LogOrKafka_Print_M(log, kafka, "%d",GET_IPH_TTL(p));
             }
         }
         else if(!strncasecmp("tos",type,3))
         {
             if(IPH_IS_VALID(p)){
-                PrintJSONFieldName(log,JSON_TOS_NAME);
-                TextLog_Print(log, "%d",GET_IPH_TOS(p));
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_TOS_NAME);
+                LogOrKafka_Print_M(log, kafka, "%d",GET_IPH_TOS(p));
             }
         }
         else if(!strncasecmp("id",type,2))
         {
             if(IPH_IS_VALID(p)){
-                PrintJSONFieldName(log,JSON_ID_NAME);
-                TextLog_Print(log, "%u", IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)));
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_ID_NAME);
+                if(log)
+                    TextLog_Print(log, "%u", IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)));
+                else
+                    KafkaLog_Print(kafka,"%u", IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)));
             }
         }
         else if(!strncasecmp("iplen",type,5))
         {
             if(IPH_IS_VALID(p)){
-                PrintJSONFieldName(log,JSON_IPLEN_NAME);
-                TextLog_Print(log, "%d",GET_IPH_LEN(p) << 2);
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_IPLEN_NAME);
+                LogOrKafka_Print_M(log, kafka, "%d",GET_IPH_LEN(p) << 2);
             }
         }
         else if(!strncasecmp("dgmlen",type,6))
         {
             if(IPH_IS_VALID(p)){
-                PrintJSONFieldName(log,JSON_DGMLEN_NAME);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_DGMLEN_NAME);
                 // XXX might cause a bug when IPv6 is printed?
-                TextLog_Print(log, "%d",ntohs(GET_IPH_LEN(p)));
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Print_M(log, kafka, "%d",ntohs(GET_IPH_LEN(p)));
             }
         }
         else if(!strncasecmp("tcpseq",type,6))
         {
             if(p->tcph){
-                PrintJSONFieldName(log,JSON_TCPSEQ_NAME);
-                TextLog_Print(log, "0x%lX",(u_long) ntohl(p->tcph->th_seq));
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                // PrintJSONFieldName(log,kafka,JSON_TCPSEQ_NAME);                          // hex format
+                // LogOrKafka_Print_M(log, kafka, "0x%lX",(u_long) ntohl(p->tcph->th_ack)); // hex format
+                LogJSON_i32(log,kafka,JSON_TCPSEQ_NAME,ntohl(p->tcph->th_seq));
             }
         }
         else if(!strncasecmp("tcpack",type,6))
             {
             if(p->tcph){
-                PrintJSONFieldName(log,JSON_TCPACK_NAME);
-                TextLog_Print(log, "0x%lX",(u_long) ntohl(p->tcph->th_ack));
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                // PrintJSONFieldName(log,kafka,JSON_TCPACK_NAME);
+                // LogOrKafka_Print_M(log, kafka, "0x%lX",(u_long) ntohl(p->tcph->th_ack));
+                LogJSON_i32(log,kafka,JSON_TCPSEQ_NAME,ntohl(p->tcph->th_ack));
             }
         }
+
         else if(!strncasecmp("tcplen",type,6))
         {
             if(p->tcph){
-                PrintJSONFieldName(log,JSON_TCPLEN_NAME);
-                TextLog_Print(log, "%d",TCP_OFFSET(p->tcph) << 2);
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_TCPLEN_NAME);
+                LogOrKafka_Print_M(log, kafka, "%d",TCP_OFFSET(p->tcph) << 2);
             }
         }
         else if(!strncasecmp("tcpwindow",type,9))
         {
             if(p->tcph){
-                PrintJSONFieldName(log,JSON_DST_NAME);
-                TextLog_Print(log, "0x%X",ntohs(p->tcph->th_win));
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                //PrintJSONFieldName(log,kafka,JSON_DST_NAME);                    // hex format
+                //LogOrKafka_Print_M(log, kafka, "0x%X",ntohs(p->tcph->th_win));  // hex format
+                LogJSON_i16(log,kafka,JSON_TCPSEQ_NAME,ntohs(p->tcph->th_win));
             }
         }
         else if(!strncasecmp("tcpflags",type,8))
         {
             if(p->tcph)
             {
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
                 CreateTCPFlagString(p, tcpFlags);
-                PrintJSONFieldName(log,JSON_TCPFLAGS_NAME);
-                TextLog_Print(log, "%s", tcpFlags);
-                if (num < numargs - 1)
-                    TextLog_Puts(log, JSON_FIELDS_SEPARATOR);
+                PrintJSONFieldName(log,kafka,JSON_TCPFLAGS_NAME);
+                LogOrKafka_Quote(log, kafka, tcpFlags);
             }
         }
-
         DEBUG_WRAP(DebugMessage(DEBUG_LOG, "WOOT!\n"););
 
     }
 
-    TextLog_Putc(log,'}');
-    TextLog_NewLine(log); // Newline not needed.
-    TextLog_Flush(log);
+    if(log){
+        TextLog_Putc(log,'}');
+        TextLog_NewLine(log);
+        TextLog_Flush(log);
+    }else{
+        KafkaLog_Putc(kafka,'}');
+        //KafkaLog_NewLine(kafka); // Newline not needed.
+        KafkaLog_Flush(kafka);
+    }
 }
 

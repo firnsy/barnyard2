@@ -29,9 +29,12 @@ unified2.h \
 util.c util.h
 
 barnyard2_LDADD = output-plugins/libspo.a \
-output-plugins/librdkafka.a \
 input-plugins/libspi.a \
-sfutil/libsfutil.a 
+sfutil/libsfutil.a \
+sfutil/kafka/librdkafka.a \
+-lpthread\
+-lz -lrt
+
 
 SUBDIRS = sfutil output-plugins input-plugins
 

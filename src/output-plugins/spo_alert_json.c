@@ -114,6 +114,7 @@
 #define JSON_TCPSEQ_NAME "tcpseq"
 #define JSON_TCPACK_NAME "tcpack"
 #define JSON_TCPLEN_NAME "tcplen"
+#define JSON_TCPWINDOW_NAME "tcpwindow"
 #define JSON_TCPFLAGS_NAME "tcpflags"
 
 
@@ -333,8 +334,12 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         char * kafka_server = malloc(sizeof(char)*(broker_length+1));
         strncpy(kafka_server,kafka_str+strlen(KAFKA_PROT),broker_length);
 
-        data->kafka = KafkaLog_Init(kafka_server,LOG_BUFFER, at_char_pos+1,KAFKA_PARTITION);
+        /*
+         * In DaemonMode(), kafka must start in another function, because, in daemon mode, Barnyard2Main will execute this 
+         * function, will do a fork() and then, in the child process, will call RealAlertJSON, that will not be able to 
+         * send kafka data*/
 
+        data->kafka = KafkaLog_Init(kafka_server,LOG_BUFFER, at_char_pos+1,KAFKA_PARTITION,BcDaemonMode()?0:1);
     }
 
     
@@ -739,7 +744,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
                 // PrintJSONFieldName(log,kafka,JSON_TCPACK_NAME);
                 // LogOrKafka_Print_M(log, kafka, "0x%lX",(u_long) ntohl(p->tcph->th_ack));
-                LogJSON_i32(log,kafka,JSON_TCPSEQ_NAME,ntohl(p->tcph->th_ack));
+                LogJSON_i32(log,kafka,JSON_TCPACK_NAME,ntohl(p->tcph->th_ack));
             }
         }
 
@@ -755,9 +760,9 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         {
             if(p->tcph){
                 LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
-                //PrintJSONFieldName(log,kafka,JSON_DST_NAME);                    // hex format
+                //PrintJSONFieldName(log,kafka,JSON_TCPWINDOW_NAME);                    // hex format
                 //LogOrKafka_Print_M(log, kafka, "0x%X",ntohs(p->tcph->th_win));  // hex format
-                LogJSON_i16(log,kafka,JSON_TCPSEQ_NAME,ntohs(p->tcph->th_win));
+                LogJSON_i16(log,kafka,JSON_TCPWINDOW_NAME,ntohs(p->tcph->th_win));
             }
         }
         else if(!strncasecmp("tcpflags",type,8))

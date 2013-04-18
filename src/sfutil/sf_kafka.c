@@ -37,6 +37,8 @@
 #include "log.h"
 #include "util.h"
 
+#include "barnyard2.h"
+
 /* some reasonable minimums */
 #define MIN_BUF  (1*K_BYTES)
 #define MIN_FILE (MIN_BUF)
@@ -47,7 +49,7 @@
  * TextLog_Open/Close: open/close associated log file
  *-------------------------------------------------------------------
  */
-static rd_kafka_t* KafkaLog_Open (const char* name)
+rd_kafka_t* KafkaLog_Open (const char* name)
 {
     if ( !name ) return NULL;
     rd_kafka_t * kafka_handle = rd_kafka_new(RD_KAFKA_PRODUCER, name, NULL);
@@ -89,10 +91,12 @@ static size_t KafkaLog_Size (rd_kafka_t* file)
 
 /*-------------------------------------------------------------------
  * KafkaLog_Init: constructor
+ * If open=1, will create kafka handler. If not, KafkaLog->handler returned from this function
+ * will be null
  *-------------------------------------------------------------------
  */
 KafkaLog* KafkaLog_Init (
-    const char* broker, unsigned int maxBuf, const char * topic, const int partition
+    const char* broker, unsigned int maxBuf, const char * topic, const int partition, bool open
 ) {
     KafkaLog* this;
 
@@ -104,7 +108,7 @@ KafkaLog* KafkaLog_Init (
     }
     this->broker = broker ? SnortStrdup(broker) : NULL;
     this->topic = topic ? SnortStrdup(topic) : NULL;
-    this->handler = KafkaLog_Open(this->broker);
+    this->handler = open ? KafkaLog_Open(this->broker):NULL;
 
     this->maxBuf = maxBuf;
     KafkaLog_Reset(this);
@@ -147,6 +151,10 @@ bool KafkaLog_Flush(KafkaLog* this)
 
     memcpy(this->auxbuf,this->buf,this->pos);
 
+    // In daemon mode, we must start the handler here
+    if(this->handler==NULL && BcDaemonMode()){
+        this->handler = KafkaLog_Open(this->broker);
+    }
     rd_kafka_produce(this->handler, this->topic, 0, 0, this->auxbuf, this->pos);
 
     /* on stdout flush after printing to avoid lags in output */

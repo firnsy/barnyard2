@@ -89,7 +89,7 @@ typedef struct _KafkaLog
 } KafkaLog;
 
 KafkaLog* KafkaLog_Init (
-    const char* broker, unsigned int maxBuf, const char * topic, const int partition
+    const char* broker, unsigned int maxBuf, const char * topic, const int partition, bool open
 );
 void KafkaLog_Term (KafkaLog* this);
 

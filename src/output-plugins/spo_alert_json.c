@@ -75,7 +75,7 @@
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_LIMIT (128*M_BYTES)
-#define LOG_BUFFER    (4*K_BYTES)
+#define LOG_BUFFER    (30*K_BYTES)
 
 #define KAFKA_PROT "kafka://"
 //#define KAFKA_TOPIC "rb_ips"

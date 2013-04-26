@@ -193,10 +193,14 @@ SpoAlertUnixSockData *ParseAlertUnixSockArgs(char *args)
                 break;
         }
     }
-    if ( !filename ) filename = UNSOCK_FILE;
+    
+    if ( !filename )
+    { 
+	filename = strdup(UNSOCK_FILE);
+    }
 
     data->filename = ProcessFileOption(barnyard2_conf_for_parsing, filename);
-
+    
     mSplitFree(&toks, num_toks);
 
     DEBUG_WRAP(DebugMessage(
@@ -375,6 +379,17 @@ void AlertUnixSockCleanExit(int signal, void *arg)
     SpoAlertUnixSockData *data = (SpoAlertUnixSockData *)arg;
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"AlertUnixSockCleanExitFunc\n"););
     CloseAlertSock(data);
+
+    if(data->filename)
+    {
+	free(data->filename);
+    }
+
+    if(data)
+    {
+	free(data);
+    }
+
 }
 
 void AlertUnixSockRestart(int signal, void *arg) 
@@ -382,6 +397,17 @@ void AlertUnixSockRestart(int signal, void *arg)
     SpoAlertUnixSockData *data = (SpoAlertUnixSockData *)arg;
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"AlertUnixSockRestartFunc\n"););
     CloseAlertSock(data);
+
+    if(data->filename)
+    {
+	free(data->filename);
+    }
+
+    if(data)
+    {
+	free(data);
+    }
+
 }
 
 void CloseAlertSock(SpoAlertUnixSockData *data)

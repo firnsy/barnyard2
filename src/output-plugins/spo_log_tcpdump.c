@@ -566,7 +566,7 @@ static void SpoLogTcpdumpCleanup(int signal, void *arg, const char* msg)
         free (data->filename);
     }
 
-    bzero(data, sizeof(LogTcpdumpData));
+    memset(data,'\0',sizeof(LogTcpdumpData));
     free(data);
 }
 

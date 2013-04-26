@@ -1298,35 +1298,11 @@ static void ParseConfig(Barnyard2Config *bc, char *args)
 
     if (num_toks > 1)
     {
-        /* Dup the opts because we're putting into hash table */
+  
         opts = SnortStrdup(toks[1]);
         DEBUG_WRAP(DebugMessage(DEBUG_CONFIGRULES,"Args: %s\n", opts););
     }
-/*
-    switch (sfghash_add(bc->config_table, toks[0], opts))
-    {
-        case SFGHASH_NOMEM:
-            FatalError("%s(%d) No memory to add entry to config table.\n",
-                       __FILE__, __LINE__);
-            break;
 
-        case SFGHASH_INTABLE:
-        */
-            /* Only reference and classifications are likely dup candidates
-             * right now and we're not too worried about keeping track of
-             * all of them */
-/*          if (opts != NULL)
-            {
-                free(opts);
-                opts = toks[1];
-            }
-
-            break;
-
-        default:
-            break;
-    }
-*/
     for (i = 0; config_opts[i].name != NULL; i++)
     {
         if (strcasecmp(toks[0], config_opts[i].name) == 0)
@@ -1359,6 +1335,12 @@ static void ParseConfig(Barnyard2Config *bc, char *args)
     }
 
     mSplitFree(&toks, num_toks);
+
+    if(opts)
+    {
+	free(opts);
+    }
+
 }
 
 /*

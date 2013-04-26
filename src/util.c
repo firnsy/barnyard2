@@ -593,7 +593,8 @@ NORETURN void FatalError(const char *format,...)
 #endif
     }
 
-    exit(1);
+    CleanExit(1);
+    
 }
 
 
@@ -1020,6 +1021,13 @@ void CleanupProtoNames(void)
             protocol_names[i] = NULL;
         }
     }
+
+    if(protocol_names)
+    {
+	free(protocol_names);
+	protocol_names = NULL;
+    }
+
 }
 
  /****************************************************************************
@@ -1080,9 +1088,9 @@ void GoDaemon(void)
 {
 #ifndef WIN32
     int exit_val = 0;
-	int ret = 0;
+    int ret = 0;
     pid_t fs;
-
+    
     LogMessage("Initializing daemon mode\n");
 
     if (BcDaemonRestart())
@@ -1181,7 +1189,6 @@ void GoDaemon(void)
     ret = dup(0);  /* stderr, fd 0 => fd 2 */
 
     SignalWaitingParent();
-
 #endif /* ! WIN32 */
 }
 

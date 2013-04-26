@@ -162,6 +162,8 @@ Spooler *spoolerOpen(const char *dirpath, const char *filename, uint32_t extensi
     /* create the spooler structure and allocate all memory */
     spooler = (Spooler *)SnortAlloc(sizeof(Spooler));
 
+    RegisterSpooler(spooler);
+
     /* allocate some extra structures required (ie. Packet) */
 
     spooler->fd = -1;
@@ -180,6 +182,7 @@ Spooler *spoolerOpen(const char *dirpath, const char *filename, uint32_t extensi
     /* sanity check the filepath */
     if (ret != SNORT_SNPRINTF_SUCCESS)
     {
+	UnRegisterSpooler(spooler);
         spoolerClose(spooler);
         FatalError("spooler: filepath too long!\n");
     }
@@ -193,6 +196,7 @@ Spooler *spoolerOpen(const char *dirpath, const char *filename, uint32_t extensi
     {
         LogMessage("ERROR: Unable to open log spool file '%s' (%s)\n", 
                     spooler->filepath, strerror(errno));
+	UnRegisterSpooler(spooler);
         spoolerClose(spooler);
         spooler = NULL;
         return NULL;
@@ -205,6 +209,7 @@ Spooler *spoolerOpen(const char *dirpath, const char *filename, uint32_t extensi
 
     if (spooler->ifn == NULL)
     {
+	UnRegisterSpooler(spooler);
         spoolerClose(spooler);
         spooler = NULL;
         FatalError("ERROR: No suitable input plugin found!\n");
@@ -233,6 +238,51 @@ int spoolerClose(Spooler *spooler)
 
     return 0;
 }
+
+void RegisterSpooler(Spooler *spooler)
+{
+    Barnyard2Config *bc =  BcGetConfig();
+    
+    if(!bc)
+	return;
+    
+    
+    if(bc->spooler)
+    {
+	/* XXX */
+	FatalError("[%s()], can't register spooler. \n",
+		   __FUNCTION__);
+    }
+    else
+    {
+	bc->spooler = spooler;
+    }
+    
+    return;
+}
+
+void UnRegisterSpooler(Spooler *spooler)
+{
+    Barnyard2Config *bc =  BcGetConfig();
+
+    if(!bc)
+	return;
+    
+    if(bc->spooler != spooler)
+    {
+	/* XXX */
+	FatalError("[%s()], can't un-register spooler. \n",
+		   __FUNCTION__);
+    }
+    else
+    {
+	bc->spooler = NULL;
+    }
+
+    return;
+}
+
+
 
 int spoolerReadRecordHeader(Spooler *spooler)
 {
@@ -315,6 +365,9 @@ int ProcessBatch(const char *dirpath, const char *filename)
 
     while (exit_signal == 0 && pb_ret == 0)
     {
+	/* for SIGUSR1 / dropstats */
+	SignalCheck();
+	
         switch (spooler->state)
         {
             case SPOOLER_STATE_OPENED:
@@ -404,6 +457,9 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
     /* Start the main process loop */
     while (exit_signal == 0)
     {
+	/* for SIGUSR1 / dropstats */
+	SignalCheck();
+
         /* no spooler exists so let's create one */
         if (spooler == NULL)
         {
@@ -492,6 +548,7 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
 #endif
 
                 /* we've finished with the spooler so destroy and cleanup */
+		UnRegisterSpooler(spooler);
                 spoolerClose(spooler);
                 spooler = NULL;
 
@@ -568,6 +625,7 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
                     ArchiveFile(spooler->filepath, BcArchiveDir());
 
                 /* close (ie. destroy and cleanup) the spooler so we can rotate */
+		UnRegisterSpooler(spooler);
                 spoolerClose(spooler);
                 spooler = NULL;
 
@@ -608,8 +666,8 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
 
     /* close waldo if appropriate */
     if(barnyard2_conf)
-	spoolerCloseWaldo(&barnyard2_conf->waldo);
-
+    	spoolerCloseWaldo(&barnyard2_conf->waldo);
+    
     return pc_ret;
 }
 
@@ -918,6 +976,36 @@ int spoolerEventCacheClean(Spooler *spooler)
     return 0;
 }
 
+void spoolerEventCacheFlush(Spooler *spooler)
+{
+    EventRecordNode *next_ptr = NULL;
+    EventRecordNode *evt_ptr = NULL;
+    
+    if (spooler == NULL || spooler->event_cache == NULL )
+        return;
+    
+    evt_ptr = spooler->event_cache;
+    
+    while(evt_ptr != NULL)
+    {
+	next_ptr = evt_ptr->next;
+	
+	if(evt_ptr->data)
+	{
+	    free(evt_ptr->data);
+	    evt_ptr->data = NULL;
+	}
+	
+	free(evt_ptr);
+
+	evt_ptr = next_ptr;
+    }
+    
+    spooler->event_cache = NULL;
+    
+    return;
+}
+
 
 void spoolerFreeRecord(Record *record)
 {
@@ -925,6 +1013,7 @@ void spoolerFreeRecord(Record *record)
     {
         free(record->data);
     }
+
 
     record->data = NULL;
 }
@@ -996,13 +1085,17 @@ int spoolerOpenWaldo(Waldo *waldo, uint8_t mode)
 */
 int spoolerCloseWaldo(Waldo *waldo)
 {
-
+    if(waldo == NULL)
+	return WALDO_STRUCT_EMPTY;
+    
     /* check we have a valid file descriptor */
     if (waldo->state & WALDO_STATE_OPEN)
         return WALDO_FILE_EOPEN;
     
     /* close the file */
-    close(waldo->fd);
+    if(waldo->fd > 0)
+	close(waldo->fd);
+
     waldo->fd = -1;
 
     /* reset open state and mode */

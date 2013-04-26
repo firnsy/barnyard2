@@ -81,6 +81,7 @@ extern OutputConfigFuncNode *output_config_funcs;
 extern PluginSignalFuncNode *plugin_shutdown_funcs;
 extern PluginSignalFuncNode *plugin_clean_exit_funcs;
 extern PluginSignalFuncNode *plugin_restart_funcs;
+
 extern InputFuncNode  *InputList;
 extern OutputFuncNode *AlertList;
 extern OutputFuncNode *LogList;
@@ -97,7 +98,6 @@ InputFuncNode *InputList;
 void RegisterInputPlugins()
 {
     LogMessage("Initializing Input Plugins!\n");
-    
     Unified2Setup();
 }
 
@@ -199,6 +199,7 @@ void RegisterInputPlugin(char *keyword, InputConfigFunc func)
 
     node2->keyword = SnortStrdup(keyword);
 }
+
 
 InputConfigFunc GetInputConfigFunc(char *keyword)
 {
@@ -323,7 +324,7 @@ static void AppendOutputFuncList(OutputFunc, void *, OutputFuncNode **);
 void RegisterOutputPlugins(void)
 {
     LogMessage("Initializing Output Plugins!\n");
-
+    
     AlertCEFSetup();
     AlertSyslogSetup();
 
@@ -467,7 +468,60 @@ void FreeOutputConfigFuncs(void)
         free(head);
         head = tmp;
     }
+
+    output_config_funcs = NULL;
 }
+
+
+void FreeInputPlugins(void)
+{
+
+    InputConfigFuncNode *tmp = input_config_funcs;
+    InputConfigFuncNode *next = NULL;
+
+    InputFuncNode *tmp2 = InputList;
+    InputFuncNode *next2 = NULL;
+    
+    while(tmp != NULL)
+    {
+	next = tmp->next;
+
+	if(tmp->keyword != NULL)
+	{
+	    free(tmp->keyword);
+	    tmp->keyword = NULL;
+	}
+	
+       	free(tmp);
+	tmp = next;
+    }
+    
+
+    while(tmp2 != NULL)
+    {
+	next2 =tmp2->next;
+	
+	if( tmp2->keyword != NULL)
+	{
+	    free(tmp2->keyword);
+	    tmp2->keyword = NULL;
+	}
+
+	if( tmp2->arg != NULL)
+	{
+	    free(tmp2->arg);
+	    tmp2->arg = NULL;
+	}
+
+	free(tmp2);
+	tmp2 = next2;
+    }
+    
+    input_config_funcs = NULL;
+    InputList = NULL;
+    return;
+}
+
 
 void FreeOutputList(OutputFuncNode *list)
 {
@@ -482,6 +536,7 @@ void FreeOutputList(OutputFuncNode *list)
 	    free(tmp);
 	}
     }
+
 }
 
 /****************************************************************************
@@ -732,6 +787,7 @@ void AddFuncToSignalList(PluginSignalFunc func, void *arg, PluginSignalFuncNode 
     node->func = func;
     node->arg = arg;
 }
+
 
 void FreePluginSigFuncs(PluginSignalFuncNode *head)
 {

@@ -1168,15 +1168,15 @@ cat <<EOF
 
  The MySQL client version you are using does not by default reconnect to the
  server if the connection is lost and does not have the option to configure
- this for the client.  Snort, for security reasons, erases the connection
+ this for the client.  Barnyard2, for security reasons, erases the connection
  password from memory, so it cannot explicity reconnect at runtime.  Please
  update your version of MySQL to 5.0.13 or greater or you risk connections
- timing out because of inactivity resulting in the inablilty of Snort to write
+ timing out because of inactivity resulting in the inablilty of Barnyard2 to write
  alerts to the database.  If you can't upgrade, try setting the 'wait-timeout'
  configuration parameter to the maximum value possible in the @<:@mysqld@:>@
  section of my.cnf, e.g. wait-timeout=31536000.  This should give you a good
  year of inactivity before the server terminates the connection ... if your
- network is this clean, you probably don't need to use Snort.
+ network is this clean, you probably don't need to use Barnyard2.
 
 ********************************************************************************
 

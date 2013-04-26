@@ -236,12 +236,15 @@ int Unified2ReadRecord(void *sph)
 void Unified2CleanExitFunc(int signal, void *arg)
 {
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Unified2CleanExitFunc\n"););
+    return;
 }
 
 void Unified2RestartFunc(int signal, void *arg)
 {
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Unified2RestartFunc\n"););
+    return;
 }
+
 
 #ifdef DEBUG
 void Unified2PrintEventCommonRecord(Unified2EventCommon *evt)

@@ -98,7 +98,7 @@ typedef struct _Spooler
     void                    *header;    // header of input file
 
     Record                  record;     // data of current Record
-
+    
     EventRecordNode         *event_cache; // linked list of cached events
     uint32_t                events_cached;
 
@@ -130,6 +130,12 @@ int ProcessBatch(const char *, const char *);
 int ProcessWaldoFile(const char *);
 
 int spoolerReadWaldo(Waldo *);
+void spoolerEventCacheFlush(Spooler *);
+void RegisterSpooler(Spooler *);
+void UnRegisterSpooler(Spooler *);
+
+int spoolerCloseWaldo(Waldo *);
+int spoolerClose(Spooler *);
 
 #endif /* __SPOOLER_H__ */
 

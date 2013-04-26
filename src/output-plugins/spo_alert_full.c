@@ -329,8 +329,15 @@ static void AlertFullCleanup(int signal, void *arg, const char* msg)
     DEBUG_WRAP(DebugMessage(DEBUG_LOG, "%s\n", msg););
 
     /* free memory from SpoAlertFullData */
-    if ( data->log ) TextLog_Term(data->log);
-    free(data);
+    if ( data->log ) 
+    {
+	TextLog_Term(data->log);
+    }
+    
+    if(data)
+	free(data);
+    
+    return;
 }
 
 static void AlertFullCleanExit(int signal, void *arg)

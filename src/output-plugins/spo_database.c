@@ -60,7 +60,7 @@ static const char* FATAL_NO_SENSOR_2 =
 
 static const char* FATAL_BAD_SCHEMA_1 =
     "database: The underlying database has not been initialized correctly.  This\n"
-    "          version of Snort requires version %d of the DB schema.  Your DB\n"
+    "          version of barnyard2 requires version %d of the DB schema.  Your DB\n"
     "          doesn't appear to have any records in the 'schema' table.\n%s";
 
 static const char* FATAL_BAD_SCHEMA_2 =
@@ -74,8 +74,8 @@ static const char* FATAL_OLD_SCHEMA_1 =
     "database: The underlying database seems to be running an older version of\n"
     "          the DB schema (current version=%d, required minimum version= %d).\n\n"
     "          If you have an existing database with events logged by a previous\n"
-    "          version of snort, this database must first be upgraded to the latest\n"
-    "          schema (see the snort-users mailing list archive or DB plugin\n"
+    "          version of barnyard2, this database must first be upgraded to the latest\n"
+    "          schema (see the barnyard2-users mailing list archive or DB plugin\n"
     "          documention for details).\n%s\n";
 
 static const char* FATAL_OLD_SCHEMA_2 =
@@ -87,10 +87,10 @@ static const char* FATAL_OLD_SCHEMA_2 =
     "          and the URL to the most recent database plugin documentation.\n";
 
 static const char* FATAL_NO_SUPPORT_1 =
-    "If this build of snort was obtained as a binary distribution (e.g., rpm,\n"
+    "If this build of barnyard2 was obtained as a binary distribution (e.g., rpm,\n"
     "or Windows), then check for alternate builds that contains the necessary\n"
     "'%s' support.\n\n"
-    "If this build of snort was compiled by you, then re-run the\n"
+    "If this build of barnyard2 was compiled by you, then re-run the\n"
     "the ./configure script using the '--with-%s' switch.\n"
     "For non-standard installations of a database, the '--with-%s=DIR'\n%s";
 
@@ -4029,6 +4029,7 @@ void Connect(DatabaseData * data)
         if(PQstatus(data->p_connection) == CONNECTION_BAD)
         {
             PQfinish(data->p_connection);
+	    data->p_connection = NULL;
             FatalError("database Connection to database '%s' failed\n", data->dbname);
         }
 	break;
@@ -4322,6 +4323,7 @@ void Disconnect(DatabaseData * data)
 	if(data->p_connection)
 	{
 	    PQfinish(data->p_connection);
+	    data->p_connection = NULL;
 	}
     break;
     
@@ -4471,34 +4473,36 @@ void SpoDatabaseCleanExitFunction(int signal, void *arg)
 	    }
 	    
 	}
-    	
+	
 	resetTransactionState(&data->dbRH[data->dbtype_id]);
 	
 	MasterCacheFlush(data,CACHE_FLUSH_ALL);    
 	
 	SQL_Finalize(data);
 	
-	UpdateLastCid(data, data->sid, ((data->cid)-1));
+	if( !(data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
+	{
+	    UpdateLastCid(data, data->sid, ((data->cid)-1));
+	}
 	
 	Disconnect(data);
-    }
-	
-    if(data->SQL_INSERT != NULL)
-    {
-	free(data->SQL_INSERT);
+
+	if(data->SQL_INSERT != NULL)
+	{
+	    free(data->SQL_INSERT);
 	    data->SQL_INSERT = NULL;
-    }
-    
-    if(data->SQL_SELECT != NULL)
-    {
-	free(data->SQL_SELECT);
-	data->SQL_SELECT = NULL;
-    }
-    
-    free(data->args);
-    free(data);
+	}
+	
+	if(data->SQL_SELECT != NULL)
+	{
+	    free(data->SQL_SELECT);
+	    data->SQL_SELECT = NULL;
+	}
+	
+	free(data->args);
+	free(data);
 	data = NULL;
-    
+    }
 
     return;
 }
@@ -5091,7 +5095,7 @@ u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH)
     DatabaseData *data = NULL;
     
     int PQpingRet = 0;
-
+    
     if( (pdbRH == NULL) ||
         (pdbRH->dbdata == NULL))
     {
@@ -5133,7 +5137,11 @@ conn_test:
                 setTransactionState(pdbRH);
             }
 
-            PQreset(data->p_connection);
+	    if(data->p_connection)
+	    {
+		PQfinish(data->p_connection);
+		data->p_connection = NULL;
+	    }
             break;
         }
 #endif
@@ -5163,7 +5171,11 @@ conn_test:
 	    }
 
 	    /* Changed PQreset by call to PQfinish and PQdbLogin */
-	    PQfinish(data->p_connection);
+	    if(data->p_connection)
+	    {
+		PQfinish(data->p_connection);
+		data->p_connection = NULL;
+	    }
 
 	    if (data->use_ssl == 1)
 	    {

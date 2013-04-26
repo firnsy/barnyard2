@@ -687,16 +687,16 @@ void snort_alert_prelude(Packet *p, void *event, u_int32_t event_type, void *dat
 static void snort_alert_prelude_clean_exit(int signal, void *data)
 
 {
-        /*
-         * A Snort sensor reporting to Prelude shall never go offline,
-         * which is why we use PRELUDE_CLIENT_EXIT_STATUS_FAILURE.
-         */
-        prelude_client_destroy(data, PRELUDE_CLIENT_EXIT_STATUS_FAILURE);
-
-        /*
-         * Free libprelude relevant data and synchronize asynchronous thread.
-         */
-        prelude_deinit();
+    /*
+     * A Snort sensor reporting to Prelude shall never go offline,
+     * which is why we use PRELUDE_CLIENT_EXIT_STATUS_FAILURE.
+     */
+    prelude_client_destroy(data, PRELUDE_CLIENT_EXIT_STATUS_FAILURE);
+    
+    /*
+     * Free libprelude relevant data and synchronize asynchronous thread.
+     */
+    prelude_deinit();
 }
 
 

@@ -572,6 +572,8 @@ void AlertCEFCleanExit(int signal, void *arg)
     /* free memory from SyslogData */
     if(data)
         free(data);
+
+    closelog();
 }
 
 void AlertCEFRestart(int signal, void *arg)
@@ -581,5 +583,7 @@ void AlertCEFRestart(int signal, void *arg)
     /* free memory from SyslogData */
     if(data)
         free(data);
+
+    closelog();
 }
 

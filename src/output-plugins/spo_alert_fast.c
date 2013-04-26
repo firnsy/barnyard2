@@ -408,10 +408,17 @@ static void AlertFastCleanup(int signal, void *arg, const char* msg)
 {
     SpoAlertFastData *data = (SpoAlertFastData *)arg;
     DEBUG_WRAP(DebugMessage(DEBUG_LOG, "%s\n", msg););
-
+    
     /*free memory from SpoAlertFastData */
-    if ( data->log ) TextLog_Term(data->log);
-    free(data);
+    if ( data->log ) 
+    {
+	TextLog_Term(data->log);
+    }
+    
+    if(data)
+	free(data);
+
+    return;
 }
 
 static void AlertFastCleanExitFunc(int signal, void *arg)

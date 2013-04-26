@@ -21,17 +21,8 @@
 
 /*
  *
- * Program: Snort
- *
- * Purpose: Check out the README file for info on what you can do
- *          with Snort.
- *
- * Author: Martin Roesch (roesch@clark.net)
- *
- * Comments: Ideas and code stolen liberally from Mike Borella's IP Grab
- *           program. Check out his stuff at http://www.borella.net.  I
- *           also have ripped some util functions from TCPdump, plus Mike's
- *           prog is derived from it as well.  All hail TCPdump....
+ * Program: barnyard2
+ * Alot of code borrowed from snort. (all credit due)
  *
  */
 
@@ -120,11 +111,13 @@ typedef enum _GetOptArgType
 
 } GetOptArgType;
 
-
 /* Globals ********************************************************************/
 PacketCount pc;  /* packet count information */
+
+unsigned short stat_dropped = 0;
 uint32_t *netmasks = NULL;   /* precalculated netmask array */
 char **protocol_names = NULL;
+
 char *barnyard2_conf_file = NULL;   /* -c */
 char *barnyard2_conf_dir = NULL;
 
@@ -137,12 +130,10 @@ static struct timeval endtime;
 VarNode *cmd_line_var_list = NULL;
 
 int exit_signal = 0;
+
 static int usr_signal = 0;
-
 static volatile int hup_signal = 0;
-
 volatile int barnyard2_initializing = 1;
-static volatile int barnyard2_exiting = 0;
 
 InputConfigFuncNode  *input_config_funcs = NULL;
 OutputConfigFuncNode *output_config_funcs = NULL;
@@ -228,21 +219,24 @@ static void InitSignals(void);
 #if defined(NOCOREFILE) && !defined(WIN32)
 static void SetNoCores(void);
 #endif
-static void Barnyard2Cleanup(int);
+
+static void Barnyard2Cleanup(int,int);
 
 static void FreeInputConfigs(InputConfig *);
 static void FreeOutputConfigs(OutputConfig *);
-static void FreeClassifications(ClassType *);
-static void FreeReferences(ReferenceSystemNode *);
 static void FreePlugins(Barnyard2Config *);
 
 static void Barnyard2PostInit(void);
 static char * ConfigFileSearch(void);
 
+int SignalCheck(void);
+
 /* Signal handler declarations ************************************************/
+
 static void SigExitHandler(int);
 static void SigUsrHandler(int);
 static void SigHupHandler(int);
+
 
 /*  F U N C T I O N   D E F I N I T I O N S  **********************************/
 
@@ -261,6 +255,12 @@ static void SigHupHandler(int);
  */
 int main(int argc, char *argv[]) 
 {
+    barnyard2_argc = argc;
+    barnyard2_argv = argv;
+    
+    argc = 0;
+    argv = NULL; 
+    
 #if defined(WIN32) && defined(ENABLE_WIN32_SERVICE)
     /* Do some sanity checking, because some people seem to forget to
      * put spaces between their parameters
@@ -277,14 +277,11 @@ int main(int argc, char *argv[])
     /* If the first parameter is "/SERVICE", then start Snort as a Win32 service */
     if((argc > 1) && (_stricmp(argv[1],SERVICE_CMDLINE_PARAM) == 0))
     {
-        return Barnyard2ServiceMain(argc, argv);
+        return Barnyard2ServiceMain(barnyard2_argc, barnyard2_argv);
     }
 #endif /* WIN32 && ENABLE_WIN32_SERVICE */
-
-    barnyard2_argc = argc;
-    barnyard2_argv = argv;
-
-    return Barnyard2Main(argc, argv);
+    
+    return Barnyard2Main(barnyard2_argc, barnyard2_argv);
 }
 
 /*
@@ -311,6 +308,8 @@ int Barnyard2Main(int argc, char *argv[])
     if (!init_winsock())
         FatalError("Could not Initialize Winsock!\n");
 #endif
+
+restart:
 
     Barnyard2Init(argc, argv);
 
@@ -366,16 +365,31 @@ int Barnyard2Main(int argc, char *argv[])
             LogMessage("Processing %d files...\n", barnyard2_conf->batch_total_files);
             for(idx = 0; idx < barnyard2_conf->batch_total_files; idx++)
             {
-    			ProcessBatch("", barnyard2_conf->batch_filelist[idx]);
-            }
+		ProcessBatch("", barnyard2_conf->batch_filelist[idx]);
+		if( SignalCheck())
+		{
+		    /* Clean Things up */
+		    Barnyard2Cleanup(0,0);
+		    /* Relaunch status */
+		    goto restart;
+		}
+	    }
         }
     }
-	/* Continual processing mode */
-	else if (BcContinuousMode())
-	{
-	    ProcessContinuousWithWaldo(&barnyard2_conf->waldo);
+    /* Continual processing mode */
+    else if (BcContinuousMode())
+    {
+	ProcessContinuousWithWaldo(&barnyard2_conf->waldo);
+	
+	if( SignalCheck())
+	{	    
+	    /* Clean Things up */
+	    Barnyard2Cleanup(0,0);
+	    /* Relaunch status */
+	    goto restart;
 	}
-
+    }
+    
 #ifndef WIN32
     closelog();
 #endif
@@ -564,7 +578,7 @@ static void ParseCmdLine(int argc, char **argv)
         FatalError("%s(%d) Trying to parse the command line again.\n",
                    __FILE__, __LINE__);
     }
-
+    
     barnyard2_cmd_line_conf = Barnyard2ConfNew();
     barnyard2_conf = barnyard2_cmd_line_conf;     /* Set the global for log messages */
     bc = barnyard2_cmd_line_conf;
@@ -622,6 +636,7 @@ static void ParseCmdLine(int argc, char **argv)
     **  Instead, we check optopt and it will tell us.
     */
     optopt = 0;
+    optind = 0; /* in case we are being re-invoked , think HUP */
 
     /* loop through each command line var and process it */
     while ((ch = getopt_long(argc, argv, valid_options, long_options, &option_index)) != -1)
@@ -857,27 +872,27 @@ static void ParseCmdLine(int argc, char **argv)
         }
     }
 
-	/* when batch processing check for any remaining arguments which should */
-	/* be a parsed as a list of files to process. */
-	if ((bc->run_mode_flags & RUN_MODE_FLAG__BATCH) && (optind < argc))
+    /* when batch processing check for any remaining arguments which should */
+    /* be a parsed as a list of files to process. */
+    if ((bc->run_mode_flags & RUN_MODE_FLAG__BATCH) && (optind < argc))
+    {
+	int idx = 0;
+	
+	bc->batch_total_files = argc - optind;
+	bc->batch_filelist = SnortAlloc(bc->batch_total_files * sizeof(char *));
+	
+	while (optind < argc)
 	{
-		int idx = 0;
-
-		bc->batch_total_files = argc - optind;
-	    bc->batch_filelist = SnortAlloc(bc->batch_total_files * sizeof(char *));
-
-		while (optind < argc)
-		{
-			DEBUG_WRAP(DebugMessage(DEBUG_INIT, "Extra args: %s\n", argv[optind]););
-			bc->batch_filelist[idx] = SnortStrdup(argv[optind]);
-
-			idx++;
-			optind++;
-		}
-		
-		DEBUG_WRAP(DebugMessage(DEBUG_INIT, "Total files: %i\n", bc->batch_total_files););
+	    DEBUG_WRAP(DebugMessage(DEBUG_INIT, "Extra args: %s\n", argv[optind]););
+	    bc->batch_filelist[idx] = SnortStrdup(argv[optind]);
+	    
+	    idx++;
+	    optind++;
 	}
-
+	
+	DEBUG_WRAP(DebugMessage(DEBUG_INIT, "Total files: %i\n", bc->batch_total_files););
+    }
+    
     if ((bc->run_mode_flags & RUN_MODE_FLAG__TEST) &&
         (bc->run_flags & RUN_FLAG__DAEMON))
     {
@@ -886,12 +901,12 @@ static void ParseCmdLine(int argc, char **argv)
                    "mode and then restart in daemon mode.\n");
     }
     else if ((bc->run_mode_flags & RUN_MODE_FLAG__BATCH) &&
-        (bc->run_flags & RUN_MODE_FLAG__CONTINUOUS))
+	     (bc->run_flags & RUN_MODE_FLAG__CONTINUOUS))
     {
         FatalError("Cannot use batch mode and continuous mode together.\n");
     }
-
-
+    
+    
     if ((bc->run_mode_flags & RUN_MODE_FLAG__TEST) &&
         (barnyard2_conf_file == NULL))
     {
@@ -899,10 +914,10 @@ static void ParseCmdLine(int argc, char **argv)
                    "file.  Use the '-c' option on the command line to "
                    "specify a configuration file.\n");
     }
-
+    
     if (pcap_filter != NULL)
         free(pcap_filter);
-
+    
     /* Set the run mode based on what we've got from command line */
 
     /* Version overrides all */
@@ -1011,36 +1026,32 @@ static void SigExitHandler(int signal)
     if (exit_signal != 0)
         return;
 
-    
-
-    /* Don't want to have to wait to start processing packets before
-     * getting out of dodge */
     if (barnyard2_initializing)
         _exit(0);
-
+    
     exit_signal = signal;
-
-    Barnyard2Cleanup(signal);
-
+    return;
 }
 
 static void SigUsrHandler(int signal)
 {
-    if (usr_signal != 0)
+    if ( (usr_signal != 0) || 
+	 (exit_signal != 0))
         return;
-
+    
     usr_signal = signal;
-
-    Barnyard2Cleanup(signal);
-
-
+    return;
 }
 
 static void SigHupHandler(int signal)
 {
+    if(exit_signal  != 0)
+	return;
+    
+    exit_signal = 1;
     hup_signal = 1;
-    Barnyard2Cleanup(signal);
-
+    
+    return;
 }
 
 /****************************************************************************
@@ -1056,56 +1067,70 @@ static void SigHupHandler(int signal)
  ****************************************************************************/
 void CleanExit(int exit_val)
 {
-    LogMessage("Snort exiting\n");
-    Barnyard2Cleanup(exit_val);
+    LogMessage("Barnyard2 exiting\n");
+
 #ifndef WIN32
     closelog();
 #endif
-    exit(exit_val);
+    
+    Barnyard2Cleanup(exit_val,1);
 }
 
-static void Barnyard2Cleanup(int exit_val)
+
+static void Barnyard2Cleanup(int exit_val,int exit_needed)
 {
     PluginSignalFuncNode *idxPlugin = NULL;
+    PluginSignalFuncNode *idxPluginNext = NULL;
 
-    /* This function can be called more than once.  For example,
-     * once from the SIGINT signal handler, and once recursively
-     * as a result of calling pcap_close() below.  We only need
-     * to perform the cleanup once, however.  So the static
-     * variable already_exiting will act as a flag to prevent
-     * double-freeing any memory.  Not guaranteed to be
-     * thread-safe, but it will prevent the simple cases.
-     */
+    /* This function can be called more than once. */
     static int already_exiting = 0;
+    
     if( already_exiting != 0 )
     {
         return;
     }
-    already_exiting = 1;
-    barnyard2_exiting = 1;
-    barnyard2_initializing = 0;  /* just in case we cut out early */
 
+    already_exiting = 1;
+    
+    barnyard2_initializing = 0;  /* just in case we cut out early */
+    
     if (BcContinuousMode() || BcBatchMode())
     {
         /* Do some post processing on any incomplete Plugin Data */
         idxPlugin = plugin_shutdown_funcs;
         while(idxPlugin)
         {
+	    idxPluginNext = idxPlugin->next;
             idxPlugin->func(SIGQUIT, idxPlugin->arg);
-            idxPlugin = idxPlugin->next;
+	    free(idxPlugin);
+            idxPlugin = idxPluginNext;
         }
-    }
+	plugin_shutdown_funcs = NULL;
 
+	/*
+	  Right now we will just free them if they are initialized since
+	  in the context we operate if we receive HUP we mainly just "restart"
+	*/
+	idxPlugin = plugin_restart_funcs;
+	while(idxPlugin)
+        {
+            idxPluginNext = idxPlugin->next;
+            free(idxPlugin);
+            idxPlugin = idxPluginNext;
+        }
+	plugin_restart_funcs = NULL;
+    }
+    
     if (!exit_val)
     {
         struct timeval difftime;
         struct timezone tz;
-
+	
 	memset((char *) &tz, 0, sizeof(tz)); /* bzero() deprecated, replaced by memset() */
         gettimeofday(&endtime, &tz);
-
+	
         TIMERSUB(&endtime, &starttime, &difftime);
-
+	
         if (exit_signal)
         {
             LogMessage("Run time prior to being shutdown was %lu.%lu seconds\n", 
@@ -1120,34 +1145,75 @@ static void Barnyard2Cleanup(int exit_val)
         idxPlugin = plugin_clean_exit_funcs;
         while(idxPlugin)
         {
+	    idxPluginNext = idxPlugin->next;
             idxPlugin->func(SIGQUIT, idxPlugin->arg);
-            idxPlugin = idxPlugin->next;
+	    free(idxPlugin);
+            idxPlugin = idxPluginNext;
         }
+	plugin_clean_exit_funcs = NULL;
     }
 
     /* Print Statistics */
-    if (!BcTestMode() && !BcVersionMode()
-       )
+    if (!BcTestMode() && !BcVersionMode())
     {
-        DropStats(2);
+	if(!stat_dropped)
+	{
+	    DropStats(2);
+	}
+	else
+	{
+	    stat_dropped = 0;
+	}
     }
 
+    /* Cleanup some spooler stuff */
+    if(barnyard2_conf->spooler)
+    {
+	spoolerEventCacheFlush(barnyard2_conf->spooler);
+	
+	if(barnyard2_conf->spooler->header)
+	{
+	    free(barnyard2_conf->spooler->header);
+	    barnyard2_conf->spooler->header = NULL;
+	}
+
+	if(barnyard2_conf->spooler->record.header)
+	{
+	    free(barnyard2_conf->spooler->record.header);
+	    barnyard2_conf->spooler->record.header = NULL;
+	}
+
+	if(barnyard2_conf->spooler->record.data)
+	{
+	    free(barnyard2_conf->spooler->record.data);
+	    barnyard2_conf->spooler->record.data = NULL;
+	}
+    }
+    
     CleanupProtoNames();
-
     ClosePidFile();
-
+    
     /* remove pid file */
     if (SnortStrnlen(barnyard2_conf->pid_filename, sizeof(barnyard2_conf->pid_filename)) > 0)
     {
         int ret;
         ret = unlink(barnyard2_conf->pid_filename);       
-    
+	
         if (ret != 0)
         {    
             ErrorMessage("Could not remove pid file %s: %s\n",
                          barnyard2_conf->pid_filename, strerror(errno));
         }
     }
+
+    spoolerCloseWaldo(&barnyard2_conf->waldo);
+
+    if(barnyard2_conf->spooler)
+    {
+	spoolerClose(barnyard2_conf->spooler);
+	barnyard2_conf->spooler = NULL;
+    }
+
     
     /* free allocated memory */
     if (barnyard2_conf == barnyard2_cmd_line_conf)
@@ -1164,49 +1230,44 @@ static void Barnyard2Cleanup(int exit_val)
         barnyard2_conf = NULL;
     }
 
-    FreeOutputConfigFuncs();
     FreeOutputList(AlertList);
+    FreeOutputList(LogList);    
     AlertList = NULL;
-
-    FreeOutputList(LogList);
     LogList = NULL;
 
+    FreeOutputConfigFuncs();
+
+    FreeInputPlugins();
+    
     /* Global lists */
     ParserCleanup();
-
+    
     /* Stuff from plugbase */
-
     ClearDumpBuf();
-
+    
     if (netmasks != NULL)
     {
         free(netmasks);
         netmasks = NULL;
     }
-
-    if (protocol_names != NULL)
-    {
-        int i;
-
-        for (i = 0; i < NUM_IP_PROTOS; i++)
-        {
-            if (protocol_names[i] != NULL)
-                free(protocol_names[i]);
-        }
-
-        free(protocol_names);
-        protocol_names = NULL;
-    }
-
-    if (barnyard2_conf_file != NULL)
-        free(barnyard2_conf_file);
-
-    if (barnyard2_conf_dir != NULL)
-        free(barnyard2_conf_dir);
-
     
-    _exit(exit_val);
+    if (barnyard2_conf_file != NULL)
+    {
+        free(barnyard2_conf_file);
+	barnyard2_conf_file = NULL;
+    }
+    
+    if (barnyard2_conf_dir != NULL)
+    {
+        free(barnyard2_conf_dir);
+	barnyard2_conf_dir = NULL;
+    }
+    
+    if(exit_needed)
+	_exit(exit_val);
 
+    already_exiting = 0;
+    return;
 }
 
 void Restart(void)
@@ -1225,7 +1286,7 @@ void Restart(void)
     LogMessage("\n");
     LogMessage("***** Restarting Barnyard2 *****\n");
     LogMessage("\n");
-    Barnyard2Cleanup(0);
+    Barnyard2Cleanup(0,0);
 
     if (daemon_mode)
     {
@@ -1263,6 +1324,7 @@ void Restart(void)
     exit(-1);
 }
 
+
 /*
  *  Check for signal activity 
  */
@@ -1270,67 +1332,85 @@ int SignalCheck(void)
 {
     switch (exit_signal)
     {
-        case SIGTERM:
-            if (!exit_logged)
-            {
-                ErrorMessage("*** Caught Term-Signal\n");
-                exit_logged = 1;
-            }
-            CleanExit(0);
-            break;
 
-        case SIGINT:
-            if (!exit_logged)
-            {
-                ErrorMessage("*** Caught Int-Signal\n");
-                exit_logged = 1;
-            }
-            CleanExit(0);
-            break;
+    case SIGTERM:
+	if (!exit_logged)
+	{
+	    ErrorMessage("*** Caught Term-Signal\n");
+	    exit_logged = 1;
+	}
+	
+	CleanExit(exit_signal);
+	break;
+	
+    case SIGINT:
+	if (!exit_logged)
+	{
+	    ErrorMessage("*** Caught Int-Signal\n");
+	    exit_logged = 1;
+	}
+	
+	CleanExit(exit_signal);
+	break;
+	
+    case SIGQUIT:
+	if (!exit_logged)
+	{
+	    ErrorMessage("*** Caught Quit-Signal\n");
+	    exit_logged = 1;
+	}
+	
+	CleanExit(exit_signal);
+	break;
+	
+    case SIGKILL:
+	if (!exit_logged)
+        {
+            ErrorMessage("*** Caught Kill-Signal\n");
+            exit_logged = 1;
+        }
+	
+	CleanExit(exit_signal);
+	break;
 
-        case SIGQUIT:
-            if (!exit_logged)
-            {
-                ErrorMessage("*** Caught Quit-Signal\n");
-                exit_logged = 1;
-            }
-            CleanExit(0);
-            break;
-
-        default:
-            break;
+    default:
+	break;
     }
-
+    
     exit_signal = 0;
-
+    
     switch (usr_signal)
     {
-        case SIGUSR1:
-            ErrorMessage("*** Caught Usr-Signal\n");
-            DropStats(0);
-            break;
-
-        case SIGNAL_SNORT_ROTATE_STATS:
-            ErrorMessage("*** Caught Usr-Signal: 'Rotate Stats'\n");
-            break;
+    case SIGUSR1:
+	ErrorMessage("*** Caught Usr-Signal\n");
+	DropStats(0);
+	break;
+	
+    case SIGNAL_SNORT_ROTATE_STATS:
+	ErrorMessage("*** Caught Usr-Signal: 'Rotate Stats'\n");
+	break;
     }
-
+    
     usr_signal = 0;
-
+    
     if (hup_signal)
     {
         ErrorMessage("*** Caught Hup-Signal\n");
+	DropStats(0);
+	stat_dropped = 1;
+	ErrorMessage("*** Resetting Stats\n");
+	memset(&pc,'\0',sizeof(PacketCount));
         hup_signal = 0;
         return 1;
     }
-
+    
     return 0;
 }
+
 
 static void InitGlobals(void)
 {
     memset(&pc, 0, sizeof(PacketCount));
-
     InitNetmasks();
     InitProtoNames();
 }
@@ -1359,41 +1439,110 @@ void Barnyard2ConfFree(Barnyard2Config *bc)
 {
     if (bc == NULL)
         return;
-
+       
     if (bc->log_dir != NULL)
+    {
         free(bc->log_dir);
-
+	bc->log_dir = NULL;
+    }
+    
     if (bc->orig_log_dir != NULL)
+    {
         free(bc->orig_log_dir);
-
+	bc->orig_log_dir = NULL;
+    }
+    
     if (bc->interface != NULL)
+    {
         free(bc->interface);
-
+	bc->interface = NULL;
+    }
+    
     if (bc->chroot_dir != NULL)
+    {
         free(bc->chroot_dir);
-   
+	bc->chroot_dir = NULL;
+    }
+    
     if (bc->archive_dir != NULL)
+    {
         free(bc->archive_dir);
+	bc->archive_dir = NULL;
+    }
+    
+    if(bc->config_file != NULL)
+    {
+	free(bc->config_file);
+	bc->config_file = NULL;
+    }
+    
+    if(bc->config_dir != NULL)
+    {
+	free(bc->config_dir);
+	bc->config_dir = NULL;
+    }
+    
+    if(bc->hostname != NULL)
+    {
+	free(bc->hostname);
+	bc->hostname = NULL;
+    }
+    
+    if(bc->class_file != NULL)
+    {
+	free(bc->class_file);
+	bc->class_file = NULL;
+    }
+    
+    if( bc->sid_msg_file != NULL)
+    {
+	free(bc->sid_msg_file);
+	bc->sid_msg_file = NULL;
+    }
 
-	if (bc->batch_total_files > 0)
+    if( bc->gen_msg_file != NULL)
+    {
+	free(bc->gen_msg_file);
+	bc->gen_msg_file = NULL;
+    }
+
+    if( bc->reference_file != NULL)
+    {
+	free(bc->reference_file);
+	bc->reference_file = NULL;
+    }
+
+    if( bc->bpf_filter != NULL)
+    {
+	free(bc->bpf_filter);
+	bc->bpf_filter = NULL;
+    }
+    
+    if (bc->batch_total_files > 0)
+    {
+	int idx;
+	for(idx = 0; idx< bc->batch_total_files; idx++)
 	{
-		int idx;
-		for(idx = 0; idx< bc->batch_total_files; idx++)
-		{
-			free(bc->batch_filelist[idx]);
-		}
-		free(bc->batch_filelist);
+	    free(bc->batch_filelist[idx]);
+	    bc->batch_filelist[idx] = NULL;
 	}
+	free(bc->batch_filelist);
+    }
 
+    FreeSigSuppression(&bc->ssHead);
+    FreeSigNodes(&bc->sigHead);
+    FreeClassifications(&bc->classifications);
+    FreeReferences(&bc->references);
+    
     FreeInputConfigs(bc->input_configs);
+    bc->input_configs = NULL;
+    
     FreeOutputConfigs(bc->output_configs);
-
-    FreeClassifications(bc->classifications);
-    FreeReferences(bc->references);
-
+    bc->output_configs = NULL;
+    
     VarTablesFree(bc);
     FreePlugins(bc);
-
+    
     free(bc);
 }
 
@@ -1522,7 +1671,7 @@ static void FreePlugins(Barnyard2Config *bc)
 {
     if (bc == NULL)
         return;
-
+    
     FreePluginSigFuncs(bc->plugin_post_config_funcs);
     bc->plugin_post_config_funcs = NULL;
 }
@@ -2028,42 +2177,6 @@ static void FreeOutputConfigs(OutputConfig *head)
 
         if (tmp->file_name != NULL)
             free(tmp->file_name);
-
-        free(tmp);
-    }
-}
-
-static void FreeClassifications(ClassType *head)
-{
-    while (head != NULL)
-    {
-        ClassType *tmp = head;
-
-        head = head->next;
-
-        if (tmp->name != NULL)
-            free(tmp->name);
-
-        if (tmp->type != NULL)
-            free(tmp->type);
-
-        free(tmp);
-    }
-}
-
-static void FreeReferences(ReferenceSystemNode *head)
-{
-    while (head != NULL)
-    {
-        ReferenceSystemNode *tmp = head;
-
-        head = head->next;
-
-        if (tmp->name != NULL)
-            free(tmp->name);
-
-        if (tmp->url != NULL)
-            free(tmp->url);
 
         free(tmp);
     }

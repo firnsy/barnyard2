@@ -1209,20 +1209,29 @@ void SguilCleanExitFunc(int signal, void *arg)
     /* free allocated memory from SpoSguilData */
 	if (ssd_data)
 	{
-		if (ssd_data->sensor_name)
-			free(ssd_data->sensor_name);
 
-		if (ssd_data->tag_path)
-			free(ssd_data->tag_path);
-
-		if (ssd_data->passwd)
-			free(ssd_data->passwd);
-
-		if (ssd_data->args)
-			free(ssd_data->args);
-
-		free(ssd_data);
+	    if(ssd_data->agent_sock > 0)
+	    {
+		close(ssd_data->agent_sock);
+		ssd_data->agent_sock = -1;
+	    }
+	    
+	    
+	    if (ssd_data->sensor_name)
+		free(ssd_data->sensor_name);
+	    
+	    if (ssd_data->tag_path)
+		free(ssd_data->tag_path);
+	    
+	    if (ssd_data->passwd)
+		free(ssd_data->passwd);
+	    
+	    if (ssd_data->args)
+		free(ssd_data->args);
+	    
+	    free(ssd_data);
 	}
+
 }
 
 void SguilRestartFunc(int signal, void *arg)
@@ -1234,19 +1243,26 @@ void SguilRestartFunc(int signal, void *arg)
     /* free allocated memory from SpoSguilData */
 	if (ssd_data)
 	{
-		if (ssd_data->sensor_name)
-			free(ssd_data->sensor_name);
 
-		if (ssd_data->tag_path)
-			free(ssd_data->tag_path);
-
-		if (ssd_data->passwd)
-			free(ssd_data->passwd);
-
-		if (ssd_data->args)
-			free(ssd_data->args);
-
-		free(ssd_data);
+	    if(ssd_data->agent_sock > 0)
+	    {
+		close(ssd_data->agent_sock);
+		ssd_data->agent_sock = -1;
+	    }
+	    
+	    if (ssd_data->sensor_name)
+		free(ssd_data->sensor_name);
+	    
+	    if (ssd_data->tag_path)
+		free(ssd_data->tag_path);
+	    
+	    if (ssd_data->passwd)
+		free(ssd_data->passwd);
+	    
+	    if (ssd_data->args)
+		free(ssd_data->args);
+	    
+	    free(ssd_data);
 	}
 }
 

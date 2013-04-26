@@ -224,6 +224,8 @@ void OpSyslog_Exit(int signal,void *pSyslogContext)
     }
     
     NetClose(iSyslogContext);
+
+    free(iSyslogContext);
     
     return;
 }

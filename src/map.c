@@ -480,7 +480,7 @@ int ReadClassificationFile(Barnyard2Config *bc, const char *file)
         
         return -1;
     }
-
+    
     bc->class_file =(char *)file;
 
     memset(buf, 0, BUFFER_SIZE); /* bzero() deprecated, replaced with memset() */
@@ -510,6 +510,8 @@ int ReadClassificationFile(Barnyard2Config *bc, const char *file)
 
   if(fd != NULL)
     fclose(fd);
+
+  bc->class_file = NULL;
 
   return 0;
 }
@@ -584,7 +586,8 @@ int SignatureResolveClassification(ClassType *class,SigNode *sig,char *sid_msg_f
 	    if(sig->class_id == 0)
 	    {
 		
-		DEBUG_WRAP(DebugMessage(DEBUG_MAPS"\nINFO: [%s()],In file [%s]\n"
+		DEBUG_WRAP(DebugMessage(DEBUG_MAPS,
+					"\nINFO: [%s()],In file [%s]\n"
 					"Signature [gid: %d] [sid : %d] [revision: %d] message [%s] has no classification literal defined, signature priority is [%d]\n\n",
 					__FUNCTION__,
 					BcGetSourceFile(sig->source_file),
@@ -606,7 +609,8 @@ int SignatureResolveClassification(ClassType *class,SigNode *sig,char *sid_msg_f
 	    if( (found) &&
 		(found->priority != sig->priority))
 	    {
-		DEBUG_WRAP(DebugMessage(DEBUG_MAPS"\nINFO: [%s()],In file [%s]\n"
+		DEBUG_WRAP(DebugMessage(DEBUG_MAPS,
+					"\nINFO: [%s()],In file [%s]\n"
 					"Signature [gid: %d] [sid : %d] [revision: %d] message [%s] has classification [%s] priority [%d]\n"
 					"The priority define by the rule will overwride classification [%s] priority [%d] defined in [%s] using [%d] as priority \n\n",
 					__FUNCTION__,
@@ -743,59 +747,7 @@ int ReadSidFile(Barnyard2Config *bc)
   return 0;
 }
 
-void DeleteSigNodes()
-{
-    SigNode *sn = NULL, *snn = NULL;
-    SigNode **sigHead = NULL;
-    
-    ReferenceNode *rn = NULL, *rnn = NULL;
 
-    sigHead = BcGetSigNodeHead();
-    sn = *sigHead;
-    
-    while(sn != NULL)
-    {
-        snn = sn->next;
-    
-        /* free the message */
-        if(sn->msg)
-	{
-            free(sn->msg);
-	}
-    
-        /* free the references (NOT the reference systems) */
-        if(sn->refs)
-        {
-            rn = sn->refs;
-            while(rn != NULL)
-            {
-                rnn = rn->next;
-            
-                /* free the id */
-                if(rn->id)
-                    free(rn->id);
-            
-                /* free the reference node */
-                free(rn);
-
-                rn = rnn;
-            }
-        }
-	
-        /* free the signature node */
-	free(sn);
-	sn = NULL;
-        sn = snn;
-    }
-    
-    if(*sigHead != NULL)
-    {
-	free(*sigHead);
-	*sigHead = NULL;
-    }
-    
-    return;
-}
 
 void ParseSidMapLine(Barnyard2Config *bc, char *data)
 {
@@ -1283,4 +1235,123 @@ void ParseGenMapLine(char *data)
     mSplitFree(&toks, num_toks);
 
     return;
+}
+
+/* 
+ * Some destructors 
+ * 
+ *
+ */
+
+void FreeSigNodes(SigNode **sigHead)
+{
+    SigNode *sn = NULL, *snn = NULL;
+    ReferenceNode *rn = NULL, *rnn = NULL;
+    sn = *sigHead;
+
+    while(sn != NULL)
+    {
+        snn = sn->next;
+    
+        /* free the message */
+        if(sn->msg)
+	{
+            free(sn->msg);
+	    sn->msg = NULL;
+	}
+    
+	if(sn->classLiteral)
+	{
+	    free(sn->classLiteral);
+	    sn->classLiteral = NULL;
+	}
+
+        /* free the references (NOT the reference systems) */
+        if(sn->refs)
+        {
+            rn = sn->refs;
+            while(rn != NULL)
+            {
+                rnn = rn->next;
+            
+                /* free the id */
+                if(rn->id)
+                    free(rn->id);
+            
+                /* free the reference node */
+                free(rn);
+
+                rn = rnn;
+            }
+        }
+
+        /* free the signature node */
+	free(sn);
+	sn = NULL;
+        sn = snn;
+    }
+
+    *sigHead = NULL;
+    
+    return;
+}
+
+void FreeClassifications(ClassType **i_head)
+{
+    ClassType *head = *i_head;
+    
+    while (head != NULL)
+    {
+        ClassType *tmp = head;
+
+        head = head->next;
+
+        if (tmp->name != NULL)
+            free(tmp->name);
+
+        if (tmp->type != NULL)
+            free(tmp->type);
+
+        free(tmp);
+    }
+
+    *i_head = NULL;
+}
+
+
+void FreeReferences(ReferenceSystemNode **i_head)
+{
+    ReferenceSystemNode *head = *i_head;
+    
+    while (head != NULL)
+    {
+        ReferenceSystemNode *tmp = head;
+
+        head = head->next;
+	
+        if (tmp->name != NULL)
+            free(tmp->name);
+	
+        if (tmp->url != NULL)
+            free(tmp->url);
+	
+        free(tmp);
+    }
+
+    *i_head = NULL;
+}
+
+void FreeSigSuppression(SigSuppress_list **i_head)
+{
+    SigSuppress_list *head = *i_head;
+    
+    while(head != NULL)
+    {
+	SigSuppress_list *next = head->next;
+	
+	free(head);
+	head = next;
+    }
+
+    *i_head = NULL;
 }

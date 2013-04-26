@@ -60,7 +60,7 @@ static const char* FATAL_NO_SENSOR_2 =
 
 static const char* FATAL_BAD_SCHEMA_1 =
     "database: The underlying database has not been initialized correctly.  This\n"
-    "          version of Snort requires version %d of the DB schema.  Your DB\n"
+    "          version of barnyard2 requires version %d of the DB schema.  Your DB\n"
     "          doesn't appear to have any records in the 'schema' table.\n%s";
 
 static const char* FATAL_BAD_SCHEMA_2 =
@@ -74,8 +74,8 @@ static const char* FATAL_OLD_SCHEMA_1 =
     "database: The underlying database seems to be running an older version of\n"
     "          the DB schema (current version=%d, required minimum version= %d).\n\n"
     "          If you have an existing database with events logged by a previous\n"
-    "          version of snort, this database must first be upgraded to the latest\n"
-    "          schema (see the snort-users mailing list archive or DB plugin\n"
+    "          version of barnyard2, this database must first be upgraded to the latest\n"
+    "          schema (see the barnyard2-users mailing list archive or DB plugin\n"
     "          documention for details).\n%s\n";
 
 static const char* FATAL_OLD_SCHEMA_2 =
@@ -87,10 +87,10 @@ static const char* FATAL_OLD_SCHEMA_2 =
     "          and the URL to the most recent database plugin documentation.\n";
 
 static const char* FATAL_NO_SUPPORT_1 =
-    "If this build of snort was obtained as a binary distribution (e.g., rpm,\n"
+    "If this build of barnyard2 was obtained as a binary distribution (e.g., rpm,\n"
     "or Windows), then check for alternate builds that contains the necessary\n"
     "'%s' support.\n\n"
-    "If this build of snort was compiled by you, then re-run the\n"
+    "If this build of barnyard2 was compiled by you, then re-run the\n"
     "the ./configure script using the '--with-%s' switch.\n"
     "For non-standard installations of a database, the '--with-%s=DIR'\n%s";
 
@@ -4029,6 +4029,7 @@ void Connect(DatabaseData * data)
         if(PQstatus(data->p_connection) == CONNECTION_BAD)
         {
             PQfinish(data->p_connection);
+	    data->p_connection = NULL;
             FatalError("database Connection to database '%s' failed\n", data->dbname);
         }
 	break;
@@ -4062,16 +4063,26 @@ void Connect(DatabaseData * data)
                               data->port == NULL ? 0 : atoi(data->port), NULL, 0) == NULL)
         {
             if(mysql_errno(data->m_sock))
-                FatalError("database mysql_error: %s\n", mysql_error(data->m_sock));
-
-            FatalError("database Failed to logon to database '%s'\n", data->dbname);
+	    {
+                LogMessage("database mysql_error: %s\n", mysql_error(data->m_sock));
+		mysql_close(data->m_sock);
+		data->m_sock = NULL;
+		CleanExit(1);
+	    }
+	    
+            LogMessage("database Failed to logon to database '%s'\n", data->dbname);
+	    mysql_close(data->m_sock);
+	    data->m_sock = NULL;
+	    CleanExit(1);
         }
 	
 	if(mysql_autocommit(data->m_sock,0))
 	{
 	    /* XXX */
+	    mysql_close(data->m_sock);
+	    data->m_sock = NULL;
 	    LogMessage("WARNING database: unable to unset autocommit\n");
-	    return ;
+	    return;
 	}
 
 	data->dbRH[data->dbtype_id].pThreadID = mysql_thread_id(data->m_sock);
@@ -4320,8 +4331,9 @@ void Disconnect(DatabaseData * data)
 	}
 	
 	if(data->p_connection)
-	{
+ 	{
 	    PQfinish(data->p_connection);
+	    data->p_connection = NULL;
 	}
     break;
     
@@ -4340,7 +4352,7 @@ void Disconnect(DatabaseData * data)
 	if(data->m_sock)
 	{
 	    mysql_close(data->m_sock);
-	
+	    data->m_sock = NULL;
 	}
 
 
@@ -4471,34 +4483,36 @@ void SpoDatabaseCleanExitFunction(int signal, void *arg)
 	    }
 	    
 	}
-    	
+	
 	resetTransactionState(&data->dbRH[data->dbtype_id]);
 	
 	MasterCacheFlush(data,CACHE_FLUSH_ALL);    
 	
 	SQL_Finalize(data);
 	
-	UpdateLastCid(data, data->sid, ((data->cid)-1));
+	if( !(data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
+	{
+	    UpdateLastCid(data, data->sid, ((data->cid)-1));
+	}
 	
 	Disconnect(data);
-    }
-	
-    if(data->SQL_INSERT != NULL)
-    {
-	free(data->SQL_INSERT);
+
+	if(data->SQL_INSERT != NULL)
+	{
+	    free(data->SQL_INSERT);
 	    data->SQL_INSERT = NULL;
-    }
-    
-    if(data->SQL_SELECT != NULL)
-    {
-	free(data->SQL_SELECT);
-	data->SQL_SELECT = NULL;
-    }
-    
-    free(data->args);
-    free(data);
+	}
+	
+	if(data->SQL_SELECT != NULL)
+	{
+	    free(data->SQL_SELECT);
+	    data->SQL_SELECT = NULL;
+	}
+	
+	free(data->args);
+	free(data);
 	data = NULL;
-    
+    }
 
     return;
 }
@@ -4779,6 +4793,9 @@ u_int32_t MYSQL_ManualConnect(DatabaseData *dbdata)
 	    LogMessage("database: mysql_error: %s\n", mysql_error(dbdata->m_sock));
 	
 	LogMessage("database: Failed to logon to database '%s'\n", dbdata->dbname);
+	
+	mysql_close(dbdata->m_sock);
+	dbdata->m_sock = NULL;
 	return 1;
     }
 
@@ -4787,6 +4804,8 @@ u_int32_t MYSQL_ManualConnect(DatabaseData *dbdata)
     {
 	/* XXX */
 	LogMessage("database Can't set autocommit off \n");
+	mysql_close(dbdata->m_sock);
+	dbdata->m_sock = NULL;
 	return 1;
     }
     
@@ -4794,6 +4813,8 @@ u_int32_t MYSQL_ManualConnect(DatabaseData *dbdata)
     if (mysql_options(dbdata->m_sock, MYSQL_OPT_RECONNECT, &dbdata->dbRH[dbdata->dbtype_id].mysql_reconnect) != 0)
     {
 	LogMessage("database: Failed to set reconnect option: %s\n", mysql_error(dbdata->m_sock));
+	mysql_close(dbdata->m_sock);
+	dbdata->m_sock = NULL;
 	return 1;
     }
     
@@ -4818,6 +4839,9 @@ u_int32_t dbConnectionStatusMYSQL(dbReliabilityHandle *pdbRH)
     }
     
     dbdata = pdbRH->dbdata;
+    
+    if(dbdata->m_sock == NULL)
+	return 1;
     
 MYSQL_RetryConnection:    
     /* mysql_ping() could reconnect and we wouldn't know */
@@ -5091,7 +5115,7 @@ u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH)
     DatabaseData *data = NULL;
     
     int PQpingRet = 0;
-
+    
     if( (pdbRH == NULL) ||
         (pdbRH->dbdata == NULL))
     {
@@ -5133,7 +5157,11 @@ conn_test:
                 setTransactionState(pdbRH);
             }
 
-            PQreset(data->p_connection);
+	    if(data->p_connection)
+	    {
+		PQfinish(data->p_connection);
+		data->p_connection = NULL;
+	    }
             break;
         }
 #endif
@@ -5163,7 +5191,11 @@ conn_test:
 	    }
 
 	    /* Changed PQreset by call to PQfinish and PQdbLogin */
-	    PQfinish(data->p_connection);
+	    if(data->p_connection)
+	    {
+		PQfinish(data->p_connection);
+		data->p_connection = NULL;
+	    }
 
 	    if (data->use_ssl == 1)
 	    {

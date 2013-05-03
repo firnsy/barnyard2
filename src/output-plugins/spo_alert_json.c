@@ -515,19 +515,21 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         {
             if(IPH_IS_VALID(p))
             {
-                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
                 switch (GET_IPH_PROTO(p))
                 {
                     case IPPROTO_UDP:
                         //TextLog_Puts(log, "UDP");
+                	LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
                         LogJSON_a(log,kafka,JSON_PROTO_NAME,"UDP");
                         break;
                     case IPPROTO_TCP:
                         //TextLog_Puts(log, "TCP");
+                	LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
                         LogJSON_a(log,kafka,JSON_PROTO_NAME,"TCP");
                         break;
                     case IPPROTO_ICMP:
                         //TextLog_Puts(log, "ICMP");
+                	LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
                         LogJSON_a(log,kafka,JSON_PROTO_NAME,"ICMP");
                         break;
                 }
@@ -775,7 +777,6 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 LogOrKafka_Quote(log, kafka, tcpFlags);
             }
         }
-        DEBUG_WRAP(DebugMessage(DEBUG_LOG, "WOOT!\n"););
 
     }
 

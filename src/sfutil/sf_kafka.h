@@ -85,7 +85,7 @@ typedef struct _KafkaLog
     unsigned int pos;
     unsigned int maxBuf;
     char auxbuf[KAFKA_AUXBUF_SIZE];
-    char buf[1];
+    char * buf;
 } KafkaLog;
 
 KafkaLog* KafkaLog_Init (

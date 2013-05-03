@@ -100,9 +100,10 @@ KafkaLog* KafkaLog_Init (
 ) {
     KafkaLog* this;
 
-    this = (KafkaLog*)malloc(sizeof(KafkaLog)+maxBuf);
+    this = (KafkaLog*)malloc(sizeof(KafkaLog));
+    this->buf = malloc(sizeof(char)*maxBuf);
 
-    if ( !this )
+    if ( !this || !this->buf)
     {
         FatalError("Unable to allocate a KafkaLog(%u)!\n", maxBuf);
     }
@@ -149,23 +150,15 @@ bool KafkaLog_Flush(KafkaLog* this)
 
     if ( !this->pos ) return FALSE;
 
-    memcpy(this->auxbuf,this->buf,this->pos);
-
     // In daemon mode, we must start the handler here
     if(this->handler==NULL && BcDaemonMode()){
         this->handler = KafkaLog_Open(this->broker);
     }
-    rd_kafka_produce(this->handler, this->topic, 0, 0, this->auxbuf, this->pos);
+    rd_kafka_produce(this->handler, this->topic, 0, RD_KAFKA_OP_F_FREE, this->buf, this->pos);
+    this->buf = malloc(sizeof(char)*this->maxBuf);
 
-    /* on stdout flush after printing to avoid lags in output */
-    // if (this->file == stdout ) fflush (this->file) ;
-
-    //if ( ok == 1 ) 
-    //{
-        KafkaLog_Reset(this);
-        return TRUE;
-    //}
-    //return FALSE;
+    KafkaLog_Reset(this);
+    return TRUE;
 }
 
 /*-------------------------------------------------------------------

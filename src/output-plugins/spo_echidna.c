@@ -254,9 +254,6 @@ callback_lws_mirror(struct libwebsocket_context *this, struct libwebsocket *wsi,
       case LWS_CALLBACK_HTTP:
         //fprintf(stderr, " LWS_CALLBACK_HTTP\n");
         break;
-      case LWS_CALLBACK_BROADCAST:
-        //fprintf(stderr, " LWS_CALLBACK_BROADCAST\n");
-        break;
       case LWS_CALLBACK_FILTER_NETWORK_CONNECTION:
         //fprintf(stderr, " LWS_CALLBACK_FILTER_NETWORK_CONNECTION\n");
         break;
@@ -332,6 +329,8 @@ void EchidnaInit(char *args)
 
     // TODO: 
 //    AddFuncToIdleList(EchidnaIdle, spd_data);
+
+    lws_set_log_level(0, NULL);
 }
 
 SpoEchidnaData *InitEchidnaData(char *args)
@@ -704,22 +703,27 @@ int EchidnaNodeConnect(SpoEchidnaData *spd_data)
 {
     int ws_ret = 0;
     int tries = 10;
+    struct lws_context_creation_info info;
 
     DEBUG_WRAP(DebugMessage(DEBUG_PLUGIN, "echidna: creating context ... \n"););
 
+    info.port = CONTEXT_PORT_NO_LISTEN;
+    info.iface = NULL;
+    info.protocols = protocols;
+    info.gid = -1;
+    info.uid = -1;
+    info.options = 0;
+
+#ifndef LWS_NO_EXTENSIONS
+    info.extensions = libwebsocket_get_internal_extensions();
+#endif
+
+    info.ssl_cert_filepath = NULL;
+    info.ssl_private_key_filepath = NULL;
+    info.ssl_ca_filepath = NULL;
+
     /* create the websockt context */
-    context = libwebsocket_create_context(
-        CONTEXT_PORT_NO_LISTEN,
-        NULL,
-        protocols,
-        libwebsocket_internal_extensions,
-        NULL,
-        NULL,
-        -1,
-        -1,
-        0,
-        NULL
-      );
+    context = libwebsocket_create_context(&info);
 
     if (context == NULL)
     {
@@ -952,7 +956,6 @@ void EchidnaClose(void *arg)
     }
 
     /* cleanup the websocket contexts */
-    libwebsocket_close_and_free_session(context, wsi_echidna, LWS_CLOSE_STATUS_GOINGAWAY);
     libwebsocket_context_destroy(context);
 
     /* clean up curl */

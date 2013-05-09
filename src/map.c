@@ -1150,13 +1150,25 @@ void ParseGenMapLine(char *data)
         }
     }
     
-    /* 
-       Generators have pre-defined revision,classification and priority 
-    */
-    t_sn.rev = 1;
-    t_sn.classLiteral = strdup("NOCLASS"); /* default */
-    t_sn.class_id = 0;
-    t_sn.priority = 3;
+    switch(BcSidMapVersion())
+    {
+        case SIDMAPV1:
+           t_sn.rev = 1;
+           t_sn.priority = 0;
+           t_sn.classLiteral = strdup("NOCLASS"); /* default */
+           t_sn.class_id = 0;
+           break;
+
+        case SIDMAPV2:
+           /*
+              Generators have pre-defined revision,classification and priority
+           */
+           t_sn.rev = 1;
+           t_sn.classLiteral = strdup("NOCLASS"); /* default */
+           t_sn.class_id = 0;
+           t_sn.priority = 3;
+           break;
+    }
     
     /* Look if we have a brother inserted from sid map file */
     if(SigLookup((SigNode *)*BcGetSigNodeHead(),t_sn.generator,t_sn.id,SOURCE_SID_MSG,&sn))

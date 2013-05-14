@@ -1288,7 +1288,6 @@ void ParseDatabaseArgs(DatabaseData *data)
 */
 u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUpdateSig)
 {
-
     u_int32_t db_sig_id = 0;
     
     if( (data == NULL) ||
@@ -1489,7 +1488,6 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
     if( (sigMatchCount = cacheEventSignatureLookup(data->mc.cacheSignatureHead,
 						   data->mc.plgSigCompare,
 						   gid,sid)) > 0 )
-    {	
 	for(x = 0 ; x < sigMatchCount ; x++)
 	{
 	    if( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev == revision) &&
@@ -1503,8 +1501,14 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 	    }
 	    
 	    /* If we have an "uninitialized signature save it */
-	    if( data->mc.plgSigCompare[x].cacheSigObj->obj.rev == 0 || 
-		data->mc.plgSigCompare[x].cacheSigObj->obj.rev < revision)
+	    if( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev == 0) || 
+		(data->mc.plgSigCompare[x].cacheSigObj->obj.rev < revision) ||
+		
+		/* So we have a signature that was inserted, probably a preprocessor signature,
+		   but it has probably never been logged before lets set it as a temporary unassigned signature */
+		((data->mc.plgSigCompare[x].cacheSigObj->obj.rev == revision) && 
+		 (data->mc.plgSigCompare[x].cacheSigObj->obj.class_id == 0  ||
+		  (data->mc.plgSigCompare[x].cacheSigObj->obj.priority_id == 0))))
 	    {
 		memcpy(&unInitSig,data->mc.plgSigCompare[x].cacheSigObj,sizeof(cacheSignatureObj));
 		
@@ -1520,50 +1524,51 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 		}
 	    }
 	}
-    }
+	    
+    if(BcSidMapVersion() == SIDMAPV1)
+    {
+	if(unInitSig.obj.db_id != 0)
+	{
+#if DEBUG
+	    DEBUG_WRAP(DebugMessage(DB_DEBUG,
+				    "[%s()], [%u] signatures where found in cache for [gid: %u] [sid: %u] but non matched event criteria.\n" 
+				    "Updating database [db_sig_id: %u] FROM  [rev: %u] classification [ %u ] priority [%u] "
+				    "                                  TO    [rev: %u] classification [ %u ] priority [%u]\n",
+				    __FUNCTION__,
+				    sigMatchCount,
+				    gid,
+				    sid,
+				    unInitSig.obj.db_id,
+				    unInitSig.obj.rev,unInitSig.obj.class_id,unInitSig.obj.priority_id,
+				    revision,db_classification_id,priority));
+#endif
+	    
+	    unInitSig.obj.rev = revision;
+	    unInitSig.obj.class_id = db_classification_id;
+	    unInitSig.obj.priority_id = priority;
+	    
+	    if( (dbSignatureInformationUpdate(data,&unInitSig)))
+	    {
+		
+		LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for : \n"
+			   "[gid :%u] [sid: %u] [upd_rev: %u] [upd class: %u] [upd pri %u]\n",
+			   __FUNCTION__,
+			   __LINE__,
+			   gid,			\
+			   sid,
+			   revision,
+			   db_classification_id,
+			   priority);
+		return 1;
+	    }
+	    
+	    assert( unInitSig.obj.db_id != 0);
 	
-/*
-  This shouldn't be needed since unitialized signature are not inserted anymore, thus preventing the need for update
-  if(unInitSig.obj.db_id != 0)
-  {
-  #if DEBUG
-  DEBUG_WRAP(DebugMessage(DB_DEBUG,"[%s()], [%u] signatures where found in cache for [gid: %u] [sid: %u] but non matched\n" 
-  "updating database [db_sig_id: %u] with [rev: 0] to [rev: %u] \n",
-  __FUNCTION__,
-  sigMatchCount,
-  gid,
-  sid,
-  unInitSig.obj.db_id,
-  revision));
-  #endif
-  
-  unInitSig.obj.rev = revision;
-  unInitSig.obj.class_id = db_classification_id;
-  unInitSig.obj.priority_id = priority;
-  
-  
-  if( (dbSignatureInformationUpdate(data,&unInitSig)))
-  {
-  
-  LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for : \n"
-  "[gid :%u] [sid: %u] [upd_rev: %u] [upd class: %u] [upd pri %u]\n",
-  __FUNCTION__,
-  __LINE__,
-  gid,						\
-  sid,
-  revision,
-  db_classification_id,
-  priority);
-  return 1;
-  }
-  
-  
-  assert( unInitSig.obj.db_id != 0);
-			   
-  *psig_id = unInitSig.obj.db_id;
-  return 0;
-  }
-*/  
+	    *psig_id = unInitSig.obj.db_id;
+	    return 0;
+	}
+    }
+
     /* 
        To avoid possible collision with an older barnyard process or 
        avoid signature insertion race condition we will look in the 

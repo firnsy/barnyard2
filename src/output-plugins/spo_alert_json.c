@@ -124,6 +124,13 @@ typedef struct _AlertJSONConfig
     struct _AlertJSONConfig *next;
 } AlertJSONConfig;
 
+typedef struct _IP_str_assoc{
+    char * str;
+    uint32_t ipv4;
+    uint32_t netmask;
+    struct _IP_str_assoc * next;
+} IP_str_assoc;
+
 typedef struct _AlertJSONData
 {
     TextLog* log;
@@ -132,6 +139,7 @@ typedef struct _AlertJSONData
     char ** args;
     int numargs;
     AlertJSONConfig *config;
+    IP_str_assoc * hosts, *nets;
 } AlertJSONData;
 
 
@@ -220,6 +228,60 @@ static void AlertJSONInit(char *args)
     AddFuncToOutputList(AlertJSON, OUTPUT_TYPE__ALERT, data);
     AddFuncToCleanExitList(AlertJSONCleanExit, data);
     AddFuncToRestartList(AlertRestart, data);
+}
+
+
+/*
+ * Function FillHostsList
+ *
+ * Purpose: Fill a host/net -> ip assotiation list from a hosts or network file 
+ *          (the format is the same as /etc/hosts and /etc/network)
+ *
+ * Arguments: filename => route to host/networks file
+ *            list     => list to fill
+ *            mode     => 0 to host mode, 1 to network mode.
+ *                        In hots mode, we expect 8.8.8.8 hostname
+ *                        In network mode, we expect 8.8.8.8/24 netname.
+ */
+static void FillHostsList(char * filename,IP_str_assoc ** list, const uint8_t mode){
+    uint32_t ip_t[4];
+    uint32_t netmask = 32;
+    char line_buffer[1024];
+    FILE * file;
+
+    if((file = fopen(filename, "r")) == NULL)
+    {
+        FatalError("fopen() alert file %s: %s\n",filename, strerror(errno));
+    }
+
+    IP_str_assoc ** pnode_aux = list;
+    int aux_ret;
+    while(NULL != fgets(line_buffer,1024,file)){
+        if(line_buffer[0]!='#'){
+            *pnode_aux = SnortAlloc(sizeof(IP_str_assoc));
+            aux_ret = mode==0? 
+                sscanf(line_buffer,"%d.%d.%d.%d",&ip_t[0],&ip_t[1],&ip_t[2],&ip_t[3])
+                : sscanf(line_buffer,"%d.%d.%d.%d/%d",&ip_t[0],&ip_t[1],&ip_t[2],&ip_t[3],
+                                                           &netmask);
+            char * name_string = strchr(line_buffer,' ');
+            while(isblank(*++name_string));
+            if((mode==0?4:5) ==aux_ret && name_string && ip_t[0]<0x100 
+                && ip_t[1]<0x100 &&ip_t[2]<0x100 &&ip_t[3]<0x100)
+            {
+                name_string[strlen(name_string)-1] = '\0'; // delete '\n'
+                (*pnode_aux)->str = SnortStrdup(name_string);
+                (*pnode_aux)->ipv4 = (ip_t[0]<<24) + (ip_t[1]<<16) + (ip_t[2]<<8) + ip_t[3];
+                if(mode==1)
+                    (*pnode_aux)->netmask = 0xFFFFFFFF<<netmask;
+                pnode_aux = &(*pnode_aux)->next;
+            }else{
+                free(*pnode_aux);
+                *pnode_aux=NULL;
+            }
+        }
+    }
+
+    fclose(file);
 }
 
 /*
@@ -312,6 +374,9 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     data->args = toks;
     data->numargs = num_toks;
 
+    FillHostsList("/opt/rb/etc/hosts",&data->hosts,0);
+    FillHostsList("/opt/rb/etc/networks",&data->nets,0);
+
     DEBUG_WRAP(DebugMessage(
         DEBUG_INIT, "alert_json: '%s' '%s' %ld\n", filename, data->jsonargs, limit
     ););
@@ -323,8 +388,6 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
             kafka_str++; // skip the '+'
         }
 
-
-    
     
     if(kafka_str){
         const char * at_char_pos = strchr(kafka_str,BROKER_TOPIC_SEPARATOR);

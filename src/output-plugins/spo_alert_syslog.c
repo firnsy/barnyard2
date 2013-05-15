@@ -659,6 +659,8 @@ void AlertSyslogCleanExit(int signal, void *arg)
     /* free memory from SyslogData */
     if(data)
         free(data);
+
+    closelog();
 }
 
 void AlertSyslogRestart(int signal, void *arg)
@@ -668,4 +670,7 @@ void AlertSyslogRestart(int signal, void *arg)
     /* free memory from SyslogData */
     if(data)
         free(data);
+
+
+    closelog();
 }

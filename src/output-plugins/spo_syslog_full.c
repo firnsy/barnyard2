@@ -224,6 +224,8 @@ void OpSyslog_Exit(int signal,void *pSyslogContext)
     }
     
     NetClose(iSyslogContext);
+
+    free(iSyslogContext);
     
     return;
 }
@@ -544,7 +546,7 @@ static int Syslog_FormatIPHeaderLog(OpSyslog_Data *data, Packet *p)
 	if(IP_VER(p->iph))
 	    ver = IP_VER(p->iph);
 	if(IP_HLEN(p->iph))
-	    ver = IP_HLEN(p->iph);
+	    hlen = IP_HLEN(p->iph) << 2;
 	if(p->iph->ip_tos)
 	    tos = p->iph->ip_tos;
 	if(p->iph->ip_len)

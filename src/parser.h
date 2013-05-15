@@ -76,6 +76,7 @@
 #define CONFIG_OPT__UTC                             "utc"
 #define CONFIG_OPT__VERBOSE                         "verbose"
 #define CONFIG_OPT__WALDO_FILE                      "waldo_file"
+#define CONFIG_OPT__SIGSUPPRESS                     "sig_suppress"
 #ifdef MPLS
 # define CONFIG_OPT__MAX_MPLS_LABELCHAIN_LEN        "max_mpls_labelchain_len"
 # define CONFIG_OPT__MPLS_PAYLOAD_TYPE              "mpls_payload_type"
@@ -151,6 +152,9 @@ void ConfigSetEventCacheSize(Barnyard2Config *, char *);
 void ConfigMaxMplsLabelChain(Barnyard2Config *, char *);
 void ConfigMplsPayloadType(Barnyard2Config *, char *);
 #endif
+void ConfigSigSuppress(Barnyard2Config *, char *);
+void DisplaySigSuppress(SigSuppress_list **);
+
 
 // use this so mSplit doesn't split IP lists (try c = ';')
 char* FixSeparators (char* rule, char c, const char* err);

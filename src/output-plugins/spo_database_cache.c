@@ -107,7 +107,6 @@ void MasterCacheFlush(DatabaseData *data,u_int32_t flushFlag);
 /* Destructor */
 
 
-extern SigNode *sigTypes;
 
 
 #if DEBUG
@@ -530,7 +529,7 @@ u_int32_t dbReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead)
 	if( (strncasecmp(iLookup->ref_tag,iHead->obj.ref_tag,strlen(iHead->obj.ref_tag)) == 0))
 	{
             /* Found */
-	    if(  iHead->flag & CACHE_INTERNAL_ONLY)
+	    if(iHead->flag & CACHE_INTERNAL_ONLY)
 	    {
 		iHead->flag ^= (CACHE_INTERNAL_ONLY | CACHE_BOTH);
 	    }
@@ -538,6 +537,7 @@ u_int32_t dbReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead)
 	    {
 		iHead->flag ^= CACHE_BOTH;
 	    }
+	    
 	    iHead->obj.ref_id = iLookup->ref_id;
 	    iHead->obj.system_id = iHead->obj.parent->obj.db_ref_system_id;
 	    return 1;
@@ -588,6 +588,7 @@ u_int32_t dbSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead)
 	    {
 		iHead->flag ^= CACHE_BOTH;
 	    }
+
 	    iHead->obj.db_ref_system_id = iLookup->db_ref_system_id;
             return 1;
         }
@@ -2013,7 +2014,7 @@ u_int32_t SignatureLookupDatabase(DatabaseData *data,dbSignatureObj *sObj)
     
 #if DEBUG
     DEBUG_WRAP(DebugMessage(DB_DEBUG,"[%s()] Signature was not found in cache, looking for existance in the database:\n"
-			    "\t if this message occur to offent, make sure your sid-msg.map and gen-msg.map file are up to date.\n"
+			    "\t if this message occur to often, make sure your sid-msg.map and gen-msg.map file are up to date.\n"
 			    "\t Executing [%s]\n",
 			    __FUNCTION__,
 			    data->SQL_SELECT));
@@ -5186,10 +5187,13 @@ u_int32_t SignatureReferenceCacheUpdateDBid(dbSignatureReferenceObj *iDBList,
     cacheSignatureReferenceObj *tempCache = NULL;
     cacheSignatureReferenceObj *tNode = NULL;
     cacheSignatureReferenceObj *rNode = NULL;
-    
     dbSignatureReferenceObj *cObj = NULL;
-    
-    u_int32_t maxSeq = 0;
+
+    u_int32_t databasemaxSeq = 0;
+    u_int32_t sigRefFound = 0;
+    u_int32_t sigSeq = 0;
+    u_int32_t sigRefArr[MAX_REF_OBJ] = {0};
+
     int x = 0;
     
     if( (iDBList == NULL) ||
@@ -5257,57 +5261,116 @@ u_int32_t SignatureReferenceCacheUpdateDBid(dbSignatureReferenceObj *iDBList,
     
     while(cacheLookup != NULL)
     {
-	maxSeq = 0;
-
-	/* Look if we have colision with the databases entry*/
-	/* sig_id,ref_id */
-	/* if we have such collision, get Largest ref_id, bump it */
+	sigRefFound = 0;
+	
+	if(sigSeq != cacheLookup->obj.db_sig_id)
+	{
+	    sigSeq = cacheLookup->obj.db_sig_id;
+	    databasemaxSeq = 0;
+	    memset(sigRefArr,'\0',MAX_REF_OBJ);
+	}
+	
 	if(dbSignatureReferenceLookup(&cacheLookup->obj,tempCache,&rNode,1))
 	{
-	    if(cacheLookup->obj.ref_seq > rNode->obj.ref_seq)
+	    if( (cacheLookup->obj.ref_seq != rNode->obj.ref_seq))
 	    {
-		cacheLookup->obj.ref_seq =  rNode->obj.ref_seq;
+		cacheLookup->obj.ref_seq = rNode->obj.ref_seq;
+		
+		if(cacheLookup->obj.ref_seq > MAX_REF_OBJ)
+		{
+		    FatalError("[%s()], can't process reference_sequence of [%d] for signature [%d] reference [%d] \n",
+			       __FUNCTION__,
+			       cacheLookup->obj.ref_seq,
+			       cacheLookup->obj.db_sig_id,
+			       cacheLookup->obj.db_ref_id);
+		}
+		    
+
+		sigRefArr[cacheLookup->obj.ref_seq] = 1;
+		
+		if(databasemaxSeq < cacheLookup->obj.ref_seq)
+		{
+		    databasemaxSeq = cacheLookup->obj.ref_seq;
+		}
 	    }
 	    cacheLookup->flag ^=(CACHE_BOTH | CACHE_INTERNAL_ONLY);
 	}
 	else
 	{
-	    /* Validate in internal cache */
-	    cCheck = *cacheHead;
+	    /* Validate against value in database */
+	    cCheck = tempCache;
 	    
-	    while(cCheck != NULL)
-	    {
-		if(cCheck->obj.db_sig_id == cacheLookup->obj.db_sig_id)
-		{
-		    if(cCheck->obj.ref_seq > maxSeq)
-		    {
-			maxSeq = cCheck->obj.ref_seq;
-		    }
-		}
-		
-		cCheck = cCheck->next;
-	    }
-	    
-	    /* Validate in temp cache */
-	    cCheck =  tempCache;
-
 	    while(cCheck != NULL)
             {
-		if(cCheck->obj.db_sig_id == cacheLookup->obj.db_sig_id)
+		if( (cCheck->obj.db_sig_id == cacheLookup->obj.db_sig_id) &&
+		    (cCheck->obj.db_ref_id == cacheLookup->obj.db_ref_id))
                 {
-                    if(cCheck->obj.ref_seq > maxSeq)
-                    {
-                        maxSeq = cCheck->obj.ref_seq;
-                    }
-                }
 
+		    cacheLookup->obj.ref_seq = cCheck->obj.ref_seq;
+
+		    if(cacheLookup->obj.ref_seq > MAX_REF_OBJ)
+		    {
+			FatalError("[%s()], can't process reference_sequence of [%d] for signature [%d] reference [%d] \n",
+				   __FUNCTION__,
+				   cacheLookup->obj.ref_seq,
+				   cacheLookup->obj.db_sig_id,
+				   cacheLookup->obj.db_ref_id);
+		    }
+		    
+
+		    sigRefArr[cacheLookup->obj.ref_seq] = 1;
+		    sigRefFound = 1;
+
+		    if(databasemaxSeq < cacheLookup->obj.ref_seq)
+		    {
+			databasemaxSeq = cacheLookup->obj.ref_seq;
+			break;
+		    }
+                }
+		
                 cCheck = cCheck->next;
             }
 	    
-	    cacheLookup->obj.ref_seq = maxSeq+1;
-	    
+	    if(!sigRefFound)
+	    {
+		if(sigRefArr[cacheLookup->obj.ref_seq])
+		{
+		    cacheLookup->obj.ref_seq = (databasemaxSeq + 1);
+		    
+		    if(cacheLookup->obj.ref_seq > MAX_REF_OBJ)
+		    {
+			FatalError("[%s()], can't process reference_sequence of [%d] for signature [%d] reference [%d] \n",
+				   __FUNCTION__,
+				   cacheLookup->obj.ref_seq,
+				   cacheLookup->obj.db_sig_id,
+				   cacheLookup->obj.db_ref_id);
+		    }
+
+		    
+		    databasemaxSeq =  cacheLookup->obj.ref_seq;
+		    sigRefArr[cacheLookup->obj.ref_seq] = 1;
+		}
+		else
+		{
+		    if(cacheLookup->obj.ref_seq > MAX_REF_OBJ)
+                    {
+                        FatalError("[%s()], can't process reference_sequence of [%d] for signature [%d] reference [%d] \n",
+                                   __FUNCTION__,
+                                   cacheLookup->obj.ref_seq,
+                                   cacheLookup->obj.db_sig_id,
+                                   cacheLookup->obj.db_ref_id);
+                    }
+		    
+		    sigRefArr[cacheLookup->obj.ref_seq] = 1;
+		    
+		    if(databasemaxSeq < cacheLookup->obj.ref_seq)
+                    {
+                        databasemaxSeq = cacheLookup->obj.ref_seq;
+                     }
+		}
+	    }
 	}
-		
+	
 	cacheLookup = cacheLookup->next;
     }
     
@@ -5374,14 +5437,13 @@ u_int32_t SignatureReferencePopulateDatabase(DatabaseData *data,cacheSignatureRe
                    data->SQL_SELECT);
     }
     
-
+    
     
     while(cacheHead != NULL)
     {
         if(cacheHead->flag & CACHE_INTERNAL_ONLY)
         {
 	    row_validate = 0;
-
 #if DEBUG
             inserted_sigref_object_count++;
 #endif
@@ -5585,7 +5647,7 @@ u_int32_t ConvertDefaultCache(Barnyard2Config *bc,DatabaseData *data)
 	return 1;
     }
     
-    if( (ConvertSignatureCache(&sigTypes,&data->mc,data)))
+    if( (ConvertSignatureCache(BcGetSigNodeHead(),&data->mc,data)))
     {
 	/* XXX */
 	return 1;
@@ -5768,13 +5830,16 @@ u_int32_t CacheSynchronize(DatabaseData *data)
 	    return 1;
 	}
 	
-	//SigRef Synchronize 
-	if( (SigRefSynchronize(data,&data->mc.cacheSigReferenceHead,data->mc.cacheSignatureHead)))
+	if(!data->dbRH[data->dbtype_id].disablesigref)
 	{
-	    /* XXX */
-	    LogMessage("[%s()]: SigRefSynchronize() call failed \n",
-		       __FUNCTION__);
-	    return 1;
+	    //SigRef Synchronize 
+	    if( (SigRefSynchronize(data,&data->mc.cacheSigReferenceHead,data->mc.cacheSignatureHead)))
+	    {
+		/* XXX */
+		LogMessage("[%s()]: SigRefSynchronize() call failed \n",
+			   __FUNCTION__);
+		return 1;
+	    }
 	}
     }
     else

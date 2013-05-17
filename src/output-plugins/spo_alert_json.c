@@ -101,11 +101,15 @@
 #define JSON_SRCPORT_NAME "srcport"
 #define JSON_DSTPORT_NAME "dstport"
 #define JSON_SRC_NAME "src"
-#define JSON_SRC_STR_NAME "srcstr"
-#define JSON_SRC_NAME_NAME "srcname"
+#define JSON_SRC_STR_NAME "src_str"
+#define JSON_SRC_NAME_NAME "src_name"
+#define JSON_SRC_NET_NAME "src_net"
+#define JSON_SRC_NET_NAME_NAME "src_net_name"
 #define JSON_DST_NAME "dst"
-#define JSON_DST_NAME_NAME "dstname"
-#define JSON_DST_STR_NAME "dststr"
+#define JSON_DST_NAME_NAME "dst_name"
+#define JSON_DST_STR_NAME "dst_str"
+#define JSON_DST_NET_NAME "dst_net"
+#define JSON_DST_NET_NAME_NAME "dst_net_name"
 #define JSON_ICMPTYPE_NAME "icmptype"
 #define JSON_ICMPCODE_NAME "icmpcode"
 #define JSON_ICMPID_NAME "icmpid"
@@ -130,6 +134,7 @@ typedef struct _AlertJSONConfig
 
 typedef struct _IP_str_assoc{
     char * str;
+    char * ipv4_str;
     uint32_t ipv4;
     uint32_t netmask;
     struct _IP_str_assoc * next;
@@ -269,7 +274,9 @@ static void FillHostsList(char * filename,IP_str_assoc ** list, const uint8_t mo
                                                            &netmask);
             char * name_string = line_buffer;
             while(!isblank(*++name_string)); // skipping ip
-            while(isblank(*++name_string));
+            *name_string = '\0';
+            (*pnode_aux)->ipv4_str = SnortStrdup(line_buffer);
+            while(isblank(*++name_string)); // skipping blank spaces
             if((mode==0?4:5) ==aux_ret && name_string && ip_t[0]<0x100 
                 && ip_t[1]<0x100 &&ip_t[2]<0x100 &&ip_t[3]<0x100)
             {
@@ -289,11 +296,22 @@ static void FillHostsList(char * filename,IP_str_assoc ** list, const uint8_t mo
     fclose(file);
 }
 
-static char * SearchStrIP(const uint32_t ip,const IP_str_assoc *iplist){
+IP_str_assoc * SearchStrIP(const uint32_t ip,const IP_str_assoc *iplist){
     IP_str_assoc * node;
     for(node = (IP_str_assoc *)iplist;node;node=node->next){
         if(node->ipv4==ip)
-            return node->str;
+            return node;
+    }
+    return NULL;
+}
+
+IP_str_assoc * SearchStrNet(const uint32_t ip,const IP_str_assoc *netlist){
+    IP_str_assoc * node;
+    for(node = (IP_str_assoc *)netlist;node;node=node->next){
+        uint32_t ip_masked = ip&node->netmask;
+        if(node->ipv4 == ip_masked){
+            return node;
+        }
     }
     return NULL;
 }
@@ -389,7 +407,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     data->numargs = num_toks;
 
     FillHostsList("/opt/rb/etc/hosts",&data->hosts,0);
-    FillHostsList("/opt/rb/etc/networks",&data->nets,0);
+    FillHostsList("/opt/rb/etc/networks",&data->nets,1);
 
     DEBUG_WRAP(DebugMessage(
         DEBUG_INIT, "alert_json: '%s' '%s' %ld\n", filename, data->jsonargs, limit
@@ -430,6 +448,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
 
 static void AlertJSONCleanup(int signal, void *arg, const char* msg)
 {
+    IP_str_assoc * ip_node=NULL;
     AlertJSONData *data = (AlertJSONData *)arg;
     /* close alert file */
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"%s\n", msg););
@@ -442,6 +461,22 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
         if(data->kafka)
             KafkaLog_Term(data->kafka);
         free(data->jsonargs);
+        ip_node = data->hosts;
+        while(ip_node){
+            IP_str_assoc * aux = ip_node->next;
+            free(ip_node->ipv4_str);
+            free(ip_node->str);
+            free(ip_node);
+            ip_node = aux;
+        }
+        ip_node = data->nets;
+        while(ip_node){
+            IP_str_assoc * aux = ip_node->next;
+            free(ip_node->ipv4_str);
+            free(ip_node->str);
+            free(ip_node);
+            ip_node = aux;
+        }
         /* free memory from SpoJSONData */
         free(data);
     }
@@ -736,7 +771,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 }
             }
         }
-        else if(!strncasecmp("src", type, 3))
+        else if(!strncasecmp("src", type, 3)) // TODO merge with "dst" field
         {
             if(IPH_IS_VALID(p)){
                 static char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];
@@ -750,16 +785,28 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                     LogOrKafka_Quote(log,kafka, inet_ntoa(GET_SRC_ADDR(p))); 
                 */
                 LogJSON_i32(log,kafka,JSON_SRC_NAME,ipv4);
+
+                char * ip_str=NULL,*ip_name=NULL;
+                IP_str_assoc * ip_str_node = SearchStrIP(ipv4,jsonData->hosts);
+                if(ip_str_node){
+                    ip_str = ip_str_node->ipv4_str;
+                    ip_name = ip_str_node->str;
+                }else{
+                    ip_name = ip_str = _intoa(ipv4, buf, bufLen);
+                }
                 LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
-                char * ip_str = _intoa(ipv4, buf, bufLen);
                 LogJSON_a(log,kafka,JSON_SRC_STR_NAME,ip_str);
-                const char * ip_name = SearchStrIP(ipv4,jsonData->hosts);
-                if(NULL==ip_name)
-                    ip_name = ip_str;
 
                 LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
                 LogJSON_a(log,kafka,JSON_SRC_NAME_NAME,ip_name);
-                
+
+                // networks
+                IP_str_assoc * ip_net = SearchStrNet(ipv4,jsonData->nets);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                LogJSON_a(log,kafka,JSON_SRC_NET_NAME,ip_net?ip_net->ipv4_str:"0.0.0.0/0");
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                LogJSON_a(log,kafka,JSON_SRC_NET_NAME_NAME,ip_net?ip_net->str:"0.0.0.0/0");
+
             }
         }
         else if(!strncasecmp("dst", type, 3))
@@ -772,20 +819,31 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
                 /*
                     String version
-                    PrintJSONFieldName(log,kafka,JSON_DST_NAME);
-                    LogOrKafka_Puts(log,kafka, inet_ntoa(GET_DST_ADDR(p)));
+                    PrintJSONFieldName(log,kafka,JSON_SRC_NAME);
+                    LogOrKafka_Quote(log,kafka, inet_ntoa(GET_SRC_ADDR(p))); 
                 */
                 LogJSON_i32(log,kafka,JSON_DST_NAME,ipv4);
 
+                char * ip_str=NULL,*ip_name=NULL;
+                IP_str_assoc * ip_str_node = SearchStrIP(ipv4,jsonData->hosts);
+                if(ip_str_node){
+                    ip_str = ip_str_node->ipv4_str;
+                    ip_name = ip_str_node->str;
+                }else{
+                    ip_name = ip_str = _intoa(ipv4, buf, bufLen);
+                }
                 LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
-                char * ip_str = _intoa(ipv4, buf, bufLen);
                 LogJSON_a(log,kafka,JSON_DST_STR_NAME,ip_str);
-                const char * ip_name = SearchStrIP(ipv4,jsonData->hosts);
-                if(NULL==ip_name)
-                    ip_name = ip_str;
 
                 LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
                 LogJSON_a(log,kafka,JSON_DST_NAME_NAME,ip_name);
+
+                // networks
+                IP_str_assoc * ip_net = SearchStrNet(ipv4,jsonData->nets);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                LogJSON_a(log,kafka,JSON_DST_NET_NAME,ip_net?ip_net->ipv4_str:"0.0.0.0/0");
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                LogJSON_a(log,kafka,JSON_DST_NET_NAME_NAME,ip_net?ip_net->str:"0.0.0.0/0");
             }
         }
         else if(!strncasecmp("icmptype",type,8))

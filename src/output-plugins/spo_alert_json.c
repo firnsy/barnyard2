@@ -101,7 +101,11 @@
 #define JSON_SRCPORT_NAME "srcport"
 #define JSON_DSTPORT_NAME "dstport"
 #define JSON_SRC_NAME "src"
+#define JSON_SRC_STR_NAME "srcstr"
+#define JSON_SRC_NAME_NAME "srcname"
 #define JSON_DST_NAME "dst"
+#define JSON_DST_NAME_NAME "dstname"
+#define JSON_DST_STR_NAME "dststr"
 #define JSON_ICMPTYPE_NAME "icmptype"
 #define JSON_ICMPCODE_NAME "icmpcode"
 #define JSON_ICMPID_NAME "icmpid"
@@ -175,7 +179,7 @@ static void AlertJSON(Packet *, void *, uint32_t, void *);
 static void AlertJSONCleanExit(int, void *);
 static void AlertRestart(int, void *);
 static void RealAlertJSON(
-    Packet*, void*, uint32_t, char **args, int numargs, TextLog*,KafkaLog *
+    Packet*, void*, uint32_t, char **args, int numargs, AlertJSONData * data
 );
 
 /*
@@ -263,7 +267,8 @@ static void FillHostsList(char * filename,IP_str_assoc ** list, const uint8_t mo
                 sscanf(line_buffer,"%d.%d.%d.%d",&ip_t[0],&ip_t[1],&ip_t[2],&ip_t[3])
                 : sscanf(line_buffer,"%d.%d.%d.%d/%d",&ip_t[0],&ip_t[1],&ip_t[2],&ip_t[3],
                                                            &netmask);
-            char * name_string = strchr(line_buffer,' ');
+            char * name_string = line_buffer;
+            while(!isblank(*++name_string)); // skipping ip
             while(isblank(*++name_string));
             if((mode==0?4:5) ==aux_ret && name_string && ip_t[0]<0x100 
                 && ip_t[1]<0x100 &&ip_t[2]<0x100 &&ip_t[3]<0x100)
@@ -282,6 +287,15 @@ static void FillHostsList(char * filename,IP_str_assoc ** list, const uint8_t mo
     }
 
     fclose(file);
+}
+
+static char * SearchStrIP(const uint32_t ip,const IP_str_assoc *iplist){
+    IP_str_assoc * node;
+    for(node = (IP_str_assoc *)iplist;node;node=node->next){
+        if(node->ipv4==ip)
+            return node->str;
+    }
+    return NULL;
 }
 
 /*
@@ -447,7 +461,7 @@ static void AlertRestart(int signal, void *arg)
 static void AlertJSON(Packet *p, void *event, uint32_t event_type, void *arg)
 {
     AlertJSONData *data = (AlertJSONData *)arg;
-    RealAlertJSON(p, event, event_type, data->args, data->numargs, data->log,data->kafka);
+    RealAlertJSON(p, event, event_type, data->args, data->numargs, data);
 }
 
 static bool inline PrintJSONFieldName(TextLog * log,KafkaLog * kafka,const char *fieldName){
@@ -481,6 +495,39 @@ static bool inline LogJSON_a(TextLog *log,KafkaLog *kafka,const char *fieldName,
     return aok;
 }
 
+/*
+ * A faster replacement for inet_ntoa().
+ * Extracted from tcpdump
+ */
+char* _intoa(unsigned int addr, char* buf, u_short bufLen) {
+  char *cp, *retStr;
+  u_int byte;
+  int n;
+
+  cp = &buf[bufLen];
+  *--cp = '\0';
+
+  n = 4;
+  do {
+    byte = addr & 0xff;
+    *--cp = byte % 10 + '0';
+    byte /= 10;
+    if (byte > 0) {
+      *--cp = byte % 10 + '0';
+      byte /= 10;
+      if (byte > 0)
+        *--cp = byte + '0';
+    }
+    *--cp = '.';
+    addr >>= 8;
+  } while (--n > 0);
+
+  /* Convert the string to lowercase */
+  retStr = (char*)(cp+1);
+
+  return(retStr);
+}
+
 
 /*
   * Function: RealAlertJSON(Packet *, char *, FILE *, char *, numargs const int)
@@ -496,12 +543,15 @@ static bool inline LogJSON_a(TextLog *log,KafkaLog *kafka,const char *fieldName,
  *
  */
 static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
-        char **args, int numargs, TextLog* log,KafkaLog * kafka)
+        char **args, int numargs, AlertJSONData * jsonData)
 {
     int num;
-    SigNode             *sn;
+    SigNode *sn;
     char *type;
     char tcpFlags[9];
+
+    TextLog* log = jsonData->log;
+    KafkaLog * kafka = jsonData->kafka;
 
     if(p == NULL)
         return;
@@ -689,25 +739,53 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         else if(!strncasecmp("src", type, 3))
         {
             if(IPH_IS_VALID(p)){
+                static char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];
+                const size_t bufLen = sizeof buf;
+                uint32_t ipv4 = ntohl(GET_SRC_ADDR(p).s_addr);
+
                 LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
                 /*
                     String version
                     PrintJSONFieldName(log,kafka,JSON_SRC_NAME);
                     LogOrKafka_Quote(log,kafka, inet_ntoa(GET_SRC_ADDR(p))); 
                 */
-                LogJSON_i32(log,kafka,JSON_SRC_NAME,ntohl(GET_SRC_ADDR(p).s_addr));
+                LogJSON_i32(log,kafka,JSON_SRC_NAME,ipv4);
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                char * ip_str = _intoa(ipv4, buf, bufLen);
+                LogJSON_a(log,kafka,JSON_SRC_STR_NAME,ip_str);
+                const char * ip_name = SearchStrIP(ipv4,jsonData->hosts);
+                if(NULL==ip_name)
+                    ip_name = ip_str;
+
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                LogJSON_a(log,kafka,JSON_SRC_NAME_NAME,ip_name);
+                
             }
         }
         else if(!strncasecmp("dst", type, 3))
         {
             if(IPH_IS_VALID(p)){
+                static char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];
+                const size_t bufLen = sizeof buf;
+                uint32_t ipv4 = ntohl(GET_DST_ADDR(p).s_addr);
+
                 LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
                 /*
                     String version
                     PrintJSONFieldName(log,kafka,JSON_DST_NAME);
                     LogOrKafka_Puts(log,kafka, inet_ntoa(GET_DST_ADDR(p)));
                 */
-                LogJSON_i32(log,kafka,JSON_DST_NAME,ntohl(GET_DST_ADDR(p).s_addr));
+                LogJSON_i32(log,kafka,JSON_DST_NAME,ipv4);
+
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                char * ip_str = _intoa(ipv4, buf, bufLen);
+                LogJSON_a(log,kafka,JSON_DST_STR_NAME,ip_str);
+                const char * ip_name = SearchStrIP(ipv4,jsonData->hosts);
+                if(NULL==ip_name)
+                    ip_name = ip_str;
+
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                LogJSON_a(log,kafka,JSON_DST_NAME_NAME,ip_name);
             }
         }
         else if(!strncasecmp("icmptype",type,8))

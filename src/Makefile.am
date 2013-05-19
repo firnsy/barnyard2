@@ -33,6 +33,7 @@ input-plugins/libspi.a \
 sfutil/libsfutil.a \
 sfutil/kafka/librdkafka.a \
 -lpthread\
+-lGeoIP\
 -lz -lrt
 
 

@@ -70,6 +70,11 @@
 #include "log_text.h"
 #include "ipv6_port.h"
 
+#define GEO_IP
+#ifdef GEO_IP
+#include "GeoIP.h"
+#endif // GEO_IP
+
 
 #define DEFAULT_JSON "timestamp,sig_generator,sig_id,sig_rev,msg,proto,src,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcpln,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
@@ -125,6 +130,11 @@
 #define JSON_TCPWINDOW_NAME "tcpwindow"
 #define JSON_TCPFLAGS_NAME "tcpflags"
 
+#ifdef GEO_IP
+#define JSON_SRC_COUNTRY_NAME "src_country"
+#define JSON_DST_COUNTRY_NAME "dst_country"
+#endif // GEO_IP
+
 
 typedef struct _AlertJSONConfig
 {
@@ -149,6 +159,9 @@ typedef struct _AlertJSONData
     int numargs;
     AlertJSONConfig *config;
     IP_str_assoc * hosts, *nets;
+#ifdef GEO_IP
+    GeoIP *gi;
+#endif 
 } AlertJSONData;
 
 
@@ -406,8 +419,17 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     data->args = toks;
     data->numargs = num_toks;
 
-    FillHostsList("/opt/rb/etc/hosts",&data->hosts,0);
-    FillHostsList("/opt/rb/etc/networks",&data->nets,1);
+    FillHostsList("/etc/hosts",&data->hosts,0);
+    FillHostsList("/etc/barnyard_networks",&data->nets,1);
+
+#ifdef GEO_IP
+    const char * geoIP_path = "/usr/local/share/GeoIP/GeoIP.dat";
+    data->gi = GeoIP_open(geoIP_path, GEOIP_MEMORY_CACHE);
+
+    if (data->gi == NULL)
+        FatalError("Error opening database %s\n",geoIP_path);
+
+#endif // GEO_IP
 
     DEBUG_WRAP(DebugMessage(
         DEBUG_INIT, "alert_json: '%s' '%s' %ld\n", filename, data->jsonargs, limit
@@ -477,6 +499,10 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
             free(ip_node);
             ip_node = aux;
         }
+
+        #ifdef GEO_IP
+        GeoIP_delete(data->gi);
+        #endif // GWO_IP
         /* free memory from SpoJSONData */
         free(data);
     }
@@ -807,6 +833,11 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
                 LogJSON_a(log,kafka,JSON_SRC_NET_NAME_NAME,ip_net?ip_net->str:"0.0.0.0/0");
 
+                #ifdef GEO_IP
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                LogJSON_a(log,kafka,JSON_SRC_COUNTRY_NAME,GeoIP_country_name_by_ipnum(jsonData->gi,ipv4));
+                #endif
+
             }
         }
         else if(!strncasecmp("dst", type, 3))
@@ -844,6 +875,11 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 LogJSON_a(log,kafka,JSON_DST_NET_NAME,ip_net?ip_net->ipv4_str:"0.0.0.0/0");
                 LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
                 LogJSON_a(log,kafka,JSON_DST_NET_NAME_NAME,ip_net?ip_net->str:"0.0.0.0/0");
+
+                #ifdef GEO_IP
+                LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR);
+                LogJSON_a(log,kafka,JSON_DST_COUNTRY_NAME,GeoIP_country_name_by_ipnum(jsonData->gi,ipv4));
+                #endif
             }
         }
         else if(!strncasecmp("icmptype",type,8))

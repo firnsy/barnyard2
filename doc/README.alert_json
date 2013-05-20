@@ -1,0 +1,44 @@
+
+                                         0 Using alert_json barnyard2 plugin
+If you want barnyard2 alerts in json format, you just need to add the plugin in barnyard2.conf file,
+using the next format:
+
+output alert_json: filename
+
+And alert_json plugin will print the barnyard2 output in the correspond file.
+
+
+
+
+                                       1 Using alert_json kafka's capabilities 
+If you want to use kafka in alert_json barnyard2 plugin, you have to put it in barnyard2.conf file. The format
+of the argument passed to the plugin is:
+output alert_json: kafka://<host>:<port>@<topic>
+
+Where host, port and topic are the kafka host, port and topic (not zookeepers one).
+
+Also, you have to configure the project using --enable-kafka flag, and install librdkafka libraries 
+(see https://github.com/edenhill/librdkafka/ for details).
+
+
+
+
+                                        2 Host and network in readable format:
+Alert_json can print a human readable string plus the default host string. For example, if you
+have the hostname “foo PC” associated with the “192.168.100.3” ip in /etc/hosts file, alert_json will
+print “foo PC” plus “192.168.100.3” and the number representation of the ip. In the same way,
+alert_json can print the destination or source network of the packet. You have to make an entry
+in “/etc/barnyard_networks” indicating this. For example, the entry “192.168.100.0/24 foo
+network” will make alert_json print the network name plus the network id. In case alert_json does
+not locate the network in the file, it will print “0.0.0.0/0” instead.
+
+
+
+                                                      3 GeoIP
+Alert_json can locate the region of the IP too. You just have to have libGeoIP installed and compile
+the sources with GEO_IP macro defined (it's defined by default). Also, you have to put the database
+in “/usr/local/share/GeoIP/GeoIP.dat”
+If you want “alert_json” print geo­localization information too, you have to compile barnyard with
+geo­ip support:
+./configure ­­--enable-geo-ip
+

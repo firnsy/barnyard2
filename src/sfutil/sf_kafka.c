@@ -43,7 +43,7 @@
 #define MIN_BUF  (1*K_BYTES)
 #define MIN_FILE (MIN_BUF)
 
-
+#define KAFKA_MESSAGES_QUEUE_MAXLEN (25*1024*1024)
 
 /*-------------------------------------------------------------------
  * TextLog_Open/Close: open/close associated log file
@@ -56,6 +56,8 @@ rd_kafka_t* KafkaLog_Open (const char* name)
     if(NULL == kafka_handle){
         perror("kafka_new producer");
         FatalError("There was impossible to allocate a kafka handle.");
+    }else{
+        kafka_handle->rk_conf.producer.max_outq_msg_cnt = KAFKA_MESSAGES_QUEUE_MAXLEN;
     }
     return kafka_handle;
 }
@@ -152,7 +154,9 @@ bool KafkaLog_Flush(KafkaLog* this)
 
     // In daemon mode, we must start the handler here
     if(this->handler==NULL && BcDaemonMode()){
-        this->handler = KafkaLog_Open(this->broker);
+	this->handler = KafkaLog_Open(this->broker);
+	if(!this->handler)
+	   FatalError("There was not possible to solve %s direction",this->broker);
     }
     if(this->handler->rk_state == RD_KAFKA_STATE_DOWN)
 	free(this->buf);

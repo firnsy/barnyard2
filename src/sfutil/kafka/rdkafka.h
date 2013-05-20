@@ -140,6 +140,16 @@ typedef struct rd_kafka_conf_s {
 
 	} consumer;
 
+
+	struct {
+		int max_outq_msg_cnt;  /* Maximum number of messages allowed
+					* in the output queue.
+					* If this number is exceeded the
+					* rd_kafka_produce() call will
+					* return with -1 and errno
+					* set to ENOBUFS. */
+	} producer;
+
 } rd_kafka_conf_t;
 
 
@@ -326,9 +336,26 @@ int rd_kafka_offset_store (rd_kafka_t *rk, uint64_t offset);
 /**
  * Produce and send a single message to the broker.
  *
+ * There are two alternatives for 'payload':
+ *   1) static data that will not change or go away during the lifetime
+ *      of the rd_kafka_t handle. *This is uncommon*.
+ *
+ *   2) malloc():ed data that librdkafka will free when done with it,
+ *      this requires the RD_KAFKA_OP_F_FREE flag to be set in msgflags.
+ *
+ * There is currently no way for the application to know when librdkafka is
+ * done with the payload, so the control of freeing the payload must be left
+ * to librdkafka as described in alternative 2) above.
+ *
+ *
+ * Returns 0 on success or -1 on error (see errno for details)
+ *
+ * errno:
+ *   ENOBUFS - The conf.producer.max_outq_msg_cnt would be exceeded.
+ *
  * Locality: application thread
  */
-void        rd_kafka_produce (rd_kafka_t *rk, char *topic, uint32_t partition,
+int         rd_kafka_produce (rd_kafka_t *rk, char *topic, uint32_t partition,
 			      int msgflags, char *payload, size_t len);
 
 /**

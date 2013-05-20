@@ -154,7 +154,10 @@ bool KafkaLog_Flush(KafkaLog* this)
     if(this->handler==NULL && BcDaemonMode()){
         this->handler = KafkaLog_Open(this->broker);
     }
-    rd_kafka_produce(this->handler, this->topic, 0, RD_KAFKA_OP_F_FREE, this->buf, this->pos);
+    if(this->handler->rk_state == RD_KAFKA_STATE_DOWN)
+	free(this->buf);
+    else
+        rd_kafka_produce(this->handler, this->topic, 0, RD_KAFKA_OP_F_FREE, this->buf, this->pos);
     this->buf = malloc(sizeof(char)*this->maxBuf);
 
     KafkaLog_Reset(this);

@@ -1097,7 +1097,7 @@ static void Barnyard2Cleanup(int exit_val,int exit_needed)
     if (BcContinuousMode() || BcBatchMode())
     {
         /* Do some post processing on any incomplete Plugin Data */
-        idxPlugin = plugin_shutdown_funcs;
+	idxPlugin = plugin_clean_exit_funcs;
         while(idxPlugin)
         {
 	    idxPluginNext = idxPlugin->next;
@@ -1105,7 +1105,11 @@ static void Barnyard2Cleanup(int exit_val,int exit_needed)
 	    free(idxPlugin);
             idxPlugin = idxPluginNext;
         }
-	plugin_shutdown_funcs = NULL;
+	plugin_clean_exit_funcs = NULL;
+    }
+
+
+
 
 	/*
 	  Right now we will just free them if they are initialized since
@@ -1119,7 +1123,17 @@ static void Barnyard2Cleanup(int exit_val,int exit_needed)
             idxPlugin = idxPluginNext;
         }
 	plugin_restart_funcs = NULL;
-    }
+    
+
+	idxPlugin = plugin_shutdown_funcs;
+	while(idxPlugin)
+        {
+            idxPluginNext = idxPlugin->next;
+            free(idxPlugin);
+            idxPlugin = idxPluginNext;
+        }
+	plugin_shutdown_funcs = NULL;
+
     
     if (!exit_val)
     {
@@ -1711,10 +1725,10 @@ static Barnyard2Config * MergeBarnyard2Confs(Barnyard2Config *cmd_line, Barnyard
 
     if(cmd_line->ssHead)
     {
-        config_file->ssHead = cmd_line->ssHead;
-        cmd_line->ssHead = NULL;
+	config_file->ssHead = cmd_line->ssHead;
+	cmd_line->ssHead = NULL;
     }
-
+    
     if( (cmd_line->sid_msg_file) &&
 	(config_file->sid_msg_file))
     {

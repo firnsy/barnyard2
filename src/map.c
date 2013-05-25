@@ -461,7 +461,7 @@ void DeleteClassifications(Barnyard2Config *bc)
     bc->classifications = NULL;
 }
 
-int ReadClassificationFile(Barnyard2Config *bc, const char *file)
+int ReadClassificationFile(Barnyard2Config *bc)
 {
     FILE        *fd;
     char        buf[BUFFER_SIZE];
@@ -470,25 +470,29 @@ int ReadClassificationFile(Barnyard2Config *bc, const char *file)
     int         num_toks;
     int         count = 0;
     
+    if( (bc == NULL) ||
+	(bc->class_file == NULL))
+    {
+	/* XXX */
+	return 1;
+    }
     
     DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: opening file %s\n", file););
     
-    if((fd = fopen(file, "r")) == NULL)
+    if((fd = fopen(bc->class_file, "r")) == NULL)
     {
         LogMessage("ERROR: Unable to open Classification file '%s' (%s)\n", 
-                file, strerror(errno));
+		   bc->class_file, strerror(errno));
         
         return -1;
     }
     
-    bc->class_file =(char *)file;
-
     memset(buf, 0, BUFFER_SIZE); /* bzero() deprecated, replaced with memset() */
     
     while ( fgets(buf, BUFFER_SIZE, fd) != NULL )
     {
         index = buf;
-
+	
         /* advance through any whitespace at the beginning of the line */
         while (*index == ' ' || *index == '\t')
             index++;
@@ -511,8 +515,7 @@ int ReadClassificationFile(Barnyard2Config *bc, const char *file)
   if(fd != NULL)
     fclose(fd);
 
-  bc->class_file = NULL;
-
+  
   return 0;
 }
 
@@ -543,6 +546,7 @@ int SignatureResolveClassification(ClassType *class,SigNode *sig,char *sid_msg_f
     {
 	DEBUG_WRAP(DebugMessage(DEBUG_MAPS,"ERROR [%s()]: Failed class ptr [0x%x], sig ptr [0x%x], "
 				"sig_literal ptr [0x%x], sig_map_file ptr [0x%x], classification_file ptr [0x%x] \n",
+				__FUNCTION__,
 				class,
 				sig,
 				sig->classLiteral,

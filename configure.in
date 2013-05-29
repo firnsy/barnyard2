@@ -130,10 +130,52 @@ AC_ARG_ENABLE(geo-ip,
        enable_geo_ip="$enableval", enable_geop_ip="no")
 if test "x$enable_geo_ip" = "xyes"; then
     AC_MSG_RESULT(yes)
+    AC_CHECK_HEADERS([librdkafka/rdkafka.h],[],
+      [
+        echo "Error: Librdkafka headers not found."
+        echo "You can download and install it from https://github.com/edenhill/librdkafka"
+        echo "Remember you have to use 0.7 branch"
+        exit 1
+      ])
+    AC_CHECK_LIB(rdkafka,rd_kafka_new,[],
+      [
+        echo "Error: Librdkafka library not found."
+        echo "You can download and install it from https://github.com/edenhill/librdkafka"
+        echo "Remember you have to use 0.7 branch"
+        exit 1
+      ])
     CFLAGS="$CFLAGS -DJSON_GEO_IP"
+    LDFLAGS="$LDFLAGS -lGeoIP"
 else
     AC_MSG_RESULT(no)
 fi
+
+AC_MSG_CHECKING(for rdkafka libraries)
+AC_ARG_ENABLE(kafka,
+[  --enable-kafka           Enable kafka messagin.],
+       enable_kafka="$enableval", enable_kafka="no")
+if test "x$enable_kafka" = "xyes"; then
+    AC_CHECK_HEADERS([librdkafka/rdkafka.h],[],
+      [
+        echo "Error: Librdkafka headers not found."
+        echo "You can download and install it from https://github.com/edenhill/librdkafka"
+        echo "Remember you have to use 0.7 branch"
+        exit 1
+      ])
+    AC_CHECK_LIB(rdkafka,rd_kafka_new,[],
+      [
+        echo "Error: Librdkafka library not found."
+        echo "You can download and install it from https://github.com/edenhill/librdkafka"
+        echo "Remember you have to use 0.7 branch"
+        exit 1
+      ])
+    CFLAGS="$CFLAGS -DJSON_KAFKA"
+    LDFLAGS="$LDFLAGS -lrdkafka"
+    AC_MSG_RESULT(yes)
+else
+    AC_MSG_RESULT(no)
+fi
+
 
 # AC_PROG_YACC defaults to "yacc" when not found
 # this check defaults to "none"

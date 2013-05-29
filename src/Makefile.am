@@ -30,12 +30,7 @@ util.c util.h
 
 barnyard2_LDADD = output-plugins/libspo.a \
 input-plugins/libspi.a \
-sfutil/libsfutil.a \
-sfutil/kafka/librdkafka.a \
--lpthread\
--lGeoIP\
--lz -lrt
-
+sfutil/libsfutil.a
 
 SUBDIRS = sfutil output-plugins input-plugins
 

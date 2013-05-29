@@ -1,6 +1,8 @@
 /****************************************************************************
  *
- * Copyright (C) 2003-2009 Sourcefire, Inc.
+ * Copyright (C) 2013 Eneo Tecnologia S.L.
+ * Author: Eugenio Perez <eupm90@gmail.com>
+ * Based on sf_text source. 
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License Version 2 as
@@ -21,20 +23,15 @@
  
 /**
  * @file   sf_kafka.h
- * @author Russ Combs <cmg@sourcefire.com>
- * @date   Fri Jun 27 10:34:37 2003
+ * @author Eugenio Pérez <eupm90@gmail.com>
+ * @date   Wed May 29 2013
  * 
  * @brief  declares buffered text stream for logging
+ * Based on sf_text source.
  * 
- * Declares a TextLog_*() api for buffered logging.  This allows
- * relatively painless transition from fprintf(), fwrite(), etc.
- * to a buffer that is formatted in memory and written with one
- * fwrite().
- *
- * Additionally, the file is capped at a maximum size.  Beyond
- * that, the file is closed, renamed, and reopened.  The current
- * file always has the same name.  Old files are renamed to that
- * name plus a timestamp.
+ * Declares a KafkaLog_*() api for buffered logging and send to an Apache Kafka
+ * Server. This allows unify the way to write json in a file and sending to
+ * kafka using TextLog_sf.
  */
 
 #ifndef _SF_KAFKA_LOG_H
@@ -45,7 +42,10 @@
 #include <time.h>
 
 #include "debug.h" /* for INLINE */
+#include "sf_textlog.h"
+#ifdef JSON_KAFKA
 #include "kafka/rdkafka.h"
+#endif
 
 
 #include <stdio.h>
@@ -73,6 +73,7 @@ typedef int bool;
  */
 typedef struct _KafkaLog
 {
+#ifdef JSON_KAFKA
 /* private: */
 /* broker attributes: */
     rd_kafka_t * handler;
@@ -84,12 +85,14 @@ typedef struct _KafkaLog
 /* buffer attributes: */
     unsigned int pos;
     unsigned int maxBuf;
-    char auxbuf[KAFKA_AUXBUF_SIZE];
     char * buf;
+#endif
+/* TextLog helper. Useful for loggind and just send data to a json file */
+    TextLog * textLog;
 } KafkaLog;
 
 KafkaLog* KafkaLog_Init (
-    const char* broker, unsigned int maxBuf, const char * topic, const int partition, bool open
+    const char* broker, unsigned int maxBuf, const char * topic, const int partition, bool open, const char *filename
 );
 void KafkaLog_Term (KafkaLog* this);
 
@@ -106,18 +109,30 @@ bool KafkaLog_Flush(KafkaLog*);
   */
  static INLINE int KafkaLog_Tell (KafkaLog* this)
  {
-     return this->pos;
+    #ifndef JSON_KAFKA
+    return this->textLog?this->textLog->pos:0;
+    #else
+    return this->pos;
+    #endif
  }
  
  static INLINE int KafkaLog_Avail (KafkaLog* this)
  {
-     return this->maxBuf - this->pos - 1;
+    #ifndef JSON_KAFKA
+    return this->textLog?TextLog_Avail(this->textLog):0;
+    #else
+    return this->maxBuf - this->pos - 1;
+    #endif
  }
  
  static INLINE void KafkaLog_Reset (KafkaLog* this)
- {   
-     this->pos = 0;
-     this->buf[this->pos] = '\0';
+ {
+    if(this->textLog)
+        TextLog_Reset(this->textLog);
+    #ifdef JSON_KAFKA
+    this->pos = 0;
+    this->buf[this->pos] = '\0';
+    #endif
  }
 
 static INLINE bool KafkaLog_NewLine (KafkaLog* this)

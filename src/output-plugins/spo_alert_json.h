@@ -1,7 +1,7 @@
 /*
-** Copyright (C) 2002-2009 Sourcefire, Inc.
-** Copyright (C) 1998-2002 Martin Roesch <roesch@sourcefire.com>
-** Copyright (C) 2001 Brian Caswell <bmc@mitre.org>
+** Copyright (C) 2013 Eneo Tecnologia S.L.
+** Author: Eugenio Perez <eupm90@gmail.com>
+** Based on alert_cvs plugin. 
 **
 ** This program is free software; you can redistribute it and/or modify
 ** it under the terms of the GNU General Public License Version 2 as

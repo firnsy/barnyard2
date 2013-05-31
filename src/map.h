@@ -132,7 +132,7 @@ ClassType * ClassTypeLookupByType(struct _Barnyard2Config *, char *);
 ClassType * ClassTypeLookupById(struct _Barnyard2Config *, int);
 
 int ReadReferenceFile(struct _Barnyard2Config *, const char *);
-int ReadClassificationFile(struct _Barnyard2Config *, const char *);
+int ReadClassificationFile(struct _Barnyard2Config *);
 int ReadSidFile(struct _Barnyard2Config *);
 int ReadGenFile(struct _Barnyard2Config *);
 int SignatureResolveClassification(ClassType *class,SigNode *sig,char *sid_map_file,char *classification_file);

@@ -1284,14 +1284,18 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
         int i;
         /* parse out your args */
         toks = mSplit(args, ",", 31, &num_toks, '\\');
+
         for(i = 0; i < num_toks; ++i)
         {
             char **stoks;
             int num_stoks;
             char *index = toks[i];
-            while(isspace((int)*index))
+            
+	    while(isspace((int)*index))
                 ++index;
-            stoks = mSplit(index, " ", 2, &num_stoks, 0);
+	    
+	    stoks = mSplit(index, " ", 2, &num_stoks, 0);
+
             if(strcasecmp("port", stoks[0]) == 0)
             {
                 if(num_stoks > 1 )
@@ -1625,7 +1629,7 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
                         "SyslogFull plugin: %s\n", file_name, file_line, index);
             }	
 
-
+	    mSplitFree(&stoks,num_stoks);
 	}
 	/* free your mSplit tokens */
 	mSplitFree(&toks, num_toks);

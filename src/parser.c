@@ -1702,7 +1702,9 @@ void ConfigClassificationFile(Barnyard2Config *bc, char *args)
     if ((args == NULL) || (bc == NULL) )
         return;
 
-    ReadClassificationFile(bc, args);
+    bc->class_file = strndup(args,strlen(args));
+
+    ReadClassificationFile(bc);
 }
 
 void ConfigCreatePidFile(Barnyard2Config *bc, char *args)

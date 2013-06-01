@@ -106,7 +106,7 @@ KafkaLog* KafkaLog_Init (
 
     this = (KafkaLog*)malloc(sizeof(KafkaLog));
     #ifdef JSON_KAFKA
-    if(this)
+    if(this){
         this->buf = malloc(sizeof(char)*maxBuf);
 
         if ( !this->buf)

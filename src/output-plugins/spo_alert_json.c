@@ -77,7 +77,7 @@
 #endif // JSON_GEO_IP
 
 
-#define DEFAULT_JSON "timestamp,sig_generator,sig_id,sig_rev,msg,proto,src,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcpln,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON "timestamp,sig_generator,sig_id,sig_rev,priority,classification,msg,proto,src,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcpln,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_LIMIT (128*M_BYTES)
@@ -96,6 +96,10 @@
 #define JSON_SIG_GENERATOR_NAME "sig_generator"
 #define JSON_SIG_ID_NAME "sig_id"
 #define JSON_SIG_REV_NAME "rev"
+#define JSON_PRIORITY_NAME "priority"
+#define DEFAULT_PRIORITY 0
+#define JSON_CLASSIFICATION_NAME "classification"
+#define DEFAULT_CLASSIFICATION 0
 #define JSON_MSG_NAME "msg"
 #define JSON_PROTO_NAME "proto"
 #define JSON_ETHSRC_NAME "ethsrc"
@@ -432,7 +436,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
          * function, will do a fork() and then, in the child process, will call RealAlertJSON, that will not be able to 
          * send kafka data*/
 
-        data->kafka = KafkaLog_Init(kafka_server,LOG_BUFFER, at_char_pos+0,KAFKA_PARTITION,BcDaemonMode()?0:1,filename);
+        data->kafka = KafkaLog_Init(kafka_server,LOG_BUFFER, at_char_pos+1,KAFKA_PARTITION,BcDaemonMode()?0:1,filename);
 	free(kafka_server);
     }
     if ( filename ) free(filename);
@@ -625,6 +629,28 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                     FatalError("Not enough buffer space to escape msg string\n");
             }
         }
+        else if(!strncasecmp("priority",type,sizeof "priority")){
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            if(event != NULL)
+            {
+                if(!LogJSON_i32(kafka,JSON_PRIORITY_NAME, ntohl(((Unified2EventCommon *)event)->priority_id)))
+                    FatalError("Not enough buffer space to escape msg string\n");
+            }else{ /* Always log something */
+                if(!LogJSON_i32(kafka,JSON_PRIORITY_NAME, DEFAULT_PRIORITY))
+                    FatalError("Not enough buffer space to escape msg string\n");
+            }
+        }
+        else if(!strncasecmp("classification",type,sizeof "classification")){
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            if(event != NULL)
+            {
+                if(!LogJSON_i32(kafka,JSON_CLASSIFICATION_NAME, ntohl(((Unified2EventCommon *)event)->classification_id)))
+                    FatalError("Not enough buffer space to escape msg string\n");
+            }else{ /* Always log something */
+                if(!LogJSON_i32(kafka,JSON_PRIORITY_NAME, DEFAULT_CLASSIFICATION))
+                    FatalError("Not enough buffer space to escape msg string\n");
+            }
+        }
         else if(!strncasecmp("msg", type, 3))
         {
             if ( event != NULL )
@@ -646,23 +672,27 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         }
         else if(!strncasecmp("proto", type, 5))
         {
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
             if(IPH_IS_VALID(p))
             {
+
                 switch (GET_IPH_PROTO(p))
                 {
                     case IPPROTO_UDP:
-                	KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
                         LogJSON_a(kafka,JSON_PROTO_NAME,"UDP");
                         break;
                     case IPPROTO_TCP:
-                	KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
                         LogJSON_a(kafka,JSON_PROTO_NAME,"TCP");
                         break;
                     case IPPROTO_ICMP:
-                	KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
                         LogJSON_a(kafka,JSON_PROTO_NAME,"ICMP");
                         break;
+                    default: /* Always log something */
+                        LogJSON_a(kafka,JSON_PROTO_NAME,"-");
+                        break;
                 }
+            }else{ /* Always log something */
+                LogJSON_a(kafka,JSON_PROTO_NAME,"-");
             }
         }
         else if(!strncasecmp("ethsrc", type, 6))
@@ -725,118 +755,121 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
 
         else if(!strncasecmp("srcport", type, 7))
         {
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
             if(IPH_IS_VALID(p))
             {
                 switch(GET_IPH_PROTO(p))
                 {
                     case IPPROTO_UDP:
                     case IPPROTO_TCP:
-                        KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                        PrintJSONFieldName(kafka,JSON_SRCPORT_NAME);
-                        KafkaLog_Print(kafka, "%d", p->sp);
+                        LogJSON_i16(kafka,JSON_SRCPORT_NAME,p->sp);
+                        break;
+                    default: /* Always log something */
+                        LogJSON_i16(kafka,JSON_SRCPORT_NAME,0);
                         break;
                 }
+            }else{ /* Always Log something */
+                LogJSON_i16(kafka,JSON_SRCPORT_NAME,0);
             }
         }
         else if(!strncasecmp("dstport", type, 7))
         {
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
             if(IPH_IS_VALID(p))
             {
                 switch(GET_IPH_PROTO(p))
                 {
                     case IPPROTO_UDP:
                     case IPPROTO_TCP:
-                        KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                        PrintJSONFieldName(kafka,JSON_DSTPORT_NAME);
-                        KafkaLog_Print(kafka,  "%d", p->dp);
+                        LogJSON_i16(kafka,JSON_DSTPORT_NAME,p->dp);
+                        break;
+                    default:
+                        LogJSON_i16(kafka,JSON_DSTPORT_NAME,0);
                         break;
                 }
+            }else{ /* Always Log something */
+                LogJSON_i16(kafka,JSON_DSTPORT_NAME,0);
             }
         }
         else if(!strncasecmp("src", type, 3)) // TODO merge with "dst" field
-        {
-            if(IPH_IS_VALID(p)){
-                static char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];
-                const size_t bufLen = sizeof buf;
-                uint32_t ipv4 = ntohl(GET_SRC_ADDR(p).s_addr);
+        {    
+            static char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];
+            const size_t bufLen = sizeof buf;
+            uint32_t ipv4 = IPH_IS_VALID(p) ? ntohl(GET_SRC_ADDR(p).s_addr) : 0;
 
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                /*
-                    String version
-                    PrintJSONFieldName(kafka,JSON_SRC_NAME);
-                    LogOrKafka_Quote(log,kafka, inet_ntoa(GET_SRC_ADDR(p))); 
-                */
-                LogJSON_i32(kafka,JSON_SRC_NAME,ipv4);
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            /*
+                String version
+                PrintJSONFieldName(kafka,JSON_SRC_NAME);
+                LogOrKafka_Quote(log,kafka, inet_ntoa(GET_SRC_ADDR(p))); 
+            */
+            LogJSON_i32(kafka,JSON_SRC_NAME,ipv4);
 
-                char * ip_str=NULL,*ip_name=NULL;
-                IP_str_assoc * ip_str_node = SearchStrIP(ipv4,jsonData->hosts);
-                if(ip_str_node){
-                    ip_str = ip_str_node->ipv4_str;
-                    ip_name = ip_str_node->str;
-                }else{
-                    ip_name = ip_str = _intoa(ipv4, buf, bufLen);
-                }
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_SRC_STR_NAME,ip_str);
-
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_SRC_NAME_NAME,ip_name);
-
-                // networks
-                IP_str_assoc * ip_net = SearchStrNet(ipv4,jsonData->nets);
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_SRC_NET_NAME,ip_net?ip_net->ipv4_str:"0.0.0.0/0");
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_SRC_NET_NAME_NAME,ip_net?ip_net->str:"0.0.0.0/0");
-
-                #ifdef JSON_GEO_IP
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_SRC_COUNTRY_NAME,GeoIP_country_name_by_ipnum(jsonData->gi,ipv4));
-                #endif
-
+            char * ip_str=NULL,*ip_name=NULL;
+            IP_str_assoc * ip_str_node = SearchStrIP(ipv4,jsonData->hosts);
+            if(ip_str_node){
+                ip_str = ip_str_node->ipv4_str;
+                ip_name = ip_str_node->str;
+            }else{
+                ip_name = ip_str = _intoa(ipv4, buf, bufLen);
             }
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            LogJSON_a(kafka,JSON_SRC_STR_NAME,ip_str);
+
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            LogJSON_a(kafka,JSON_SRC_NAME_NAME,ip_name);
+
+            // networks
+            IP_str_assoc * ip_net = SearchStrNet(ipv4,jsonData->nets);
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            LogJSON_a(kafka,JSON_SRC_NET_NAME,ip_net?ip_net->ipv4_str:"0.0.0.0/0");
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            LogJSON_a(kafka,JSON_SRC_NET_NAME_NAME,ip_net?ip_net->str:"0.0.0.0/0");
+
+            #ifdef JSON_GEO_IP
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            LogJSON_a(kafka,JSON_SRC_COUNTRY_NAME,GeoIP_country_name_by_ipnum(jsonData->gi,ipv4));
+            #endif
         }
         else if(!strncasecmp("dst", type, 3))
         {
-            if(IPH_IS_VALID(p)){
-                static char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];
-                const size_t bufLen = sizeof buf;
-                uint32_t ipv4 = ntohl(GET_DST_ADDR(p).s_addr);
+            static char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];
+            const size_t bufLen = sizeof buf;
+            uint32_t ipv4 = IPH_IS_VALID(p) ? ntohl(GET_DST_ADDR(p).s_addr) : 0;
 
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                /*
-                    String version
-                    PrintJSONFieldName(log,kafka,JSON_SRC_NAME);
-                    LogOrKafka_Quote(log,kafka, inet_ntoa(GET_SRC_ADDR(p))); 
-                */
-                LogJSON_i32(kafka,JSON_DST_NAME,ipv4);
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            /*
+                String version
+                PrintJSONFieldName(log,kafka,JSON_SRC_NAME);
+                LogOrKafka_Quote(log,kafka, inet_ntoa(GET_SRC_ADDR(p))); 
+            */
+            LogJSON_i32(kafka,JSON_DST_NAME,ipv4);
 
-                char * ip_str=NULL,*ip_name=NULL;
-                IP_str_assoc * ip_str_node = SearchStrIP(ipv4,jsonData->hosts);
-                if(ip_str_node){
-                    ip_str = ip_str_node->ipv4_str;
-                    ip_name = ip_str_node->str;
-                }else{
-                    ip_name = ip_str = _intoa(ipv4, buf, bufLen);
-                }
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_DST_STR_NAME,ip_str);
-
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_DST_NAME_NAME,ip_name);
-
-                // networks
-                IP_str_assoc * ip_net = SearchStrNet(ipv4,jsonData->nets);
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_DST_NET_NAME,ip_net?ip_net->ipv4_str:"0.0.0.0/0");
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_DST_NET_NAME_NAME,ip_net?ip_net->str:"0.0.0.0/0");
-
-                #ifdef JSON_GEO_IP
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_DST_COUNTRY_NAME,GeoIP_country_name_by_ipnum(jsonData->gi,ipv4));
-                #endif
+            char * ip_str=NULL,*ip_name=NULL;
+            IP_str_assoc * ip_str_node = SearchStrIP(ipv4,jsonData->hosts);
+            if(ip_str_node){
+                ip_str = ip_str_node->ipv4_str;
+                ip_name = ip_str_node->str;
+            }else{
+                ip_name = ip_str = _intoa(ipv4, buf, bufLen);
             }
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            LogJSON_a(kafka,JSON_DST_STR_NAME,ip_str);
+
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            LogJSON_a(kafka,JSON_DST_NAME_NAME,ip_name);
+
+            // networks
+            IP_str_assoc * ip_net = SearchStrNet(ipv4,jsonData->nets);
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            LogJSON_a(kafka,JSON_DST_NET_NAME,ip_net?ip_net->ipv4_str:"0.0.0.0/0");
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            LogJSON_a(kafka,JSON_DST_NET_NAME_NAME,ip_net?ip_net->str:"0.0.0.0/0");
+
+            #ifdef JSON_GEO_IP
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            LogJSON_a(kafka,JSON_DST_COUNTRY_NAME,GeoIP_country_name_by_ipnum(jsonData->gi,ipv4));
+            #endif
         }
         else if(!strncasecmp("icmptype",type,8))
         {

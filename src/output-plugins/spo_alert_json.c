@@ -77,7 +77,7 @@
 #endif // JSON_GEO_IP
 
 
-#define DEFAULT_JSON "timestamp,sig_generator,sig_id,sig_rev,priority,classification,msg,proto,src,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcpln,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON "timestamp,sensor_id,sig_generator,sig_id,sig_rev,priority,classification,msg,proto,src,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcpln,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_LIMIT (128*M_BYTES)
@@ -93,6 +93,9 @@
 #define JSON_FIELDS_SEPARATOR ", "
 
 #define JSON_TIMESTAMP_NAME "event_timestamp"
+#define JSON_SENSOR_ID_SNORT_NAME "sensor_id_snort"
+#define JSON_SENSOR_ID_NAME "sensor_id"
+#define SENSOR_NOT_FOUND_NUMBER 0
 #define JSON_SIG_GENERATOR_NAME "sig_generator"
 #define JSON_SIG_ID_NAME "sig_id"
 #define JSON_SIG_REV_NAME "rev"
@@ -163,6 +166,7 @@ typedef struct _AlertJSONData
     int numargs;
     AlertJSONConfig *config;
     IP_str_assoc * hosts, *nets;
+    uint64_t sensor_id;
 #ifdef JSON_GEO_IP
     GeoIP *gi;
 #endif 
@@ -344,7 +348,6 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     for (i = 0; i < num_toks; i++)
     {
         const char* tok = toks[i];
-        char *end;
 
         switch (i)
         {
@@ -357,7 +360,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
                 break;
 
             case 1:
-                if ( !strcasecmp("default", tok) )
+                if ( !strncasecmp("default", tok,sizeof "default") )
                 {
                 data->jsonargs = strdup(DEFAULT_JSON);
                 }
@@ -368,20 +371,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
                 break;
 
             case 2:
-                limit = strtol(tok, &end, 10);
-
-                if ( tok == end )
-                    FatalError("alert_json error in %s(%i): %s\n",
-                        file_name, file_line, tok);
-
-                if ( end && toupper(*end) == 'G' )
-                    limit <<= 30; /* GB */
-
-                else if ( end && toupper(*end) == 'M' )
-                    limit <<= 20; /* MB */
-
-                else if ( end && toupper(*end) == 'K' )
-                    limit <<= 10; /* KB */
+                data->sensor_id = strtol(tok, NULL, 10);
                 break;
 
             case 3:
@@ -422,7 +412,6 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
             kafka_str++; // skip the FILENAME_KAFKA_SEPARATOR
         }
 
-    
     if(kafka_str){
         const char * at_char_pos = strchr(kafka_str,BROKER_TOPIC_SEPARATOR);
         if(at_char_pos==NULL)
@@ -436,8 +425,9 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
          * function, will do a fork() and then, in the child process, will call RealAlertJSON, that will not be able to 
          * send kafka data*/
 
-        data->kafka = KafkaLog_Init(kafka_server,LOG_BUFFER, at_char_pos+1,KAFKA_PARTITION,BcDaemonMode()?0:1,filename);
-	free(kafka_server);
+        data->kafka = KafkaLog_Init(kafka_server,LOG_BUFFER, at_char_pos+1,
+            KAFKA_PARTITION,BcDaemonMode()?0:1,filename==kafka_str?NULL:filename);
+        free(kafka_server);
     }
     if ( filename ) free(filename);
 
@@ -601,11 +591,28 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             if(!LogJSON_i64(kafka,JSON_TIMESTAMP_NAME,p->pkth->ts.tv_sec*1000 + p->pkth->ts.tv_usec/1000))
                 FatalError("Not enough buffer space to escape msg string\n");
         }
+        else if(!strncasecmp("sensor_id",type,sizeof "sensor_id"))
+        {
+            KafkaLog_Puts(kafka,JSON_FIELDS_SEPARATOR);
+            if(event != NULL)
+            {
+                if(!LogJSON_i32(kafka,JSON_SENSOR_ID_SNORT_NAME,ntohl(((Unified2EventCommon *)event)->sensor_id)))
+                    FatalError("Not enough buffer space to escape msg string\n");
+            }else{
+                if(!LogJSON_i32(kafka,JSON_SENSOR_ID_SNORT_NAME,SENSOR_NOT_FOUND_NUMBER))
+                    FatalError("Not enough buffer space to escape msg string\n");
+            }
+
+            KafkaLog_Puts(kafka,JSON_FIELDS_SEPARATOR);
+            if(!LogJSON_i32(kafka,JSON_SENSOR_ID_NAME,jsonData->sensor_id))
+                FatalError("Not enough buffer space to escape msg string\n");
+
+        }
         else if(!strncasecmp("sig_generator ",type,13))
         {
             if(event != NULL)
             {
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR" ");
+                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
                 if(!LogJSON_i64(kafka,JSON_SIG_GENERATOR_NAME,ntohl(((Unified2EventCommon *)event)->generator_id)))
                     FatalError("Not enough buffer space to escape msg string\n");
                     

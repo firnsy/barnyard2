@@ -122,6 +122,7 @@ KafkaLog* KafkaLog_Init (
 
     this->maxBuf = maxBuf;
     #endif
+    this->textLog = NULL; /* Force NULL by now */
     KafkaLog_Reset(this);
 
     return this;

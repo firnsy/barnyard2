@@ -95,6 +95,7 @@
 #define JSON_TIMESTAMP_NAME "event_timestamp"
 #define JSON_SENSOR_ID_SNORT_NAME "sensor_id_snort"
 #define JSON_SENSOR_ID_NAME "sensor_id"
+#define JSON_SENSOR_NAME_NAME "sensor_name"
 #define SENSOR_NOT_FOUND_NUMBER 0
 #define JSON_SIG_GENERATOR_NAME "sig_generator"
 #define JSON_SIG_ID_NAME "sig_id"
@@ -141,6 +142,8 @@
 #ifdef JSON_GEO_IP
 #define JSON_SRC_COUNTRY_NAME "src_country"
 #define JSON_DST_COUNTRY_NAME "dst_country"
+#define JSON_SRC_COUNTRY_CODE_NAME "src_country_code"
+#define JSON_DST_COUNTRY_CODE_NAME "dst_country_code"
 #endif // JSON_GEO_IP
 
 
@@ -167,6 +170,7 @@ typedef struct _AlertJSONData
     AlertJSONConfig *config;
     IP_str_assoc * hosts, *nets;
     uint64_t sensor_id;
+    char * sensor_name;
 #ifdef JSON_GEO_IP
     GeoIP *gi;
 #endif 
@@ -317,11 +321,11 @@ IP_str_assoc * SearchStrNet(const uint32_t ip,const IP_str_assoc *netlist){
  * Function: ParseJSONArgs(char *)
  *
  * Purpose: Process positional args, if any.  Syntax is:
- * output alert_json: [<logpath> ["default"|<list> [<limit>]]]
+ * output alert_json: [<logpath> ["default"|<list> [sensor_name=name] [sensor_id=id]]
  * list ::= <field>(,<field>)*
  * field ::= "dst"|"src"|"ttl" ...
- * limit ::= <number>('G'|'M'|K')
- *
+ * name ::= sensor name
+ * id  ::= number
  * Arguments: args => argument list
  *
  * Returns: void function
@@ -332,7 +336,6 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     int num_toks;
     AlertJSONData *data;
     char* filename = NULL;
-    unsigned long limit = DEFAULT_LIMIT;
     int i;
 
     DEBUG_WRAP(DebugMessage(DEBUG_INIT, "ParseJSONArgs: %s\n", args););
@@ -371,16 +374,24 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
                 break;
 
             case 2:
-                data->sensor_id = strtol(tok, NULL, 10);
+            case 3:
+                if(0 == strncmp(tok,"sensor_name=",sizeof "sensor_name="-1))
+			data->sensor_name = strdup(tok+sizeof "sensor_name="-1);
+		else if(0 == strncmp(tok,"sensor_id=",sizeof "sensor_id="-1))
+	                data->sensor_id = strtol(tok + sizeof "sensor_id="-1, NULL, 10);
+		else
+			FatalError("alert_json: error in %s(%i): %s\n",
+			file_name, file_line, tok);
                 break;
 
-            case 3:
+            case 4:
                 FatalError("alert_json: error in %s(%i): %s\n",
                     file_name, file_line, tok);
                 break;
         }
     }
     if ( !data->jsonargs ) data->jsonargs = strdup(DEFAULT_JSON);
+    if ( !data->sensor_name ) data->sensor_name = SnortStrdup("-");
     if ( !filename ) filename = ProcessFileOption(barnyard2_conf_for_parsing, DEFAULT_FILE);
 
     mSplitFree(&toks, num_toks);
@@ -605,6 +616,10 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
 
             KafkaLog_Puts(kafka,JSON_FIELDS_SEPARATOR);
             if(!LogJSON_i32(kafka,JSON_SENSOR_ID_NAME,jsonData->sensor_id))
+                FatalError("Not enough buffer space to escape msg string\n");
+		
+            KafkaLog_Puts(kafka,JSON_FIELDS_SEPARATOR);
+            if(!LogJSON_a(kafka,JSON_SENSOR_NAME_NAME,jsonData->sensor_name))
                 FatalError("Not enough buffer space to escape msg string\n");
 
         }
@@ -836,6 +851,9 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             #ifdef JSON_GEO_IP
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
             LogJSON_a(kafka,JSON_SRC_COUNTRY_NAME,GeoIP_country_name_by_ipnum(jsonData->gi,ipv4));
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            LogJSON_a(kafka,JSON_SRC_COUNTRY_CODE_NAME,GeoIP_country_code_by_ipnum(jsonData->gi,ipv4));
+
             #endif
         }
         else if(!strncasecmp("dst", type, 3))
@@ -876,6 +894,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             #ifdef JSON_GEO_IP
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
             LogJSON_a(kafka,JSON_DST_COUNTRY_NAME,GeoIP_country_name_by_ipnum(jsonData->gi,ipv4));
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            LogJSON_a(kafka,JSON_DST_COUNTRY_CODE_NAME,GeoIP_country_code_by_ipnum(jsonData->gi,ipv4));
             #endif
         }
         else if(!strncasecmp("icmptype",type,8))

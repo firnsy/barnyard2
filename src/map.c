@@ -477,7 +477,7 @@ int ReadClassificationFile(Barnyard2Config *bc)
 	return 1;
     }
     
-    DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: opening file %s\n", file););
+    DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: opening file %s\n", bc->class_file););
     
     if((fd = fopen(bc->class_file, "r")) == NULL)
     {

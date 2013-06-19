@@ -725,14 +725,13 @@ int ReadSidFile(Barnyard2Config *bc)
 		if( strncasecmp(index,SIDMAPV2STRING,strlen(SIDMAPV2STRING)) == 0)
 		{
 		    bc->sidmap_version=SIDMAPV2;
+		    continue;
 		}
 	    }
 	    else
 	    {
 		bc->sidmap_version=SIDMAPV1;
 	    }
-	    
-	    continue;
 	}
 
 	/* if it's not a comment or a <CR>, send it to the parser */

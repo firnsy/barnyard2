@@ -80,6 +80,7 @@
 #define DEFAULT_JSON "timestamp,sensor_id,sig_generator,sig_id,sig_rev,priority,classification,msg,proto,src,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcpln,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
 #define DEFAULT_FILE  "alert.json"
+#define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"
 #define DEFAULT_LIMIT (128*M_BYTES)
 #define LOG_BUFFER    (30*K_BYTES)
 
@@ -154,10 +155,9 @@ typedef struct _AlertJSONConfig
 } AlertJSONConfig;
 
 typedef struct _IP_str_assoc{
-    char * str;
-    char * ipv4_str;
-    uint32_t ipv4;
-    uint32_t netmask;
+    char * human_readable_str;
+    char * number_as_str;
+    sfip_t ip;
     struct _IP_str_assoc * next;
 } IP_str_assoc;
 
@@ -240,6 +240,60 @@ static void AlertJSONInit(char *args)
 }
 
 
+/* Enumeration for FillHostList 
+ * @TODO put in a separate file
+ */
+typedef enum{HOSTS,NETWORKS,SERVICES,PROTOCOLS} FILLHOSTSLIST_MODE;
+
+/*
+ * @TODO put in a separate file
+ */
+static IP_str_assoc * FillHostList_Host(char *line_buffer){
+    /* Assuming format of /etc/hosts: ip hostname */
+    char ** toks=NULL;
+    int num_toks;
+    IP_str_assoc * node = SnortAlloc(sizeof(IP_str_assoc));
+    if(node){
+        toks = mSplit((char *)line_buffer, " \t", 2, &num_toks, '\\');
+        node->number_as_str = SnortStrdup(toks[0]);
+        node->human_readable_str = SnortStrdup(toks[1]);
+        const SFIP_RET ret = sfip_pton(node->number_as_str, &node->ip);
+        if(ret==SFIP_FAILURE){
+            free(node->number_as_str);
+            free(node->human_readable_str);
+            free(node);
+            node=NULL;
+        }
+        mSplitFree(&toks, num_toks);
+    }
+    return node;
+}
+
+/*
+ * @TODO put in a separate file
+ * @TODO same as FillHostList_Host except for node->number_as_str and human_readable_str order. merge?
+ */
+static IP_str_assoc * FillHostList_Net(char *line_buffer){
+    /* Assuming format of /etc/hosts: ip hostname */
+    char ** toks=NULL;
+    int num_toks;
+    IP_str_assoc * node = SnortAlloc(sizeof(IP_str_assoc));
+    if(node){
+        toks = mSplit((char *)line_buffer, " \t", 2, &num_toks, '\\');
+        node->number_as_str = SnortStrdup(toks[1]);
+        node->human_readable_str = SnortStrdup(toks[0]);
+        const SFIP_RET ret = sfip_pton(node->number_as_str, &node->ip);
+        if(ret==SFIP_FAILURE){
+            free(node->number_as_str);
+            free(node->human_readable_str);
+            free(node);
+            node=NULL;
+        }
+        mSplitFree(&toks, num_toks);
+    }
+    return node;
+}
+
 /*
  * Function FillHostsList
  *
@@ -248,73 +302,70 @@ static void AlertJSONInit(char *args)
  *
  * Arguments: filename => route to host/networks file
  *            list     => list to fill
- *            mode     => 0 to host mode, 1 to network mode.
- *                        In hots mode, we expect 8.8.8.8 hostname
- *                        In network mode, we expect 8.8.8.8/24 netname.
+ *            mode     => See FILLHOSTSLIST_MODE
  */
-static void FillHostsList(char * filename,IP_str_assoc ** list, const uint8_t mode){
-    uint32_t ip_t[4];
-    uint32_t netmask = 32;
+static void FillHostsList(const char * filename,IP_str_assoc ** list, const FILLHOSTSLIST_MODE mode){
     char line_buffer[1024];
     FILE * file;
-
+    int aok=1;
+    
     if((file = fopen(filename, "r")) == NULL)
     {
         FatalError("fopen() alert file %s: %s\n",filename, strerror(errno));
     }
 
-    IP_str_assoc ** pnode_aux = list;
-    int aux_ret;
-    while(NULL != fgets(line_buffer,1024,file)){
-        if(line_buffer[0]!='#'){
-            *pnode_aux = SnortAlloc(sizeof(IP_str_assoc));
-            aux_ret = mode==0? 
-                sscanf(line_buffer,"%d.%d.%d.%d",&ip_t[0],&ip_t[1],&ip_t[2],&ip_t[3])
-                : sscanf(line_buffer,"%d.%d.%d.%d/%d",&ip_t[0],&ip_t[1],&ip_t[2],&ip_t[3],
-                                                           &netmask);
-            char * name_string = line_buffer;
-            while(!isblank(*++name_string)); // skipping ip
-            *name_string = '\0';
-            (*pnode_aux)->ipv4_str = SnortStrdup(line_buffer);
-            while(isblank(*++name_string)); // skipping blank spaces
-            if((mode==0?4:5) ==aux_ret && name_string && ip_t[0]<0x100 
-                && ip_t[1]<0x100 &&ip_t[2]<0x100 &&ip_t[3]<0x100)
-            {
-                name_string[strlen(name_string)-1] = '\0'; // delete '\n'
-                (*pnode_aux)->str = SnortStrdup(name_string);
-                (*pnode_aux)->ipv4 = (ip_t[0]<<24) + (ip_t[1]<<16) + (ip_t[2]<<8) + ip_t[3];
-                if(mode==1)
-                    (*pnode_aux)->netmask = 0xFFFFFFFF<<netmask;
-                pnode_aux = &(*pnode_aux)->next;
-            }else{
-		free((*pnode_aux)->ipv4_str);
-                free(*pnode_aux);
-                *pnode_aux=NULL;
-            }
+    IP_str_assoc ** llinst_iterator = list;
+    while(NULL != fgets(line_buffer,1024,file) && aok){
+        if(line_buffer[0]!='#' && line_buffer[0]!='\n'){
+            IP_str_assoc * ip_str;
+            
+            switch(mode){
+                case HOSTS:
+                    ip_str = FillHostList_Host(line_buffer); break;
+                case NETWORKS:
+                    ip_str = FillHostList_Net(line_buffer); break;
+                case PROTOCOLS:
+                    /* @TODO ip_str = FillHostList_Proto(line_buffer); */break;
+                case SERVICES:
+                    /* @TODO ip_str = FillHostList_Service(line_buffer); */break;
+            };
+            if(ip_str==NULL)
+                FatalError("alert_json: cannot parse '%s' line in '%s' file\n",line_buffer,filename);
+            *llinst_iterator = ip_str;
+            llinst_iterator = &ip_str->next;
+            ip_str->next=NULL;
         }
     }
 
     fclose(file);
 }
 
-IP_str_assoc * SearchStrIP(const uint32_t ip,const IP_str_assoc *iplist){
+IP_str_assoc * SearchStrIP(uint32_t ip,const IP_str_assoc *iplist){
     IP_str_assoc * node;
+    sfip_t ip_to_cmp;
+    const SFIP_RET ret = sfip_set_raw(&ip_to_cmp, &ip, AF_INET);
+    if(ret!=SFIP_SUCCESS)
+        FatalError("alert_json: Cannot create sfip to compare in line %lu",__LINE__);
+
     for(node = (IP_str_assoc *)iplist;node;node=node->next){
-        if(node->ipv4==ip)
-            return node;
+        if(sfip_equals(ip_to_cmp,node->ip))
+            break;
     }
-    return NULL;
+    return node;
 }
 
-IP_str_assoc * SearchStrNet(const uint32_t ip,const IP_str_assoc *netlist){
+IP_str_assoc * SearchStrNet(uint32_t ip,const IP_str_assoc *iplist){
     IP_str_assoc * node;
-    for(node = (IP_str_assoc *)netlist;node;node=node->next){
-        uint32_t ip_masked = ip&node->netmask;
-        if(node->ipv4 == ip_masked){
-            return node;
-        }
+    sfip_t ip_to_cmp;
+    const SFIP_RET ret = sfip_set_raw(&ip_to_cmp, &ip, AF_INET);
+    if(ret!=SFIP_SUCCESS)
+        FatalError("alert_json: Cannot create sfip to compare in line %lu",__LINE__);
+
+    for(node = (IP_str_assoc *)iplist;node;node=node->next){
+        if(sfip_fast_cont4(&node->ip,&ip_to_cmp))
+            break;
     }
-    return NULL;
+    return node;
 }
 
 /*
@@ -336,7 +387,12 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     int num_toks;
     AlertJSONData *data;
     char* filename = NULL;
+    char* kafka_str = NULL;
     int i;
+    char* hostsListPath = NULL;
+    char* networksPath = NULL;
+    char* services = NULL;
+    char* protocols = NULL;
 
     DEBUG_WRAP(DebugMessage(DEBUG_INIT, "ParseJSONArgs: %s\n", args););
     data = (AlertJSONData *)SnortAlloc(sizeof(AlertJSONData));
@@ -346,53 +402,43 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         FatalError("alert_json: unable to allocate memory!\n");
     }
     if ( !args ) args = "";
-    toks = mSplit((char *)args, " \t", 4, &num_toks, '\\');
+    toks = mSplit((char *)args, " \t", 0, &num_toks, '\\');
 
     for (i = 0; i < num_toks; i++)
     {
         const char* tok = toks[i];
 
-        switch (i)
-        {
-            case 0:
-                if ( !strncasecmp(tok, "stdout",strlen("stdout")) || !strncasecmp(tok, KAFKA_PROT,strlen(KAFKA_PROT)))
-                    filename = SnortStrdup(tok);
-
-                else
-                    filename = ProcessFileOption(barnyard2_conf_for_parsing, tok);
-                break;
-
-            case 1:
-                if ( !strncasecmp("default", tok,sizeof "default") )
-                {
-                data->jsonargs = strdup(DEFAULT_JSON);
-                }
-                else
-                {
-                data->jsonargs = strdup(toks[1]);
-                }
-                break;
-
-            case 2:
-            case 3:
-                if(0 == strncmp(tok,"sensor_name=",sizeof "sensor_name="-1))
-			data->sensor_name = strdup(tok+sizeof "sensor_name="-1);
-		else if(0 == strncmp(tok,"sensor_id=",sizeof "sensor_id="-1))
-	                data->sensor_id = strtol(tok + sizeof "sensor_id="-1, NULL, 10);
-		else
-			FatalError("alert_json: error in %s(%i): %s\n",
+        if ( !strncasecmp(tok, "filename=",strlen("filename=")) && !filename){
+            filename = SnortStrdup(tok+strlen("filename="));
+        }else if(!strncasecmp(tok,"params=",strlen("params=")) && !data->jsonargs){
+            data->jsonargs = SnortStrdup(tok+strlen("params="));
+        }else if(!strncasecmp(tok, KAFKA_PROT,strlen(KAFKA_PROT)) && !kafka_str){
+            kafka_str = SnortStrdup(tok);
+        }else if ( !strncasecmp("default", tok,strlen("default")) && !data->jsonargs){
+            data->jsonargs = SnortStrdup(DEFAULT_JSON);
+        }else if(!strncmp(tok,"sensor_name=",strlen("sensor_name=")) && !data->sensor_name){
+			data->sensor_name = SnortStrdup(tok+strlen("sensor_name="));
+		}else if(!strncmp(tok,"sensor_id=",strlen("sensor_id="))){
+	        data->sensor_id = atol(tok + strlen("sensor_id="));
+        }else if(!strncmp(tok,"hostsListPath=",strlen("hostsListPath="))){
+            hostsListPath = SnortStrdup(tok+strlen("hostsListPath="));
+        }else if(!strncmp(tok,"networksPath=",strlen("networksPath="))){
+            networksPath = SnortStrdup(tok+strlen("networksPath="));
+        }else if(!strncmp(tok,"services=",strlen("services="))){
+            services = SnortStrdup(tok+strlen("services="));
+        }else if(!strncmp(tok,"protocols=",strlen("protocols="))){
+            protocols = SnortStrdup(tok+strlen("protocols="));
+        }else{
+			FatalError("alert_json: Cannot parse %s(%i): %s\n",
 			file_name, file_line, tok);
-                break;
-
-            case 4:
-                FatalError("alert_json: error in %s(%i): %s\n",
-                    file_name, file_line, tok);
-                break;
         }
     }
-    if ( !data->jsonargs ) data->jsonargs = strdup(DEFAULT_JSON);
+
+    /* DFEFAULT VALUES */
+    if ( !data->jsonargs ) data->jsonargs = SnortStrdup(DEFAULT_JSON);
     if ( !data->sensor_name ) data->sensor_name = SnortStrdup("-");
     if ( !filename ) filename = ProcessFileOption(barnyard2_conf_for_parsing, DEFAULT_FILE);
+    if ( !kafka_str ) kafka_str = SnortStrdup(DEFAULT_KAFKA_BROKER);
 
     mSplitFree(&toks, num_toks);
     toks = mSplit(data->jsonargs, ",", 128, &num_toks, 0);
@@ -400,8 +446,8 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     data->args = toks;
     data->numargs = num_toks;
 
-    FillHostsList("/etc/hosts",&data->hosts,0);
-    FillHostsList("/etc/barnyard_networks",&data->nets,1);
+    FillHostsList("/etc/hosts",&data->hosts,HOSTS);
+    FillHostsList("/etc/networks",&data->nets,NETWORKS);
 
 #ifdef JSON_GEO_IP
     const char * geoIP_path = "/usr/local/share/GeoIP/GeoIP.dat";
@@ -413,30 +459,24 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
 #endif // JSON_GEO_IP
 
     DEBUG_WRAP(DebugMessage(
-        DEBUG_INIT, "alert_json: '%s' '%s' %ld\n", filename, data->jsonargs, limit
+        DEBUG_INIT, "alert_json: '%s' '%s'\n", filename, data->jsonargs
     ););
 
-    char * kafka_str = 0==strncasecmp(filename,KAFKA_PROT,strlen(KAFKA_PROT)) ? filename : NULL;
-    if(!kafka_str) /* case: filename+kafka://... */
-        if((kafka_str = strchr(filename,FILENAME_KAFKA_SEPARATOR))){
-            *kafka_str = '\0'; // filename now ends here.
-            kafka_str++; // skip the FILENAME_KAFKA_SEPARATOR
-        }
-
     if(kafka_str){
-        const char * at_char_pos = strchr(kafka_str,BROKER_TOPIC_SEPARATOR);
-        if(at_char_pos==NULL)
+        char * at_char = strchr(kafka_str,BROKER_TOPIC_SEPARATOR);
+        if(at_char==NULL)
             FatalError("alert_json: No topic specified, despite the fact a kafka server was given. Use kafka://broker@topic.");
-        const size_t broker_length = (at_char_pos-(kafka_str+strlen(KAFKA_PROT)));
+        const size_t broker_length = (at_char-(kafka_str+strlen(KAFKA_PROT)));
         char * kafka_server = malloc(sizeof(char)*(broker_length+1));
         strncpy(kafka_server,kafka_str+strlen(KAFKA_PROT),broker_length);
+        kafka_server[broker_length] = '\0';
 
         /*
          * In DaemonMode(), kafka must start in another function, because, in daemon mode, Barnyard2Main will execute this 
          * function, will do a fork() and then, in the child process, will call RealAlertJSON, that will not be able to 
          * send kafka data*/
 
-        data->kafka = KafkaLog_Init(kafka_server,LOG_BUFFER, at_char_pos+1,
+        data->kafka = KafkaLog_Init(kafka_server,LOG_BUFFER, at_char+1,
             KAFKA_PARTITION,BcDaemonMode()?0:1,filename==kafka_str?NULL:filename);
         free(kafka_server);
     }
@@ -461,16 +501,16 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
         ip_node = data->hosts;
         while(ip_node){
             IP_str_assoc * aux = ip_node->next;
-            free(ip_node->ipv4_str);
-            free(ip_node->str);
+            free(ip_node->human_readable_str);
+            free(ip_node->number_as_str);
             free(ip_node);
             ip_node = aux;
         }
         ip_node = data->nets;
         while(ip_node){
             IP_str_assoc * aux = ip_node->next;
-            free(ip_node->ipv4_str);
-            free(ip_node->str);
+            free(ip_node->human_readable_str);
+            free(ip_node->number_as_str);
             free(ip_node);
             ip_node = aux;
         }
@@ -830,8 +870,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             char * ip_str=NULL,*ip_name=NULL;
             IP_str_assoc * ip_str_node = SearchStrIP(ipv4,jsonData->hosts);
             if(ip_str_node){
-                ip_str = ip_str_node->ipv4_str;
-                ip_name = ip_str_node->str;
+                ip_str = ip_str_node->number_as_str;
+                ip_name = ip_str_node->human_readable_str;
             }else{
                 ip_name = ip_str = _intoa(ipv4, buf, bufLen);
             }
@@ -844,20 +884,22 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             // networks
             IP_str_assoc * ip_net = SearchStrNet(ipv4,jsonData->nets);
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_SRC_NET_NAME,ip_net?ip_net->ipv4_str:"0.0.0.0/0");
+            LogJSON_a(kafka,JSON_SRC_NET_NAME,ip_net?ip_net->number_as_str:"0.0.0.0/0");
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_SRC_NET_NAME_NAME,ip_net?ip_net->str:"0.0.0.0/0");
+            LogJSON_a(kafka,JSON_SRC_NET_NAME_NAME,ip_net?ip_net->human_readable_str:"0.0.0.0/0");
 
             #ifdef JSON_GEO_IP
+            const char * country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ipv4);
+            const char * country_code =GeoIP_country_code_by_ipnum(jsonData->gi,ipv4);
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_SRC_COUNTRY_NAME,GeoIP_country_name_by_ipnum(jsonData->gi,ipv4));
+            LogJSON_a(kafka,JSON_SRC_COUNTRY_NAME,country_name?country_name:"N/A");
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_SRC_COUNTRY_CODE_NAME,GeoIP_country_code_by_ipnum(jsonData->gi,ipv4));
-
+            LogJSON_a(kafka,JSON_SRC_COUNTRY_CODE_NAME,country_code?country_code:"N/A");
             #endif
         }
         else if(!strncasecmp("dst", type, 3))
         {
+            /* @TODO merge with "src" field */
             static char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];
             const size_t bufLen = sizeof buf;
             uint32_t ipv4 = IPH_IS_VALID(p) ? ntohl(GET_DST_ADDR(p).s_addr) : 0;
@@ -873,8 +915,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             char * ip_str=NULL,*ip_name=NULL;
             IP_str_assoc * ip_str_node = SearchStrIP(ipv4,jsonData->hosts);
             if(ip_str_node){
-                ip_str = ip_str_node->ipv4_str;
-                ip_name = ip_str_node->str;
+                ip_str = ip_str_node->number_as_str;
+                ip_name = ip_str_node->human_readable_str;
             }else{
                 ip_name = ip_str = _intoa(ipv4, buf, bufLen);
             }
@@ -887,15 +929,17 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             // networks
             IP_str_assoc * ip_net = SearchStrNet(ipv4,jsonData->nets);
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_DST_NET_NAME,ip_net?ip_net->ipv4_str:"0.0.0.0/0");
+            LogJSON_a(kafka,JSON_DST_NET_NAME,ip_net?ip_net->number_as_str:"0.0.0.0/0");
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_DST_NET_NAME_NAME,ip_net?ip_net->str:"0.0.0.0/0");
+            LogJSON_a(kafka,JSON_DST_NET_NAME_NAME,ip_net?ip_net->human_readable_str:"0.0.0.0/0");
 
             #ifdef JSON_GEO_IP
+            const char * country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ipv4);
+            const char * country_code =GeoIP_country_code_by_ipnum(jsonData->gi,ipv4);
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_DST_COUNTRY_NAME,GeoIP_country_name_by_ipnum(jsonData->gi,ipv4));
+            LogJSON_a(kafka,JSON_SRC_COUNTRY_NAME,country_name?country_name:"N/A");
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_DST_COUNTRY_CODE_NAME,GeoIP_country_code_by_ipnum(jsonData->gi,ipv4));
+            LogJSON_a(kafka,JSON_SRC_COUNTRY_CODE_NAME,country_code?country_code:"N/A");
             #endif
         }
         else if(!strncasecmp("icmptype",type,8))

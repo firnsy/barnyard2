@@ -937,9 +937,9 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             const char * country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ipv4);
             const char * country_code =GeoIP_country_code_by_ipnum(jsonData->gi,ipv4);
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_SRC_COUNTRY_NAME,country_name?country_name:"N/A");
+            LogJSON_a(kafka,JSON_DST_COUNTRY_NAME,country_name?country_name:"N/A");
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_SRC_COUNTRY_CODE_NAME,country_code?country_code:"N/A");
+            LogJSON_a(kafka,JSON_DST_COUNTRY_CODE_NAME,country_code?country_code:"N/A");
             #endif
         }
         else if(!strncasecmp("icmptype",type,8))

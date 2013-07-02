@@ -61,6 +61,7 @@
 #include "output-plugins/spo_alert_bro.h"
 #include "output-plugins/spo_alert_cef.h"
 #include "output-plugins/spo_alert_csv.h"
+#include "output-plugins/spo_alert_json.h"
 #include "output-plugins/spo_alert_fast.h"
 #include "output-plugins/spo_alert_full.h"
 #include "output-plugins/spo_alert_fwsam.h"
@@ -341,6 +342,7 @@ void RegisterOutputPlugins(void)
     AlertUnixSockSetup();
 #endif /* !WIN32 */
     AlertCSVSetup();
+		AlertJSONSetup();
     LogNullSetup();
     LogAsciiSetup();
 

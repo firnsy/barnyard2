@@ -11,6 +11,7 @@ spo_alert_csv.c spo_alert_csv.h \
 spo_alert_fast.c spo_alert_fast.h \
 spo_alert_full.c spo_alert_full.h \
 spo_alert_fwsam.c spo_alert_fwsam.h \
+spo_alert_json.c spo_alert_json.h \
 spo_alert_prelude.c spo_alert_prelude.h \
 spo_alert_syslog.c spo_alert_syslog.h \
 spo_alert_test.c spo_alert_test.h \

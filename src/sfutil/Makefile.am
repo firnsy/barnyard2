@@ -12,6 +12,7 @@ libsfutil_a_SOURCES = bitop.h \
     sf_iph.c sf_iph.h \
     sf_ipvar.c sf_ipvar.h \
     sf_textlog.c sf_textlog.h \
+    sf_kafka.c sf_kafka.h \
     sf_vartable.c sf_vartable.h
 
 

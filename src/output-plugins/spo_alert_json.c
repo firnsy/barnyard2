@@ -393,6 +393,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     char* networksPath = NULL;
     char* services = NULL;
     char* protocols = NULL;
+    int start_partition=KAFKA_PARTITION,end_partition=KAFKA_PARTITION;
 
     DEBUG_WRAP(DebugMessage(DEBUG_INIT, "ParseJSONArgs: %s\n", args););
     data = (AlertJSONData *)SnortAlloc(sizeof(AlertJSONData));
@@ -428,6 +429,10 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
             services = SnortStrdup(tok+strlen("services="));
         }else if(!strncmp(tok,"protocols=",strlen("protocols="))){
             protocols = SnortStrdup(tok+strlen("protocols="));
+        }else if(!strncmp(tok,"start_partition=",strlen("start_partition="))){
+            start_partition = end_partition = atol(tok+strlen("start_partition="));
+        }else if(!strncmp(tok,"end_partition=",strlen("end_partition="))){
+            end_partition = atol(tok+strlen("end_partition="));
         }else{
 			FatalError("alert_json: Cannot parse %s(%i): %s\n",
 			file_name, file_line, tok);
@@ -477,7 +482,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
          * send kafka data*/
 
         data->kafka = KafkaLog_Init(kafka_server,LOG_BUFFER, at_char+1,
-            KAFKA_PARTITION,BcDaemonMode()?0:1,filename==kafka_str?NULL:filename);
+            start_partition,end_partition,BcDaemonMode()?0:1,filename==kafka_str?NULL:filename);
         free(kafka_server);
     }
     if ( filename ) free(filename);

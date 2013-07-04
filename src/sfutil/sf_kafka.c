@@ -99,8 +99,8 @@ static void KafkaLog_Close (rd_kafka_t* handle)
  *-------------------------------------------------------------------
  */
 KafkaLog* KafkaLog_Init (
-    const char* broker, unsigned int maxBuf, const char * topic, const int partition, bool open,
-    const char*filename
+    const char* broker, unsigned int maxBuf, const char * topic, const int start_partition, 
+    const int end_partition, bool open,  const char*filename
 ) {
     KafkaLog* this;
 
@@ -119,6 +119,12 @@ KafkaLog* KafkaLog_Init (
     this->broker = broker ? SnortStrdup(broker) : NULL;
     this->topic = topic ? SnortStrdup(topic) : NULL;
     this->handler = open ? KafkaLog_Open(this->broker):NULL;
+    this->start_partition = this->actual_partition = start_partition;
+    this->end_partition = end_partition;
+
+    if(this->start_partition > this->end_partition){
+        FatalError("alert_json: start_partition > end_partition");
+    }
 
     this->maxBuf = maxBuf;
     #endif
@@ -165,11 +171,14 @@ bool KafkaLog_Flush(KafkaLog* this)
 	   FatalError("There was not possible to solve %s direction",this->broker);
     }
 
+    this->actual_partition++;
+    if(this->actual_partition>this->end_partition)
+        this->actual_partition=this->start_partition;
     /* This if prevent the memory overflow if the server is down */
     if(this->handler->rk_state == RD_KAFKA_STATE_DOWN)
-	free(this->buf);
+        free(this->buf);
     else
-        rd_kafka_produce(this->handler, this->topic, 0, RD_KAFKA_OP_F_FREE, this->buf, this->pos);
+        rd_kafka_produce(this->handler, this->topic, this->actual_partition, RD_KAFKA_OP_F_FREE, this->buf, this->pos);
     this->buf = malloc(sizeof(char)*this->maxBuf);
 
     #endif

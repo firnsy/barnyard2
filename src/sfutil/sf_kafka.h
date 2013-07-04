@@ -79,7 +79,9 @@ typedef struct _KafkaLog
     rd_kafka_t * handler;
     char* broker;
     char * topic;
-    int partition;
+    int start_partition;
+    int end_partition;
+    int actual_partition;
 
 
 /* buffer attributes: */
@@ -92,7 +94,7 @@ typedef struct _KafkaLog
 } KafkaLog;
 
 KafkaLog* KafkaLog_Init (
-    const char* broker, unsigned int maxBuf, const char * topic, const int partition, bool open, const char *filename
+    const char* broker, unsigned int maxBuf, const char * topic, const int start_partition, const int end_partition, bool open, const char *filename
 );
 void KafkaLog_Term (KafkaLog* this);
 

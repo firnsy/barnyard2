@@ -44,7 +44,7 @@
 #include "debug.h" /* for INLINE */
 #include "sf_textlog.h"
 #ifdef JSON_KAFKA
-#include "kafka/rdkafka.h"
+#include "librdkafka/rdkafka.h"
 #endif
 
 

@@ -393,6 +393,9 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     char* networksPath = NULL;
     char* services = NULL;
     char* protocols = NULL;
+    #ifdef JSON_GEO_IP
+    char * geoIP_path = NULL;
+    #endif
     int start_partition=KAFKA_PARTITION,end_partition=KAFKA_PARTITION;
 
     DEBUG_WRAP(DebugMessage(DEBUG_INIT, "ParseJSONArgs: %s\n", args););
@@ -417,22 +420,26 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
             kafka_str = SnortStrdup(tok);
         }else if ( !strncasecmp("default", tok,strlen("default")) && !data->jsonargs){
             data->jsonargs = SnortStrdup(DEFAULT_JSON);
-        }else if(!strncmp(tok,"sensor_name=",strlen("sensor_name=")) && !data->sensor_name){
+        }else if(!strncasecmp(tok,"sensor_name=",strlen("sensor_name=")) && !data->sensor_name){
 			data->sensor_name = SnortStrdup(tok+strlen("sensor_name="));
-		}else if(!strncmp(tok,"sensor_id=",strlen("sensor_id="))){
+		}else if(!strncasecmp(tok,"sensor_id=",strlen("sensor_id="))){
 	        data->sensor_id = atol(tok + strlen("sensor_id="));
-        }else if(!strncmp(tok,"hostsListPath=",strlen("hostsListPath="))){
+        }else if(!strncasecmp(tok,"hostsListPath=",strlen("hostsListPath="))){
             hostsListPath = SnortStrdup(tok+strlen("hostsListPath="));
-        }else if(!strncmp(tok,"networksPath=",strlen("networksPath="))){
+        }else if(!strncasecmp(tok,"networksPath=",strlen("networksPath="))){
             networksPath = SnortStrdup(tok+strlen("networksPath="));
-        }else if(!strncmp(tok,"services=",strlen("services="))){
+        }else if(!strncasecmp(tok,"services=",strlen("services="))){
             services = SnortStrdup(tok+strlen("services="));
-        }else if(!strncmp(tok,"protocols=",strlen("protocols="))){
+        }else if(!strncasecmp(tok,"protocols=",strlen("protocols="))){
             protocols = SnortStrdup(tok+strlen("protocols="));
-        }else if(!strncmp(tok,"start_partition=",strlen("start_partition="))){
+        }else if(!strncasecmp(tok,"start_partition=",strlen("start_partition="))){
             start_partition = end_partition = atol(tok+strlen("start_partition="));
-        }else if(!strncmp(tok,"end_partition=",strlen("end_partition="))){
+        }else if(!strncasecmp(tok,"end_partition=",strlen("end_partition="))){
             end_partition = atol(tok+strlen("end_partition="));
+        #ifdef JSON_GEO_IP
+        }else if(!strncasecmp(tok,"geoip=",strlen("geoip="))){
+            geoIP_path = SnortStrdup(tok+strlen("geoip="));
+        #endif // JSON_GEO_IP
         }else{
 			FatalError("alert_json: Cannot parse %s(%i): %s\n",
 			file_name, file_line, tok);
@@ -455,11 +462,16 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     FillHostsList("/etc/networks",&data->nets,NETWORKS);
 
 #ifdef JSON_GEO_IP
-    const char * geoIP_path = "/usr/local/share/GeoIP/GeoIP.dat";
-    data->gi = GeoIP_open(geoIP_path, GEOIP_MEMORY_CACHE);
+    if(geoIP_path){
+        data->gi = GeoIP_open(geoIP_path, GEOIP_MEMORY_CACHE);
 
-    if (data->gi == NULL)
-        FatalError("Error opening database %s\n",geoIP_path);
+        if (data->gi == NULL)
+            FatalError("alert_json: Error opening database %s\n",geoIP_path);
+        else
+            DEBUG_WRAP(DebugMessage(DEBUG_INIT, "alert_json: Success opening geoip database: %s\n", geoIP_path););
+    }else{
+        DEBUG_WRAP(DebugMessage(DEBUG_INIT, "alert_json: No geoip database specified.\n"););
+    }
 
 #endif // JSON_GEO_IP
 
@@ -486,6 +498,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         free(kafka_server);
     }
     if ( filename ) free(filename);
+    if (geoIP_path) free(geoIP_path);
 
     return data;
 }
@@ -894,12 +907,14 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             LogJSON_a(kafka,JSON_SRC_NET_NAME_NAME,ip_net?ip_net->human_readable_str:"0.0.0.0/0");
 
             #ifdef JSON_GEO_IP
-            const char * country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ipv4);
-            const char * country_code =GeoIP_country_code_by_ipnum(jsonData->gi,ipv4);
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_SRC_COUNTRY_NAME,country_name?country_name:"N/A");
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_SRC_COUNTRY_CODE_NAME,country_code?country_code:"N/A");
+            if(jsonData->gi){
+                const char * country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ipv4);
+                const char * country_code =GeoIP_country_code_by_ipnum(jsonData->gi,ipv4);
+                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+                LogJSON_a(kafka,JSON_SRC_COUNTRY_NAME,country_name?country_name:"N/A");
+                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+                LogJSON_a(kafka,JSON_SRC_COUNTRY_CODE_NAME,country_code?country_code:"N/A");
+            }
             #endif
         }
         else if(!strncasecmp("dst", type, 3))
@@ -939,12 +954,14 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             LogJSON_a(kafka,JSON_DST_NET_NAME_NAME,ip_net?ip_net->human_readable_str:"0.0.0.0/0");
 
             #ifdef JSON_GEO_IP
-            const char * country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ipv4);
-            const char * country_code =GeoIP_country_code_by_ipnum(jsonData->gi,ipv4);
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_DST_COUNTRY_NAME,country_name?country_name:"N/A");
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_DST_COUNTRY_CODE_NAME,country_code?country_code:"N/A");
+            if(jsonData->gi){
+                const char * country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ipv4);
+                const char * country_code =GeoIP_country_code_by_ipnum(jsonData->gi,ipv4);
+                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+                LogJSON_a(kafka,JSON_DST_COUNTRY_NAME,country_name?country_name:"N/A");
+                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+                LogJSON_a(kafka,JSON_DST_COUNTRY_CODE_NAME,country_code?country_code:"N/A");
+            }
             #endif
         }
         else if(!strncasecmp("icmptype",type,8))

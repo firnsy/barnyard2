@@ -145,7 +145,7 @@ void FillHostsList(const char * filename,Number_str_assoc ** list, const FILLHOS
  *            mode     => See FILLHOSTSLIST_MODE
  */
 Number_str_assoc * SearchNumberStr(uint32_t number,const Number_str_assoc *iplist,FILLHOSTSLIST_MODE mode){
-    Number_str_assoc * node;
+    Number_str_assoc * node=NULL;
     
     switch (mode){
         case HOSTS:

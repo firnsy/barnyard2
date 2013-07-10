@@ -875,11 +875,11 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                         Number_str_assoc * service_name_asoc = SearchNumberStr(p->dp,jsonData->services,SERVICES);
                         LogJSON_i16(kafka,JSON_SRCPORT_NAME,p->dp);
                         KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                        LogJSON_a(kafka,JSON_SRCPORT_NAME_NAME,service_name_asoc?service_name_asoc->human_readable_str:"-");
+                        LogJSON_a(kafka,JSON_DSTPORT_NAME_NAME,service_name_asoc?service_name_asoc->human_readable_str:"-");
                     }
                         break;
                     default:
-                        LogJSON_a(kafka,JSON_SRCPORT_NAME_NAME,"-");
+                        LogJSON_a(kafka,JSON_DSTPORT_NAME_NAME,"-");
                         KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
                         LogJSON_i16(kafka,JSON_DSTPORT_NAME,0);
                         break;

@@ -107,6 +107,7 @@
 #define DEFAULT_CLASSIFICATION 0
 #define JSON_MSG_NAME "msg"
 #define JSON_PROTO_NAME "proto"
+#define JSON_PROTO_ID_NAME "proto_id"
 #define JSON_ETHSRC_NAME "ethsrc"
 #define JSON_ETHDST_NAME "ethdst"
 #define JSON_ETHTYPE_NAME "ethtype"
@@ -115,6 +116,8 @@
 #define JSON_TRHEADER_NAME "trheader"
 #define JSON_SRCPORT_NAME "srcport"
 #define JSON_DSTPORT_NAME "dstport"
+#define JSON_SRCPORT_NAME_NAME "srcport_name"
+#define JSON_DSTPORT_NAME_NAME "dstport_name"
 #define JSON_SRC_NAME "src"
 #define JSON_SRC_STR_NAME "src_str"
 #define JSON_SRC_NAME_NAME "src_name"
@@ -154,12 +157,24 @@ typedef struct _AlertJSONConfig
     struct _AlertJSONConfig *next;
 } AlertJSONConfig;
 
-typedef struct _IP_str_assoc{
+// @todo pass to a separate file
+typedef struct _Number_str_assoc{
     char * human_readable_str;
     char * number_as_str;
-    sfip_t ip;
-    struct _IP_str_assoc * next;
-} IP_str_assoc;
+    union{sfip_t ip;uint16_t service;uint16_t protocol;} number;
+    struct _Number_str_assoc * next;
+} Number_str_assoc;
+
+void freeNumberStrAssocList(Number_str_assoc * nstrList){
+    Number_str_assoc * aux=nstrList,*aux2;
+    while(aux){
+        aux2 = aux->next;
+        free(aux->human_readable_str);
+        free(aux->number_as_str);
+        free(aux);
+        aux=aux2;
+    }
+};
 
 typedef struct _AlertJSONData
 {
@@ -168,7 +183,7 @@ typedef struct _AlertJSONData
     char ** args;
     int numargs;
     AlertJSONConfig *config;
-    IP_str_assoc * hosts, *nets;
+    Number_str_assoc * hosts, *nets, *services, *protocols;
     uint64_t sensor_id;
     char * sensor_name;
 #ifdef JSON_GEO_IP
@@ -248,48 +263,40 @@ typedef enum{HOSTS,NETWORKS,SERVICES,PROTOCOLS} FILLHOSTSLIST_MODE;
 /*
  * @TODO put in a separate file
  */
-static IP_str_assoc * FillHostList_Host(char *line_buffer){
+static Number_str_assoc * FillHostList_Node(char *line_buffer, FILLHOSTSLIST_MODE mode){
     /* Assuming format of /etc/hosts: ip hostname */
+    /* Assuming format of /etc/networks: netname ip/mask */
+    /* Assuming format of /etc/services: servicename number */
+    /* Assuming format of /etc/protocols: protocolname number */
     char ** toks=NULL;
     int num_toks;
-    IP_str_assoc * node = SnortAlloc(sizeof(IP_str_assoc));
+    Number_str_assoc * node = SnortAlloc(sizeof(Number_str_assoc));
     if(node){
-        toks = mSplit((char *)line_buffer, " \t", 2, &num_toks, '\\');
-        node->number_as_str = SnortStrdup(toks[0]);
-        node->human_readable_str = SnortStrdup(toks[1]);
-        const SFIP_RET ret = sfip_pton(node->number_as_str, &node->ip);
-        if(ret==SFIP_FAILURE){
-            free(node->number_as_str);
-            free(node->human_readable_str);
-            free(node);
-            node=NULL;
+        if((toks = mSplit((char *)line_buffer, " \t", 2, &num_toks, '\\'))){
+            node->number_as_str = SnortStrdup(mode==HOSTS?toks[0]:toks[1]);
+            node->human_readable_str = SnortStrdup(mode==HOSTS?toks[1]:toks[0]);
+            switch(mode){
+                case HOSTS:
+                case NETWORKS:
+                {
+                    const SFIP_RET ret = sfip_pton(node->number_as_str, &node->number.ip);
+                    if(ret==SFIP_FAILURE){
+                        free(node->number_as_str);
+                        free(node->human_readable_str);
+                        free(node);
+                        node=NULL;
+                    }
+                }
+                break;
+                case SERVICES:
+                    node->number.protocol = atoi(node->number_as_str);
+                break;
+                case PROTOCOLS:
+                    node->number.service  = atoi(node->number_as_str);
+                break;
+            };
+            mSplitFree(&toks, num_toks);
         }
-        mSplitFree(&toks, num_toks);
-    }
-    return node;
-}
-
-/*
- * @TODO put in a separate file
- * @TODO same as FillHostList_Host except for node->number_as_str and human_readable_str order. merge?
- */
-static IP_str_assoc * FillHostList_Net(char *line_buffer){
-    /* Assuming format of /etc/hosts: ip hostname */
-    char ** toks=NULL;
-    int num_toks;
-    IP_str_assoc * node = SnortAlloc(sizeof(IP_str_assoc));
-    if(node){
-        toks = mSplit((char *)line_buffer, " \t", 2, &num_toks, '\\');
-        node->number_as_str = SnortStrdup(toks[1]);
-        node->human_readable_str = SnortStrdup(toks[0]);
-        const SFIP_RET ret = sfip_pton(node->number_as_str, &node->ip);
-        if(ret==SFIP_FAILURE){
-            free(node->number_as_str);
-            free(node->human_readable_str);
-            free(node);
-            node=NULL;
-        }
-        mSplitFree(&toks, num_toks);
     }
     return node;
 }
@@ -304,7 +311,7 @@ static IP_str_assoc * FillHostList_Net(char *line_buffer){
  *            list     => list to fill
  *            mode     => See FILLHOSTSLIST_MODE
  */
-static void FillHostsList(const char * filename,IP_str_assoc ** list, const FILLHOSTSLIST_MODE mode){
+static void FillHostsList(const char * filename,Number_str_assoc ** list, const FILLHOSTSLIST_MODE mode){
     char line_buffer[1024];
     FILE * file;
     int aok=1;
@@ -314,21 +321,10 @@ static void FillHostsList(const char * filename,IP_str_assoc ** list, const FILL
         FatalError("fopen() alert file %s: %s\n",filename, strerror(errno));
     }
 
-    IP_str_assoc ** llinst_iterator = list;
+    Number_str_assoc ** llinst_iterator = list;
     while(NULL != fgets(line_buffer,1024,file) && aok){
         if(line_buffer[0]!='#' && line_buffer[0]!='\n'){
-            IP_str_assoc * ip_str;
-            
-            switch(mode){
-                case HOSTS:
-                    ip_str = FillHostList_Host(line_buffer); break;
-                case NETWORKS:
-                    ip_str = FillHostList_Net(line_buffer); break;
-                case PROTOCOLS:
-                    /* @TODO ip_str = FillHostList_Proto(line_buffer); */break;
-                case SERVICES:
-                    /* @TODO ip_str = FillHostList_Service(line_buffer); */break;
-            };
+            Number_str_assoc * ip_str= FillHostList_Node(line_buffer,mode);
             if(ip_str==NULL)
                 FatalError("alert_json: cannot parse '%s' line in '%s' file\n",line_buffer,filename);
             *llinst_iterator = ip_str;
@@ -340,31 +336,34 @@ static void FillHostsList(const char * filename,IP_str_assoc ** list, const FILL
     fclose(file);
 }
 
-IP_str_assoc * SearchStrIP(uint32_t ip,const IP_str_assoc *iplist){
-    IP_str_assoc * node;
-    sfip_t ip_to_cmp;
-    const SFIP_RET ret = sfip_set_raw(&ip_to_cmp, &ip, AF_INET);
-    if(ret!=SFIP_SUCCESS)
-        FatalError("alert_json: Cannot create sfip to compare in line %lu",__LINE__);
+Number_str_assoc * SearchNumberStr(uint32_t number,const Number_str_assoc *iplist,FILLHOSTSLIST_MODE mode){
+    Number_str_assoc * node;
+    
+    switch (mode){
+        case HOSTS:
+        case NETWORKS:
+        {
+            sfip_t ip_to_cmp;
+            const SFIP_RET ret = sfip_set_raw(&ip_to_cmp, &number, AF_INET);
+            if(ret!=SFIP_SUCCESS)
+                FatalError("alert_json: Cannot create sfip to compare in line %lu",__LINE__);
 
-    for(node = (IP_str_assoc *)iplist;node;node=node->next){
-        if(sfip_equals(ip_to_cmp,node->ip))
+            for(node = (Number_str_assoc *)iplist;node;node=node->next){
+                if(mode==HOSTS && sfip_equals(ip_to_cmp,node->number.ip))
+                    break;
+                else if(mode==NETWORKS && sfip_fast_cont4(&node->number.ip,&ip_to_cmp))
+                    break;
+            }
+        }
+        break;
+        case SERVICES:
+        case PROTOCOLS:
+            for(node=(Number_str_assoc *)iplist;node;node=node->next){
+                if(node->number.service /* same as .protocol*/ == number)
+                    break;
+            }
             break;
-    }
-    return node;
-}
-
-IP_str_assoc * SearchStrNet(uint32_t ip,const IP_str_assoc *iplist){
-    IP_str_assoc * node;
-    sfip_t ip_to_cmp;
-    const SFIP_RET ret = sfip_set_raw(&ip_to_cmp, &ip, AF_INET);
-    if(ret!=SFIP_SUCCESS)
-        FatalError("alert_json: Cannot create sfip to compare in line %lu",__LINE__);
-
-    for(node = (IP_str_assoc *)iplist;node;node=node->next){
-        if(sfip_fast_cont4(&node->ip,&ip_to_cmp))
-            break;
-    }
+    };
     return node;
 }
 
@@ -391,8 +390,8 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     int i;
     char* hostsListPath = NULL;
     char* networksPath = NULL;
-    char* services = NULL;
-    char* protocols = NULL;
+    char* servicesPath = NULL;
+    char* protocolsPath = NULL;
     #ifdef JSON_GEO_IP
     char * geoIP_path = NULL;
     #endif
@@ -424,14 +423,14 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
 			data->sensor_name = SnortStrdup(tok+strlen("sensor_name="));
 		}else if(!strncasecmp(tok,"sensor_id=",strlen("sensor_id="))){
 	        data->sensor_id = atol(tok + strlen("sensor_id="));
-        }else if(!strncasecmp(tok,"hostsListPath=",strlen("hostsListPath="))){
-            hostsListPath = SnortStrdup(tok+strlen("hostsListPath="));
-        }else if(!strncasecmp(tok,"networksPath=",strlen("networksPath="))){
-            networksPath = SnortStrdup(tok+strlen("networksPath="));
+        }else if(!strncasecmp(tok,"hosts=",strlen("hosts="))){
+            hostsListPath = SnortStrdup(tok+strlen("hosts="));
+        }else if(!strncasecmp(tok,"networks=",strlen("networks="))){
+            networksPath = SnortStrdup(tok+strlen("networks="));
         }else if(!strncasecmp(tok,"services=",strlen("services="))){
-            services = SnortStrdup(tok+strlen("services="));
+            servicesPath = SnortStrdup(tok+strlen("services="));
         }else if(!strncasecmp(tok,"protocols=",strlen("protocols="))){
-            protocols = SnortStrdup(tok+strlen("protocols="));
+            protocolsPath = SnortStrdup(tok+strlen("protocols="));
         }else if(!strncasecmp(tok,"start_partition=",strlen("start_partition="))){
             start_partition = end_partition = atol(tok+strlen("start_partition="));
         }else if(!strncasecmp(tok,"end_partition=",strlen("end_partition="))){
@@ -451,6 +450,10 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     if ( !data->sensor_name ) data->sensor_name = SnortStrdup("-");
     if ( !filename ) filename = ProcessFileOption(barnyard2_conf_for_parsing, DEFAULT_FILE);
     if ( !kafka_str ) kafka_str = SnortStrdup(DEFAULT_KAFKA_BROKER);
+    if(hostsListPath) FillHostsList(hostsListPath,&data->hosts,HOSTS);
+    if(networksPath) FillHostsList(networksPath,&data->nets,NETWORKS);
+    if(servicesPath) FillHostsList(servicesPath,&data->services,SERVICES);
+    if(protocolsPath) FillHostsList(protocolsPath,&data->protocols,PROTOCOLS);
 
     mSplitFree(&toks, num_toks);
     toks = mSplit(data->jsonargs, ",", 128, &num_toks, 0);
@@ -458,8 +461,6 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     data->args = toks;
     data->numargs = num_toks;
 
-    FillHostsList("/etc/hosts",&data->hosts,HOSTS);
-    FillHostsList("/etc/networks",&data->nets,NETWORKS);
 
 #ifdef JSON_GEO_IP
     if(geoIP_path){
@@ -498,14 +499,21 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         free(kafka_server);
     }
     if ( filename ) free(filename);
+    if( kafka_str ) free (kafka_str);
+    if( hostsListPath ) free (hostsListPath);
+    if( networksPath ) free (networksPath);
+    if( servicesPath ) free (servicesPath);
+    if( protocolsPath ) free (protocolsPath);
+    #ifdef JSON_GEO_IP
     if (geoIP_path) free(geoIP_path);
+    #endif
+
 
     return data;
 }
 
 static void AlertJSONCleanup(int signal, void *arg, const char* msg)
 {
-    IP_str_assoc * ip_node=NULL;
     AlertJSONData *data = (AlertJSONData *)arg;
     /* close alert file */
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"%s\n", msg););
@@ -516,22 +524,11 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
         if(data->kafka)
             KafkaLog_Term(data->kafka);
         free(data->jsonargs);
-        ip_node = data->hosts;
-        while(ip_node){
-            IP_str_assoc * aux = ip_node->next;
-            free(ip_node->human_readable_str);
-            free(ip_node->number_as_str);
-            free(ip_node);
-            ip_node = aux;
-        }
-        ip_node = data->nets;
-        while(ip_node){
-            IP_str_assoc * aux = ip_node->next;
-            free(ip_node->human_readable_str);
-            free(ip_node->number_as_str);
-            free(ip_node);
-            ip_node = aux;
-        }
+        freeNumberStrAssocList(data->hosts);
+        freeNumberStrAssocList(data->nets);
+        freeNumberStrAssocList(data->services);
+        freeNumberStrAssocList(data->protocols);
+
 
         #ifdef JSON_GEO_IP
         GeoIP_delete(data->gi);
@@ -618,7 +615,6 @@ char* _intoa(unsigned int addr, char* buf, u_short bufLen) {
 
   return(retStr);
 }
-
 
 /*
   * Function: RealAlertJSON(Packet *, char *, FILE *, char *, numargs const int)
@@ -755,7 +751,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
             if(IPH_IS_VALID(p))
             {
-
+                #if 0
                 switch (GET_IPH_PROTO(p))
                 {
                     case IPPROTO_UDP:
@@ -771,7 +767,14 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                         LogJSON_a(kafka,JSON_PROTO_NAME,"-");
                         break;
                 }
+                #endif
+                Number_str_assoc * service_name_asoc = SearchNumberStr(GET_IPH_PROTO(p),jsonData->protocols,PROTOCOLS);
+                LogJSON_i16(kafka,JSON_PROTO_ID_NAME,service_name_asoc?service_name_asoc->number.protocol:0);
+                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+                LogJSON_a(kafka,JSON_PROTO_NAME,service_name_asoc?service_name_asoc->human_readable_str:"-");
             }else{ /* Always log something */
+                LogJSON_i16(kafka,JSON_PROTO_ID_NAME,0);
+                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
                 LogJSON_a(kafka,JSON_PROTO_NAME,"-");
             }
         }
@@ -842,10 +845,17 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 {
                     case IPPROTO_UDP:
                     case IPPROTO_TCP:
+                    {
+                        Number_str_assoc * service_name_asoc = SearchNumberStr(p->sp,jsonData->services,SERVICES);
                         LogJSON_i16(kafka,JSON_SRCPORT_NAME,p->sp);
+                        KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+                        LogJSON_a(kafka,JSON_SRCPORT_NAME_NAME,service_name_asoc?service_name_asoc->human_readable_str:"-");
+                    }
                         break;
                     default: /* Always log something */
                         LogJSON_i16(kafka,JSON_SRCPORT_NAME,0);
+                        KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+                        LogJSON_a(kafka,JSON_SRCPORT_NAME_NAME,"-");
                         break;
                 }
             }else{ /* Always Log something */
@@ -861,9 +871,16 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 {
                     case IPPROTO_UDP:
                     case IPPROTO_TCP:
-                        LogJSON_i16(kafka,JSON_DSTPORT_NAME,p->dp);
+		    {
+                        Number_str_assoc * service_name_asoc = SearchNumberStr(p->dp,jsonData->services,SERVICES);
+                        LogJSON_i16(kafka,JSON_SRCPORT_NAME,p->dp);
+                        KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+                        LogJSON_a(kafka,JSON_SRCPORT_NAME_NAME,service_name_asoc?service_name_asoc->human_readable_str:"-");
+                    }
                         break;
                     default:
+                        LogJSON_a(kafka,JSON_SRCPORT_NAME_NAME,"-");
+                        KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
                         LogJSON_i16(kafka,JSON_DSTPORT_NAME,0);
                         break;
                 }
@@ -886,7 +903,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             LogJSON_i32(kafka,JSON_SRC_NAME,ipv4);
 
             char * ip_str=NULL,*ip_name=NULL;
-            IP_str_assoc * ip_str_node = SearchStrIP(ipv4,jsonData->hosts);
+            Number_str_assoc * ip_str_node = SearchNumberStr(ipv4,jsonData->hosts,HOSTS);
             if(ip_str_node){
                 ip_str = ip_str_node->number_as_str;
                 ip_name = ip_str_node->human_readable_str;
@@ -900,7 +917,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             LogJSON_a(kafka,JSON_SRC_NAME_NAME,ip_name);
 
             // networks
-            IP_str_assoc * ip_net = SearchStrNet(ipv4,jsonData->nets);
+            Number_str_assoc * ip_net = SearchNumberStr(ipv4,jsonData->nets,NETWORKS);
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
             LogJSON_a(kafka,JSON_SRC_NET_NAME,ip_net?ip_net->number_as_str:"0.0.0.0/0");
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
@@ -933,7 +950,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             LogJSON_i32(kafka,JSON_DST_NAME,ipv4);
 
             char * ip_str=NULL,*ip_name=NULL;
-            IP_str_assoc * ip_str_node = SearchStrIP(ipv4,jsonData->hosts);
+            Number_str_assoc * ip_str_node = SearchNumberStr(ipv4,jsonData->hosts,HOSTS);
             if(ip_str_node){
                 ip_str = ip_str_node->number_as_str;
                 ip_name = ip_str_node->human_readable_str;
@@ -947,7 +964,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             LogJSON_a(kafka,JSON_DST_NAME_NAME,ip_name);
 
             // networks
-            IP_str_assoc * ip_net = SearchStrNet(ipv4,jsonData->nets);
+            Number_str_assoc * ip_net = SearchNumberStr(ipv4,jsonData->nets,NETWORKS);
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
             LogJSON_a(kafka,JSON_DST_NET_NAME,ip_net?ip_net->number_as_str:"0.0.0.0/0");
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);

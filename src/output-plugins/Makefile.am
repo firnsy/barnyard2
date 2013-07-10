@@ -26,4 +26,4 @@ spo_syslog_full.c spo_syslog.full.h \
 spo_database.c spo_database.h \
 spo_database_cache.c spo_database_cache.h
 
-INCLUDES = -I.. -I ../sfutil
+INCLUDES = -I.. -I ../sfutil -I../rbutil

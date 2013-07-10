@@ -22,7 +22,7 @@
  ****************************************************************************/
  
 /**
- * @file   sf_kafka.h
+ * @file   rb_kafka.h
  * @author Eugenio Pérez <eupm90@gmail.com>
  * @date   Wed May 29 2013
  * 
@@ -30,29 +30,22 @@
  * Based on sf_text source.
  * 
  * Declares a KafkaLog_*() api for buffered logging and send to an Apache Kafka
- * Server. This allows unify the way to write json in a file and sending to
- * kafka using TextLog_sf.
+ * Server. This allows unify the way to write json in a file using TextLog_sf and 
+ * sending it to kafka.
  */
 
-#ifndef _SF_KAFKA_LOG_H
-#define _SF_KAFKA_LOG_H
+#ifndef _RB_KAFKA_LOG_H
+#define _RB_KAFKA_LOG_H
 
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
 
 #include "debug.h" /* for INLINE */
-#include "sf_textlog.h"
+#include "sfutil/sf_textlog.h"
 #ifdef JSON_KAFKA
 #include "librdkafka/rdkafka.h"
 #endif
-
-
-#include <stdio.h>
-#include <string.h>
-#include <time.h>
-
-#include "debug.h" /* for INLINE */
 
 #ifndef _SF_TEXT_LOG_H // already defined in
 typedef int bool;
@@ -147,5 +140,5 @@ static INLINE bool KafkaLog_Puts (KafkaLog* this, const char* str)
     return KafkaLog_Write(this, str, strlen(str));
 }
 
-#endif /* _SF_KAFKA_LOG_H */
+#endif /* _RB_KAFKA_LOG_H */
 

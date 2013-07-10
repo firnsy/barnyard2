@@ -104,7 +104,7 @@
 #define JSON_PRIORITY_NAME "priority"
 #define DEFAULT_PRIORITY 0
 #define JSON_CLASSIFICATION_NAME "classification"
-#define DEFAULT_CLASSIFICATION 0
+#define DEFAULT_CLASSIFICATION "-"
 #define JSON_MSG_NAME "msg"
 #define JSON_PROTO_NAME "proto"
 #define JSON_PROTO_ID_NAME "proto_id"
@@ -720,11 +720,14 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
             if(event != NULL)
             {
-                if(!LogJSON_i32(kafka,JSON_CLASSIFICATION_NAME, ntohl(((Unified2EventCommon *)event)->classification_id)))
-                    FatalError("Not enough buffer space to escape msg string\n");
+                uint32_t classification_id = ntohl(((Unified2EventCommon *)event)->classification_id);
+                ClassType *cn = ClassTypeLookupById(barnyard2_conf, classification_id);
+                if ( cn != NULL )
+                    LogJSON_a(kafka,JSON_CLASSIFICATION_NAME,cn->name);
+                else
+                    LogJSON_a(kafka,JSON_CLASSIFICATION_NAME, DEFAULT_CLASSIFICATION);
             }else{ /* Always log something */
-                if(!LogJSON_i32(kafka,JSON_PRIORITY_NAME, DEFAULT_CLASSIFICATION))
-                    FatalError("Not enough buffer space to escape msg string\n");
+                LogJSON_a(kafka,JSON_CLASSIFICATION_NAME, DEFAULT_CLASSIFICATION);
             }
         }
         else if(!strncasecmp("msg", type, 3))

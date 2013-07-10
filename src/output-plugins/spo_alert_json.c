@@ -72,9 +72,9 @@
 #include "signal.h"
 #include "log_text.h"
 
-#ifdef JSON_GEO_IP
+#ifdef HAVE_GEOIP
 #include "GeoIP.h"
-#endif // JSON_GEO_IP
+#endif // HAVE_GEOIP
 
 
 #define DEFAULT_JSON "timestamp,sensor_id,sig_generator,sig_id,sig_rev,priority,classification,msg,proto,src,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcpln,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
@@ -143,12 +143,12 @@
 #define JSON_TCPWINDOW_NAME "tcpwindow"
 #define JSON_TCPFLAGS_NAME "tcpflags"
 
-#ifdef JSON_GEO_IP
+#ifdef HAVE_GEOIP
 #define JSON_SRC_COUNTRY_NAME "src_country"
 #define JSON_DST_COUNTRY_NAME "dst_country"
 #define JSON_SRC_COUNTRY_CODE_NAME "src_country_code"
 #define JSON_DST_COUNTRY_CODE_NAME "dst_country_code"
-#endif // JSON_GEO_IP
+#endif // HAVE_GEOIP
 
 
 typedef struct _AlertJSONConfig
@@ -167,7 +167,7 @@ typedef struct _AlertJSONData
     Number_str_assoc * hosts, *nets, *services, *protocols;
     uint64_t sensor_id;
     char * sensor_name;
-#ifdef JSON_GEO_IP
+#ifdef HAVE_GEOIP
     GeoIP *gi;
 #endif 
 } AlertJSONData;
@@ -260,7 +260,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     char* networksPath = NULL;
     char* servicesPath = NULL;
     char* protocolsPath = NULL;
-    #ifdef JSON_GEO_IP
+    #ifdef HAVE_GEOIP
     char * geoIP_path = NULL;
     #endif
     int start_partition=KAFKA_PARTITION,end_partition=KAFKA_PARTITION;
@@ -303,10 +303,10 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
             start_partition = end_partition = atol(tok+strlen("start_partition="));
         }else if(!strncasecmp(tok,"end_partition=",strlen("end_partition="))){
             end_partition = atol(tok+strlen("end_partition="));
-        #ifdef JSON_GEO_IP
+        #ifdef HAVE_GEOIP
         }else if(!strncasecmp(tok,"geoip=",strlen("geoip="))){
             geoIP_path = SnortStrdup(tok+strlen("geoip="));
-        #endif // JSON_GEO_IP
+        #endif // HAVE_GEOIP
         }else{
 			FatalError("alert_json: Cannot parse %s(%i): %s\n",
 			file_name, file_line, tok);
@@ -330,7 +330,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     data->numargs = num_toks;
 
 
-#ifdef JSON_GEO_IP
+#ifdef HAVE_GEOIP
     if(geoIP_path){
         data->gi = GeoIP_open(geoIP_path, GEOIP_MEMORY_CACHE);
 
@@ -342,7 +342,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         DEBUG_WRAP(DebugMessage(DEBUG_INIT, "alert_json: No geoip database specified.\n"););
     }
 
-#endif // JSON_GEO_IP
+#endif // HAVE_GEOIP
 
     DEBUG_WRAP(DebugMessage(
         DEBUG_INIT, "alert_json: '%s' '%s'\n", filename, data->jsonargs
@@ -372,7 +372,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     if( networksPath ) free (networksPath);
     if( servicesPath ) free (servicesPath);
     if( protocolsPath ) free (protocolsPath);
-    #ifdef JSON_GEO_IP
+    #ifdef HAVE_GEOIP
     if (geoIP_path) free(geoIP_path);
     #endif
 
@@ -398,7 +398,7 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
         freeNumberStrAssocList(data->protocols);
 
 
-        #ifdef JSON_GEO_IP
+        #ifdef HAVE_GEOIP
         GeoIP_delete(data->gi);
         #endif // GWO_IP
         /* free memory from SpoJSONData */
@@ -794,7 +794,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
             LogJSON_a(kafka,JSON_SRC_NET_NAME_NAME,ip_net?ip_net->human_readable_str:"0.0.0.0/0");
 
-            #ifdef JSON_GEO_IP
+            #ifdef HAVE_GEOIP
             if(jsonData->gi){
                 const char * country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ipv4);
                 const char * country_code =GeoIP_country_code_by_ipnum(jsonData->gi,ipv4);
@@ -841,7 +841,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
             LogJSON_a(kafka,JSON_DST_NET_NAME_NAME,ip_net?ip_net->human_readable_str:"0.0.0.0/0");
 
-            #ifdef JSON_GEO_IP
+            #ifdef HAVE_GEOIP
             if(jsonData->gi){
                 const char * country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ipv4);
                 const char * country_code =GeoIP_country_code_by_ipnum(jsonData->gi,ipv4);

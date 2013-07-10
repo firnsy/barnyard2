@@ -41,9 +41,10 @@
 #include <string.h>
 #include <time.h>
 
+#include "config.h"
 #include "debug.h" /* for INLINE */
 #include "sfutil/sf_textlog.h"
-#ifdef JSON_KAFKA
+#ifdef HAVE_LIBRDKAFKA
 #include "librdkafka/rdkafka.h"
 #endif
 
@@ -66,7 +67,7 @@ typedef int bool;
  */
 typedef struct _KafkaLog
 {
-#ifdef JSON_KAFKA
+#ifdef HAVE_LIBRDKAFKA
 /* private: */
 /* broker attributes: */
     rd_kafka_t * handler;
@@ -104,7 +105,7 @@ bool KafkaLog_Flush(KafkaLog*);
   */
  static INLINE int KafkaLog_Tell (KafkaLog* this)
  {
-    #ifndef JSON_KAFKA
+    #ifndef HAVE_LIBRDKAFKA
     return this->textLog?this->textLog->pos:0;
     #else
     return this->pos;
@@ -113,7 +114,7 @@ bool KafkaLog_Flush(KafkaLog*);
  
  static INLINE int KafkaLog_Avail (KafkaLog* this)
  {
-    #ifndef JSON_KAFKA
+    #ifndef HAVE_LIBRDKAFKA
     return this->textLog?TextLog_Avail(this->textLog):0;
     #else
     return this->maxBuf - this->pos - 1;
@@ -124,7 +125,7 @@ bool KafkaLog_Flush(KafkaLog*);
  {
     if(this->textLog)
         TextLog_Reset(this->textLog);
-    #ifdef JSON_KAFKA
+    #ifdef HAVE_LIBRDKAFKA
     this->pos = 0;
     this->buf[this->pos] = '\0';
     #endif

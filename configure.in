@@ -130,21 +130,17 @@ AC_ARG_ENABLE(geo-ip,
        enable_geo_ip="$enableval", enable_geop_ip="no")
 if test "x$enable_geo_ip" = "xyes"; then
     AC_MSG_RESULT(yes)
-    AC_CHECK_HEADERS([librdkafka/rdkafka.h],[],
+    AC_CHECK_HEADERS([GeoIP.h],[],
       [
-        echo "Error: Librdkafka headers not found."
-        echo "You can download and install it from https://github.com/edenhill/librdkafka"
-        echo "Remember you have to use 0.7 branch"
+        echo "Error: MaxMind GeoIP headers not found."
         exit 1
       ])
-    AC_CHECK_LIB(rdkafka,rd_kafka_new,[],
+    AC_CHECK_LIB(GeoIP,GeoIP_open,[],
       [
-        echo "Error: Librdkafka library not found."
-        echo "You can download and install it from https://github.com/edenhill/librdkafka"
-        echo "Remember you have to use 0.7 branch"
+        echo "Error: MaxMind GeoIP library not found."
         exit 1
       ])
-    CFLAGS="$CFLAGS -DJSON_GEO_IP"
+    AC_DEFINE_UNQUOTED([HAVE_GEOIP],[],[Have MaxMind GeoIP])
     LDFLAGS="$LDFLAGS -lGeoIP"
 else
     AC_MSG_RESULT(no)
@@ -169,7 +165,7 @@ if test "x$enable_kafka" = "xyes"; then
         echo "Remember you have to use 0.7 branch"
         exit 1
       ])
-    CFLAGS="$CFLAGS -DJSON_KAFKA"
+    AC_DEFINE([HAVE_RDKAFKA],[],[Have Apache Kafka library])
     LDFLAGS="$LDFLAGS -lrdkafka"
     AC_MSG_RESULT(yes)
 else

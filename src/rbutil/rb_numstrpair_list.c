@@ -29,6 +29,7 @@
  */
 
 #include <errno.h>
+#include <string.h>
 #include <stdlib.h>
 #include "rb_numstrpair_list.h"
 #include "barnyard2.h"

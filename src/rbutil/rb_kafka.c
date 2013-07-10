@@ -56,7 +56,7 @@
  * TextLog_Open/Close: open/close associated log file
  *-------------------------------------------------------------------
  */
-#ifdef JSON_KAFKA
+#ifdef HAVE_LIBRDKAFKA
 rd_kafka_t* KafkaLog_Open (const char* name)
 {
     if ( !name ) return NULL;
@@ -105,7 +105,7 @@ KafkaLog* KafkaLog_Init (
     KafkaLog* this;
 
     this = (KafkaLog*)malloc(sizeof(KafkaLog));
-    #ifdef JSON_KAFKA
+    #ifdef HAVE_LIBRDKAFKA
     if(this){
         this->buf = malloc(sizeof(char)*maxBuf);
 
@@ -143,7 +143,7 @@ void KafkaLog_Term (KafkaLog* this)
     if ( !this ) return;
 
     KafkaLog_Flush(this);
-    #ifdef JSON_KAFKA
+    #ifdef HAVE_LIBRDKAFKA
     KafkaLog_Close(this->handler);
     free(this->buf);
 
@@ -161,7 +161,7 @@ void KafkaLog_Term (KafkaLog* this)
  */
 bool KafkaLog_Flush(KafkaLog* this)
 {
-    #if JSON_KAFKA
+    #if HAVE_LIBRDKAFKA
     if ( !this->pos ) return FALSE;
 
     // In daemon mode, we must start the handler here
@@ -194,14 +194,14 @@ bool KafkaLog_Flush(KafkaLog* this)
  */
 bool KafkaLog_Putc (KafkaLog* this, char c)
 {
-    #ifdef JSON_KAFKA
+    #ifdef HAVE_LIBRDKAFKA
     if ( KafkaLog_Avail(this) < 1 )
     {
         KafkaLog_Flush(this);
     }
     this->buf[this->pos++] = c;
     this->buf[this->pos] = '\0';
-    #endif // JSON_KAFKA
+    #endif // HAVE_LIBRDKAFKA
 
     if(this->textLog) TextLog_Putc(this->textLog,c);
     return TRUE;
@@ -213,7 +213,7 @@ bool KafkaLog_Putc (KafkaLog* this, char c)
  */
 bool KafkaLog_Write (KafkaLog* this, const char* str, int len)
 {
-    #ifdef JSON_KAFKA
+    #ifdef HAVE_LIBRDKAFKA
     int avail = KafkaLog_Avail(this);
 
     if ( len >= avail )
@@ -235,7 +235,7 @@ bool KafkaLog_Write (KafkaLog* this, const char* str, int len)
     }
     this->pos += len;
 
-    #endif // JSON_KAFKA
+    #endif // HAVE_LIBRDKAFKA
     if(this->textLog) TextLog_Write(this->textLog,str,len);
     return TRUE;
 }
@@ -249,19 +249,19 @@ bool KafkaLog_Print (KafkaLog* this, const char* fmt, ...)
     int avail = KafkaLog_Avail(this);
     int len;
     va_list ap;
-    #ifdef JSON_KAFKA
+    #ifdef HAVE_LIBRDKAFKA
     int currentLenght = this->maxBuf;
     #endif
 
     va_start(ap, fmt);
-    #ifdef JSON_KAFKA
+    #ifdef HAVE_LIBRDKAFKA
     len = vsnprintf(this->buf+this->pos, avail, fmt, ap);
     #endif
     if(this->textLog)
         vsnprintf(this->textLog->buf+this->textLog->pos, avail, fmt, ap);
     va_end(ap);
 
-    #ifdef JSON_KAFKA
+    #ifdef HAVE_LIBRDKAFKA
     while(len >= avail){
         // Send a half json message to Kafka has no sense, so we will try to
 	// increase the buffer's lenght to allocate the full message.
@@ -300,7 +300,7 @@ bool KafkaLog_Print (KafkaLog* this, const char* fmt, ...)
     {
         // NOPE! return FALSE;
     }
-    #ifdef JSON_KAFKA
+    #ifdef HAVE_LIBRDKAFKA
     this->pos += len;
     #endif
     if(this->textLog) this->textLog->pos += len;
@@ -315,7 +315,7 @@ bool KafkaLog_Print (KafkaLog* this, const char* fmt, ...)
  */
 bool KafkaLog_Quote (KafkaLog* this, const char* qs)
 {
-    #ifdef JSON_KAFKA
+    #ifdef HAVE_LIBRDKAFKA
     int pos = this->pos;
 
     if ( KafkaLog_Avail(this) < 3 )

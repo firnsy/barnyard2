@@ -1176,6 +1176,7 @@ AC_CONFIG_FILES([ \
 Makefile \
 src/Makefile \
 src/sfutil/Makefile \
+src/rbutil/Makefile \
 src/input-plugins/Makefile \
 src/output-plugins/Makefile \
 etc/Makefile \

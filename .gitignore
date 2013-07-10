@@ -21,4 +21,5 @@ src/barnyard2
 src/input-plugins/libspi.a
 src/output-plugins/libspo.a
 src/sfutil/libsfutil.a
+src/rbutil/librbutil.a
 stamp-h1

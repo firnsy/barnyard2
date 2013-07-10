@@ -30,8 +30,9 @@ util.c util.h
 
 barnyard2_LDADD = output-plugins/libspo.a \
 input-plugins/libspi.a \
-sfutil/libsfutil.a
+sfutil/libsfutil.a \ 
+rbutil/librbutil.a 
 
-SUBDIRS = sfutil output-plugins input-plugins
+SUBDIRS = sfutil rbutil output-plugins input-plugins 
 
 INCLUDES = -Isfutil

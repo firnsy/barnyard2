@@ -40,7 +40,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include "sf_kafka.h"
+#include "rb_kafka.h"
 #include "log.h"
 #include "util.h"
 

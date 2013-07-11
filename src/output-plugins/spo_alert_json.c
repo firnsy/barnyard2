@@ -77,7 +77,7 @@
 #endif // HAVE_GEOIP
 
 
-#define DEFAULT_JSON "timestamp,sensor_id,sig_generator,sig_id,sig_rev,priority,classification,msg,proto,src,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcpln,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON "timestamp,sensor_id,sig_generator,sig_id,sig_rev,priority,classification,msg,payload,proto,src,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcpln,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"
@@ -106,6 +106,7 @@
 #define JSON_CLASSIFICATION_NAME "classification"
 #define DEFAULT_CLASSIFICATION "-"
 #define JSON_MSG_NAME "msg"
+#define JSON_PAYLOAD_NAME "payload"
 #define JSON_PROTO_NAME "proto"
 #define JSON_PROTO_ID_NAME "proto_id"
 #define JSON_ETHSRC_NAME "ethsrc"
@@ -617,6 +618,19 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
                 }
             }
         }
+        else if(!strncasecmp("payload", type, strlen("payload")))
+        {
+            uint16_t i;
+            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+            KafkaLog_Puts(kafka, "\""JSON_PAYLOAD_NAME"\":\"");
+            if(p &&  p->dsize>0){
+                for(i=0;i<p->dsize;++i)
+                    KafkaLog_Print(kafka, "%"PRIx8, p->data[i]);
+            }else{
+                KafkaLog_Puts(kafka, "-");
+            }
+            KafkaLog_Puts(kafka,"\"");
+        }
         else if(!strncasecmp("proto", type, 5))
         {
             KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
@@ -979,6 +993,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
     }
 
     KafkaLog_Putc(kafka,'}');
+    // Just for debug
+    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"[KAFKA]: %s",kafka->buf););
     KafkaLog_Flush(kafka);
 }
 

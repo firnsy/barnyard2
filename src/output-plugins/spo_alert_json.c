@@ -77,7 +77,7 @@
 #endif // HAVE_GEOIP
 
 
-#define DEFAULT_JSON "timestamp,sensor_id,sig_generator,sig_id,sig_rev,priority,classification,msg,payload,proto,src,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcpln,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,sig_generator,sig_id,sig_rev,priority,classification,msg,payload,proto,src,src_str,src_name,src_net,src_net_name,dst_name,dst_str,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"
@@ -107,8 +107,11 @@
 #define DEFAULT_CLASSIFICATION "-"
 #define JSON_MSG_NAME "msg"
 #define JSON_PAYLOAD_NAME "payload"
+#define DEFAULT_PAYLOAD "-"
 #define JSON_PROTO_NAME "proto"
+#define DEFAULT_PROTO "-"
 #define JSON_PROTO_ID_NAME "proto_id"
+#define DEFAULT_PROTO_ID 0
 #define JSON_ETHSRC_NAME "ethsrc"
 #define JSON_ETHDST_NAME "ethdst"
 #define JSON_ETHTYPE_NAME "ethtype"
@@ -151,9 +154,78 @@
 #define JSON_DST_COUNTRY_CODE_NAME "dst_country_code"
 #endif // HAVE_GEOIP
 
+#define TIMESTAMP 1
+#define SENSOR_ID_SNORT 2
+#define SENSOR_ID 3
+#define SENSOR_NAME 4
+#define SIG_GENERATOR 5
+#define SIG_ID 6
+#define SIG_REV 7
+#define PRIORITY 8
+#define CLASSIFICATION 9
+#define MSG 10
+#define PAYLOAD 11
+#define PROTO 12
+#define PROTO_ID 13
+#define ETHSRC 14
+#define ETHDST 15
+#define ETHTYPE 16
+#define UDPLENGTH 17
+#define ETHLENGTH 18
+#define TRHEADER 19
+#define SRCPORT 20
+#define DSTPORT 21
+#define SRCPORT_NAME 22
+#define DSTPORT_NAME 23
+#define SRC_TEMPLATE_ID 24
+#define SRC_STR 25
+#define SRC_NAME 26
+#define SRC_NET 27
+#define SRC_NET_NAME 28
+#define DST_TEMPLATE_ID 29
+#define DST_NAME 30
+#define DST_STR 31
+#define DST_NET 32
+#define DST_NET_NAME 33
+#define ICMPTYPE 34
+#define ICMPCODE 35
+#define ICMPID 36
+#define ICMPSEQ 37
+#define TTL 38
+#define TOS 39
+#define ID 40
+#define IPLEN 41
+#define DGMLEN 42
+#define TCPSEQ 43
+#define TCPACK 44
+#define TCPLEN 45
+#define TCPWINDOW 46
+#define TCPFLAGS 47
 
-typedef struct _AlertJSONConfig
-{
+#ifdef HAVE_GEOIP
+#define SRC_COUNTRY 48
+#define DST_COUNTRY 49
+#define SRC_COUNTRY_CODE 50
+#define DST_COUNTRY_CODE 51
+#endif // HAVE_GEOIP
+
+#define TEMPLATE_END_ID 52 /* Remember to update it if some template element is added */
+
+typedef enum{stringFormat,numericFormat} JsonPrintFormat;
+
+typedef struct{
+    const uint32_t id;
+    const char * templateName;
+    const char * jsonName;
+    const JsonPrintFormat printFormat;
+}  AlertJSONTemplateElement;
+
+typedef struct _TemplateElementsList{
+    AlertJSONTemplateElement * templateElement;
+    struct _TemplateElementsList * next;
+} TemplateElementsList;
+
+typedef struct _AlertJSONConfig{
     char *type;
     struct _AlertJSONConfig *next;
 } AlertJSONConfig;
@@ -162,8 +234,9 @@ typedef struct _AlertJSONData
 {
     KafkaLog * kafka;
     char * jsonargs;
-    char ** args;
-    int numargs;
+    char ** args; // @before commit this will be deleted.
+    int numargs;  // same for this
+    TemplateElementsList * outputTemplate;
     AlertJSONConfig *config;
     Number_str_assoc * hosts, *nets, *services, *protocols;
     uint64_t sensor_id;
@@ -173,6 +246,63 @@ typedef struct _AlertJSONData
 #endif 
 } AlertJSONData;
 
+/* Remember update printElementWithTemplate if some element modified here */
+static AlertJSONTemplateElement template[] = {
+    {TIMESTAMP,"timestamp","event_timestamp",numericFormat},
+    {SENSOR_ID_SNORT,"sensor_id_snort","sensor_id_snort",numericFormat},
+    {SENSOR_ID,"sensor_id","sensor_id",numericFormat},
+    {SENSOR_NAME,"sensor_name","sensor_name",stringFormat},
+    {SIG_GENERATOR,"sig_generator","sig_generator",numericFormat},
+    {SIG_ID,"sig_id","sig_id",numericFormat},
+    {SIG_REV,"sig_rev","rev",numericFormat},
+    {PRIORITY,"priority","priority",numericFormat},
+    {CLASSIFICATION,"classification","classification",stringFormat},
+    {MSG,"msg","msg",stringFormat},
+    {PAYLOAD,"payload","payload",stringFormat},
+    {PROTO,"proto","proto",stringFormat},
+    {PROTO_ID,"proto_id","proto_id",numericFormat},
+    {ETHSRC,"ethsrc","ethsrc",stringFormat},
+    {ETHDST,"ethdst","ethdst",stringFormat},
+    {ETHTYPE,"ethtype","ethtype",numericFormat},
+    {UDPLENGTH,"udplength","udplength",numericFormat},
+    {ETHLENGTH,"ethlen","ethlength",numericFormat},
+    {TRHEADER,"trheader","trheader",stringFormat},
+    {SRCPORT,"srcport","srcport",numericFormat},
+    {SRCPORT_NAME,"srcport_name","srcport_name",stringFormat},
+    {DSTPORT,"dstport","dstport",numericFormat},
+    {DSTPORT_NAME,"dstport_name","dstport_name",stringFormat},
+    {SRC_TEMPLATE_ID,"src","src",numericFormat}, 
+    {SRC_STR,"src_str","src_str",stringFormat},
+    {SRC_NAME,"src_name","src_name",stringFormat},
+    {SRC_NET,"src_net","src_net",stringFormat},
+    {SRC_NET_NAME,"src_net_name","src_net_name",stringFormat},
+    {DST_TEMPLATE_ID,"dst","dst",numericFormat}, 
+    {DST_NAME,"dst_name","dst_name",stringFormat},
+    {DST_STR,"dst_str","dst_str",stringFormat},
+    {DST_NET,"dst_net","dst_net",stringFormat},
+    {DST_NET_NAME,"dst_net_name","dst_net_name",stringFormat},
+    {ICMPTYPE,"icmptype","icmptype",numericFormat},
+    {ICMPCODE,"icmpcode","icmpcode",numericFormat},
+    {ICMPID,"icmpid","icmpid",numericFormat},
+    {ICMPSEQ,"icmpseq","icmpseq",numericFormat},
+    {TTL,"ttl","ttl",numericFormat},
+    {TOS,"tos","tos",numericFormat},
+    {ID,"id","id",numericFormat},
+    {IPLEN,"iplen","iplen",numericFormat},
+    {DGMLEN,"dgmlen","dgmlen",numericFormat},
+    {TCPSEQ,"tcpseq","tcpseq",numericFormat},
+    {TCPACK,"tcpack","tcpack",numericFormat},
+    {TCPLEN,"tcplen","tcplen",numericFormat},
+    {TCPWINDOW,"tcpwindow","tcpwindow",numericFormat},
+    {TCPFLAGS,"tcpflags","tcpflags",stringFormat},
+    #ifdef HAVE_GEOIP
+    {SRC_COUNTRY,"src_country","src_country",stringFormat},
+    {DST_COUNTRY,"dst_country","dst_country",stringFormat},
+    {SRC_COUNTRY_CODE,"src_country_code","src_country_code",stringFormat},
+    {DST_COUNTRY_CODE,"dst_country_code","dst_country_code",stringFormat},
+    #endif /* HAVE_GEOIP */
+    {TEMPLATE_END_ID,"","",numericFormat}
+};
 
 /* list of function prototypes for this preprocessor */
 static void AlertJSONInit(char *);
@@ -327,8 +457,25 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     mSplitFree(&toks, num_toks);
     toks = mSplit(data->jsonargs, ",", 128, &num_toks, 0);
 
-    data->args = toks;
-    data->numargs = num_toks;
+    for(i=0;i<num_toks;++i){
+        int j;
+        for(j=0;;++j){
+            if(template[j].id==TEMPLATE_END_ID)
+                FatalError("alert_json: Cannot parse template element %s\n",toks[i]);
+            if(!strcmp(template[j].templateName,toks[i])){
+                TemplateElementsList ** templateIterator = &data->outputTemplate;
+                while(*templateIterator!=NULL) templateIterator=&(*templateIterator)->next;
+                *templateIterator = SnortAlloc(sizeof(TemplateElementsList));
+                (*templateIterator)->templateElement = &template[j];
+                break;
+            }
+        }
+    }
+
+    data->args = NULL;
+    data->numargs = 0;
+
+    mSplitFree(&toks, num_toks);
 
 
 #ifdef HAVE_GEOIP
@@ -384,12 +531,12 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
 static void AlertJSONCleanup(int signal, void *arg, const char* msg)
 {
     AlertJSONData *data = (AlertJSONData *)arg;
+    TemplateElementsList *iter,*aux;
     /* close alert file */
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"%s\n", msg););
 
     if(data)
     {
-        mSplitFree(&data->args, data->numargs);
         if(data->kafka)
             KafkaLog_Term(data->kafka);
         free(data->jsonargs);
@@ -397,6 +544,10 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
         freeNumberStrAssocList(data->nets);
         freeNumberStrAssocList(data->services);
         freeNumberStrAssocList(data->protocols);
+        for(iter=data->outputTemplate;iter;iter=aux){
+            aux = iter->next;
+            free(iter);
+        }
 
 
         #ifdef HAVE_GEOIP
@@ -486,7 +637,406 @@ char* _intoa(unsigned int addr, char* buf, u_short bufLen) {
 }
 
 /*
-  * Function: RealAlertJSON(Packet *, char *, FILE *, char *, numargs const int)
+ * Function: PrintElementWithTemplate(Packet *, char *, FILE *, char *, numargs const int)
+ *
+ * Purpose: Write a user defined JSON message
+ *
+ * Arguments:     p => packet. (could be NULL)
+ *              msg => the message to send
+ *             args => JSON output arguements
+ *          numargs => number of arguements
+ *             log => Log
+ * Returns: void function
+ *
+ */
+static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type, AlertJSONData *jsonData, AlertJSONTemplateElement *templateElement){
+    SigNode *sn;
+    char tcpFlags[9];
+    char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];
+    const size_t bufLen = sizeof buf;
+    KafkaLog * kafka = jsonData->kafka;
+    uint32_t ipv4 = 0;
+    const int initial_buffer_pos = kafka->pos;
+
+    /* Avoid repeated code */
+    if(IPH_IS_VALID(p)){
+        switch(templateElement->id){
+            case SRC_TEMPLATE_ID:
+            case SRC_STR:
+            case SRC_NAME:
+            case SRC_NET:
+            case SRC_NET_NAME:
+#ifdef HAVE_GEOIP
+            case SRC_COUNTRY:
+            case SRC_COUNTRY_CODE:
+#endif
+                ipv4 = GET_SRC_ADDR(p).s_addr;
+                break;
+
+            case DST_TEMPLATE_ID:
+            case DST_STR:
+            case DST_NAME:
+            case DST_NET:
+            case DST_NET_NAME:
+#ifdef HAVE_GEOIP
+            case DST_COUNTRY:
+            case DST_COUNTRY_CODE:
+#endif
+                ipv4 = GET_DST_ADDR(p).s_addr;
+                break;
+        };
+    }
+
+    /* Printing name of field. At the moment, we don't use the template one.*/
+    #if 0
+    PrintJSONFieldName(kafka,templateElement->jsonName);
+    if(templateElement->printFormat == stringFormat)
+        KafkaLog_Putc('"');
+    #endif
+
+
+
+    switch(templateElement->id){
+        case TIMESTAMP:
+            LogJSON_i64(kafka,JSON_TIMESTAMP_NAME,p->pkth->ts.tv_sec*1000 + p->pkth->ts.tv_usec/1000);
+            break;
+        case SENSOR_ID_SNORT:
+            if(event != NULL)
+                LogJSON_i32(kafka,JSON_SENSOR_ID_SNORT_NAME,ntohl(((Unified2EventCommon *)event)->sensor_id));
+            else
+                LogJSON_i32(kafka,JSON_SENSOR_ID_SNORT_NAME,SENSOR_NOT_FOUND_NUMBER);
+            break;
+        case SENSOR_ID:
+            LogJSON_i32(kafka,JSON_SENSOR_ID_NAME,jsonData->sensor_id);
+            break;
+        
+        case SENSOR_NAME:
+            LogJSON_a(kafka,JSON_SENSOR_NAME_NAME,jsonData->sensor_name);
+            break;
+        case SIG_GENERATOR:
+            if(event != NULL)
+                LogJSON_i64(kafka,JSON_SIG_GENERATOR_NAME,ntohl(((Unified2EventCommon *)event)->generator_id));
+            break;
+        case SIG_ID:
+            if(event != NULL)
+                LogJSON_i64(kafka,JSON_SIG_ID_NAME,ntohl(((Unified2EventCommon *)event)->signature_id));
+            break;
+        case SIG_REV:
+            if(event != NULL)
+                LogJSON_i64(kafka,JSON_SIG_REV_NAME,ntohl(((Unified2EventCommon *)event)->signature_revision));
+            break;
+        case PRIORITY:
+            if(event != NULL)
+                LogJSON_i32(kafka,JSON_PRIORITY_NAME, ntohl(((Unified2EventCommon *)event)->priority_id));
+            else /* Always log something */
+                LogJSON_i32(kafka,JSON_PRIORITY_NAME, DEFAULT_PRIORITY);
+            break;
+        case CLASSIFICATION:
+            if(event != NULL)
+            {
+                uint32_t classification_id = ntohl(((Unified2EventCommon *)event)->classification_id);
+                ClassType *cn = ClassTypeLookupById(barnyard2_conf, classification_id);
+                if ( cn != NULL )
+                    LogJSON_a(kafka,JSON_CLASSIFICATION_NAME,cn->name);
+                else
+                    LogJSON_a(kafka,JSON_CLASSIFICATION_NAME, DEFAULT_CLASSIFICATION);
+            }else{ /* Always log something */
+                LogJSON_a(kafka,JSON_CLASSIFICATION_NAME, DEFAULT_CLASSIFICATION);
+            }
+            break;
+        case MSG:
+            if ( event != NULL )
+            {
+                sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
+                    ntohl(((Unified2EventCommon *)event)->signature_id),
+                    ntohl(((Unified2EventCommon *)event)->signature_revision));
+
+                if (sn != NULL)
+                {
+                    //const int msglen = strlen(sn->msg);
+                    LogJSON_a(kafka,JSON_MSG_NAME,sn->msg);
+                }
+            }
+            break;
+        case PAYLOAD:
+            {
+                uint16_t i;
+                KafkaLog_Puts(kafka, "\""JSON_PAYLOAD_NAME"\":\"");
+                if(p &&  p->dsize>0){
+                    for(i=0;i<p->dsize;++i)
+                        KafkaLog_Print(kafka, "%"PRIx8, p->data[i]);
+                }else{
+                    KafkaLog_Puts(kafka, DEFAULT_PAYLOAD);
+                }
+                KafkaLog_Puts(kafka,"\"");
+            }
+            break;
+
+        case PROTO:
+            if(IPH_IS_VALID(p))
+            {
+                Number_str_assoc * service_name_asoc = SearchNumberStr(GET_IPH_PROTO(p),jsonData->protocols,PROTOCOLS);
+                LogJSON_a(kafka,JSON_PROTO_NAME,service_name_asoc?service_name_asoc->human_readable_str:DEFAULT_PROTO);
+            }else{ /* Always log something */
+                LogJSON_i16(kafka,JSON_PROTO_ID_NAME,0);
+                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
+                LogJSON_a(kafka,JSON_PROTO_NAME,DEFAULT_PROTO);
+            }
+            break;
+        case PROTO_ID:
+            LogJSON_i16(kafka,JSON_PROTO_ID_NAME,GET_IPH_PROTO(p));
+            break;
+
+        case ETHSRC:
+            if(p->eh)
+            {
+                PrintJSONFieldName(kafka,JSON_ETHSRC_NAME);
+                KafkaLog_Print(kafka, "\"%X:%X:%X:%X:%X:%X\"", p->eh->ether_src[0],
+                    p->eh->ether_src[1], p->eh->ether_src[2], p->eh->ether_src[3],
+                    p->eh->ether_src[4], p->eh->ether_src[5]);
+            }
+            break;
+
+        case ETHDST:
+            if(p->eh)
+            {
+                PrintJSONFieldName(kafka,JSON_ETHDST_NAME);
+                KafkaLog_Print(kafka, "\"%X:%X:%X:%X:%X:%X\"", p->eh->ether_dst[0],
+                p->eh->ether_dst[1], p->eh->ether_dst[2], p->eh->ether_dst[3],
+                p->eh->ether_dst[4], p->eh->ether_dst[5]);
+            }
+            break;
+
+        case ETHTYPE:
+            if(p->eh)
+            {
+                PrintJSONFieldName(kafka,JSON_ETHTYPE_NAME);
+                KafkaLog_Print(kafka, "%"PRIu16,ntohs(p->eh->ether_type));
+            }
+            break;
+
+        case UDPLENGTH:
+            if(p->udph){
+                PrintJSONFieldName(kafka,JSON_UDPLENGTH_NAME);
+                KafkaLog_Print(kafka, "%"PRIu16,ntohs(p->udph->uh_len));
+            }
+            break;
+        case ETHLENGTH:
+            if(p->eh){
+                PrintJSONFieldName(kafka,JSON_ETHLENGTH_NAME);
+                KafkaLog_Print(kafka, "%"PRIu16,p->pkth->len);
+            }
+            break;
+
+        case SRCPORT:
+        case DSTPORT:
+            if(IPH_IS_VALID(p))
+            {
+                switch(GET_IPH_PROTO(p))
+                {
+                    case IPPROTO_UDP:
+                    case IPPROTO_TCP:
+                    {
+                        LogJSON_i16(kafka,
+                            templateElement->id==SRCPORT? JSON_SRCPORT_NAME:JSON_DSTPORT_NAME,
+                            templateElement->id==SRCPORT? p->sp:p->dp);
+                    }
+                        break;
+                    default: /* Always log something */
+                        LogJSON_i16(kafka,templateElement->id==SRCPORT?JSON_SRCPORT_NAME:JSON_DSTPORT_NAME,0);
+                        break;
+                }
+            }else{ /* Always Log something */
+                LogJSON_i16(kafka,templateElement->id==SRCPORT?JSON_SRCPORT_NAME:JSON_DSTPORT_NAME,0);
+            }
+            break;
+        case SRCPORT_NAME:
+        case DSTPORT_NAME:
+            if(IPH_IS_VALID(p))
+            {
+                switch(GET_IPH_PROTO(p))
+                {
+                    case IPPROTO_UDP:
+                    case IPPROTO_TCP:
+                    {
+                        const uint16_t port = templateElement->id==SRCPORT_NAME? p->sp:p->dp;
+                        Number_str_assoc * service_name_asoc = SearchNumberStr(port,jsonData->services,SERVICES);
+                        LogJSON_a(kafka,
+                            templateElement->id==SRCPORT_NAME?JSON_SRCPORT_NAME_NAME:JSON_DSTPORT_NAME_NAME,
+                            service_name_asoc?service_name_asoc->human_readable_str:"-");
+                    }
+                        break;
+                    default: /* Always log something */
+                        LogJSON_a(kafka,templateElement->id==SRCPORT_NAME?JSON_SRCPORT_NAME_NAME:JSON_DSTPORT_NAME_NAME,"-");
+                        break;
+                };
+            }else{ /* Always Log something */
+                LogJSON_i16(kafka,templateElement->id==SRCPORT_NAME?JSON_SRCPORT_NAME_NAME:JSON_DSTPORT_NAME_NAME,0);
+            }
+            break;
+
+        case SRC_TEMPLATE_ID:
+            LogJSON_i32(kafka,JSON_SRC_NAME,ipv4);
+            break;
+        case DST_TEMPLATE_ID:
+            LogJSON_i32(kafka,JSON_DST_NAME,ipv4);
+            break;
+        case SRC_STR:
+        case DST_STR:
+            {
+                LogJSON_a(kafka,templateElement->id == SRC_STR ? JSON_SRC_STR_NAME : JSON_DST_STR_NAME,_intoa(ipv4, buf, bufLen));
+            }
+            break;
+        case SRC_NAME:
+        case DST_NAME:
+            {
+                Number_str_assoc * ip_str_node = SearchNumberStr(ipv4,jsonData->hosts,HOSTS);
+                const char * ip_name = ip_str_node ? ip_str_node->human_readable_str : _intoa(ipv4, buf, bufLen);
+                LogJSON_a(kafka, templateElement->id == SRC_NAME? JSON_SRC_NAME_NAME:JSON_DST_NAME_NAME,ip_name);
+            }
+            break;
+        case SRC_NET:
+        case DST_NET:
+            {
+                Number_str_assoc * ip_net = SearchNumberStr(ipv4,jsonData->nets,NETWORKS);
+                LogJSON_a(kafka,templateElement->id == SRC_NET? JSON_SRC_NET_NAME : JSON_DST_NET_NAME,ip_net?ip_net->number_as_str:"0.0.0.0/0");
+            }
+            break;
+        case SRC_NET_NAME:
+        case DST_NET_NAME:
+            {
+                Number_str_assoc * ip_net = SearchNumberStr(ipv4,jsonData->nets,NETWORKS);
+                LogJSON_a(kafka,templateElement->id == SRC_NET_NAME?JSON_SRC_NET_NAME_NAME:JSON_DST_NET_NAME_NAME,ip_net?ip_net->human_readable_str:"0.0.0.0/0");
+            }
+            break;
+
+#ifdef HAVE_GEOIP
+        case SRC_COUNTRY:
+        case DST_COUNTRY:
+            if(jsonData->gi){
+                const char * country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ipv4);
+                LogJSON_a(kafka,templateElement->id == SRC_COUNTRY ? JSON_SRC_COUNTRY_NAME : JSON_DST_COUNTRY_NAME,country_name?country_name:"N/A");
+            }
+            break;
+        case SRC_COUNTRY_CODE:
+        case DST_COUNTRY_CODE:
+            if(jsonData->gi){
+                const uint32_t ipv4 = IPH_IS_VALID(p) ? 
+                    ntohl(templateElement->id == SRC_COUNTRY_CODE? GET_SRC_ADDR(p).s_addr : GET_DST_ADDR(p).s_addr)
+                    : 0;
+                const char * country_code =GeoIP_country_code_by_ipnum(jsonData->gi,ipv4);
+                LogJSON_a(kafka,templateElement->id == SRC_COUNTRY_CODE ? JSON_SRC_COUNTRY_CODE_NAME : JSON_DST_COUNTRY_CODE_NAME,country_code?country_code:"N/A");
+            }
+            break;
+#endif /* HAVE_GEOIP */
+
+        case ICMPTYPE:
+            if(p->icmph){
+                PrintJSONFieldName(kafka,JSON_ICMPTYPE_NAME);
+                KafkaLog_Print(kafka, "%d",p->icmph->type);
+            }
+            break;
+        case ICMPCODE:
+            if(p->icmph)
+            {
+                PrintJSONFieldName(kafka,JSON_ICMPCODE_NAME);
+                KafkaLog_Print(kafka, "%d",p->icmph->code);
+            }
+            break;
+        case ICMPID:
+            if(p->icmph){
+                PrintJSONFieldName(kafka,JSON_ICMPID_NAME);
+                KafkaLog_Print(kafka, "%d",ntohs(p->icmph->s_icmp_id));
+            }
+            break;
+        case ICMPSEQ:
+            if(p->icmph){
+                /* Doesn't work because "%d" arbitrary
+                    PrintJSONFieldName(kafka,JSON_ICMPSEQ_NAME);
+                    KafkaLog_Print(kafka, "%d",ntohs(p->icmph->s_icmp_seq));
+                */
+                LogJSON_i16(kafka,JSON_ICMPSEQ_NAME,ntohs(p->icmph->s_icmp_seq));
+            }
+            break;
+        case TTL:
+            if(IPH_IS_VALID(p)){
+                PrintJSONFieldName(kafka,JSON_TTL_NAME);
+                KafkaLog_Print(kafka, "%d",GET_IPH_TTL(p));
+            }
+            break;
+
+        case TOS: 
+            if(IPH_IS_VALID(p)){
+                PrintJSONFieldName(kafka,JSON_TOS_NAME);
+                KafkaLog_Print(kafka, "%d",GET_IPH_TOS(p));
+            }
+            break;
+        case ID:
+            if(IPH_IS_VALID(p)){
+                LogJSON_i16(kafka,JSON_ID_NAME,IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)));
+            } 
+            break;
+        case IPLEN:
+            if(IPH_IS_VALID(p)){
+                PrintJSONFieldName(kafka,JSON_IPLEN_NAME);
+                KafkaLog_Print(kafka, "%d",GET_IPH_LEN(p) << 2);
+            }
+            break;
+        case DGMLEN:
+            if(IPH_IS_VALID(p)){
+                PrintJSONFieldName(kafka,JSON_DGMLEN_NAME);
+                // XXX might cause a bug when IPv6 is printed?
+                KafkaLog_Print(kafka, "%d",ntohs(GET_IPH_LEN(p)));
+            }
+            break;
+
+        case TCPSEQ:
+            if(p->tcph){
+                // PrintJSONFieldName(kafka,JSON_TCPSEQ_NAME);                     // hex format
+                // KafkaLog_Print(kafka, "lX%0x",(u_long) ntohl(p->tcph->th_ack)); // hex format
+                LogJSON_i32(kafka,JSON_TCPSEQ_NAME,ntohl(p->tcph->th_seq));
+            }
+            break;
+        case TCPACK:
+            if(p->tcph){
+                // PrintJSONFieldName(kafka,JSON_TCPACK_NAME);
+                // KafkaLog_Print(kafka, "0x%lX",(u_long) ntohl(p->tcph->th_ack));
+                LogJSON_i32(kafka,JSON_TCPACK_NAME,ntohl(p->tcph->th_ack));
+            }
+            break;
+        case TCPLEN:
+            if(p->tcph){
+                PrintJSONFieldName(kafka,JSON_TCPLEN_NAME);
+                KafkaLog_Print(kafka, "%d",TCP_OFFSET(p->tcph) << 2);
+            }
+            break;
+        case TCPWINDOW:
+            if(p->tcph){
+                //PrintJSONFieldName(kafka,JSON_TCPWINDOW_NAME);         // hex format
+                //KafkaLog_Print(kafka, "0x%X",ntohs(p->tcph->th_win));  // hex format
+                LogJSON_i16(kafka,JSON_TCPWINDOW_NAME,ntohs(p->tcph->th_win));
+            }
+            break;
+        case TCPFLAGS:
+            if(p->tcph)
+            {
+                CreateTCPFlagString(p, tcpFlags);
+                PrintJSONFieldName(kafka,JSON_TCPFLAGS_NAME);
+                KafkaLog_Quote(kafka, tcpFlags);
+            }
+            break;
+
+        default:
+            *(int *)NULL = 0;
+            FatalError("Template id %d not found",templateElement->id); /* just for sanity */
+            break;
+    };
+
+    return kafka->pos-initial_buffer_pos; /* if we have write something */
+}
+
+/*
+ * Function: RealAlertJSON(Packet *, char *, FILE *, char *, numargs const int)
  *
  * Purpose: Write a user defined JSON message
  *
@@ -502,9 +1052,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         char **args, int numargs, AlertJSONData * jsonData)
 {
     int num;
-    SigNode *sn;
     char *type;
-    char tcpFlags[9];
+    TemplateElementsList * iter;
 
     KafkaLog * kafka = jsonData->kafka;
 
@@ -513,203 +1062,28 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
 
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Logging JSON Alert data\n"););
     KafkaLog_Putc(kafka,'{');
+    for(iter=jsonData->outputTemplate;iter;iter=iter->next){
+        const int initial_pos = kafka->pos;
+        if(iter!=jsonData->outputTemplate)
+            KafkaLog_Puts(kafka,JSON_FIELDS_SEPARATOR);
+        const int writed = printElementWithTemplate(p,event,event_type,jsonData,iter->templateElement);
+        if(0==writed)
+            kafka->pos = initial_pos; // Revert the insertion of empty element */
+    }
+
+    
+
+
     for (num = 0; num < numargs; num++)
     {
         type = args[num];
 
         DEBUG_WRAP(DebugMessage(DEBUG_LOG, "JSON Got type %s %d\n", type, num););
 
-        if(!strncasecmp("timestamp", type, 9))
-        {
-            // LogOrKafka_Puts(log, kafka, JSON_FIELDS_SEPARATOR" "); // Commented cause timestamp will be the first always
-            if(!LogJSON_i64(kafka,JSON_TIMESTAMP_NAME,p->pkth->ts.tv_sec*1000 + p->pkth->ts.tv_usec/1000))
-                FatalError("Not enough buffer space to escape msg string\n");
-        }
-        else if(!strncasecmp("sensor_id",type,sizeof "sensor_id"))
-        {
-            KafkaLog_Puts(kafka,JSON_FIELDS_SEPARATOR);
-            if(event != NULL)
-            {
-                if(!LogJSON_i32(kafka,JSON_SENSOR_ID_SNORT_NAME,ntohl(((Unified2EventCommon *)event)->sensor_id)))
-                    FatalError("Not enough buffer space to escape msg string\n");
-            }else{
-                if(!LogJSON_i32(kafka,JSON_SENSOR_ID_SNORT_NAME,SENSOR_NOT_FOUND_NUMBER))
-                    FatalError("Not enough buffer space to escape msg string\n");
-            }
+        
+        if(0){}
+        
 
-            KafkaLog_Puts(kafka,JSON_FIELDS_SEPARATOR);
-            if(!LogJSON_i32(kafka,JSON_SENSOR_ID_NAME,jsonData->sensor_id))
-                FatalError("Not enough buffer space to escape msg string\n");
-		
-            KafkaLog_Puts(kafka,JSON_FIELDS_SEPARATOR);
-            if(!LogJSON_a(kafka,JSON_SENSOR_NAME_NAME,jsonData->sensor_name))
-                FatalError("Not enough buffer space to escape msg string\n");
-
-        }
-        else if(!strncasecmp("sig_generator ",type,13))
-        {
-            if(event != NULL)
-            {
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                if(!LogJSON_i64(kafka,JSON_SIG_GENERATOR_NAME,ntohl(((Unified2EventCommon *)event)->generator_id)))
-                    FatalError("Not enough buffer space to escape msg string\n");
-                    
-            }
-        }
-        else if(!strncasecmp("sig_id",type,6))
-        {
-            if(event != NULL)
-            {
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                if(!LogJSON_i64(kafka,JSON_SIG_ID_NAME,ntohl(((Unified2EventCommon *)event)->signature_id)))
-                    FatalError("Not enough buffer space to escape msg string\n");
-            }
-        }
-        else if(!strncasecmp("sig_rev",type,7))
-        {
-            if(event != NULL)
-            {
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                if(!LogJSON_i64(kafka,JSON_SIG_REV_NAME,ntohl(((Unified2EventCommon *)event)->signature_revision)))
-                    FatalError("Not enough buffer space to escape msg string\n");
-            }
-        }
-        else if(!strncasecmp("priority",type,sizeof "priority")){
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            if(event != NULL)
-            {
-                if(!LogJSON_i32(kafka,JSON_PRIORITY_NAME, ntohl(((Unified2EventCommon *)event)->priority_id)))
-                    FatalError("Not enough buffer space to escape msg string\n");
-            }else{ /* Always log something */
-                if(!LogJSON_i32(kafka,JSON_PRIORITY_NAME, DEFAULT_PRIORITY))
-                    FatalError("Not enough buffer space to escape msg string\n");
-            }
-        }
-        else if(!strncasecmp("classification",type,sizeof "classification")){
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            if(event != NULL)
-            {
-                uint32_t classification_id = ntohl(((Unified2EventCommon *)event)->classification_id);
-                ClassType *cn = ClassTypeLookupById(barnyard2_conf, classification_id);
-                if ( cn != NULL )
-                    LogJSON_a(kafka,JSON_CLASSIFICATION_NAME,cn->name);
-                else
-                    LogJSON_a(kafka,JSON_CLASSIFICATION_NAME, DEFAULT_CLASSIFICATION);
-            }else{ /* Always log something */
-                LogJSON_a(kafka,JSON_CLASSIFICATION_NAME, DEFAULT_CLASSIFICATION);
-            }
-        }
-        else if(!strncasecmp("msg", type, 3))
-        {
-            if ( event != NULL )
-            {
-                sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-				    ntohl(((Unified2EventCommon *)event)->signature_id),
-				    ntohl(((Unified2EventCommon *)event)->signature_revision));
-
-                if (sn != NULL)
-                {
-                    KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                    //const int msglen = strlen(sn->msg);
-                    if(!LogJSON_a(kafka,JSON_MSG_NAME,sn->msg))
-                    {
-                        FatalError("Not enough buffer space to escape msg string\n");
-                    }
-                }
-            }
-        }
-        else if(!strncasecmp("payload", type, strlen("payload")))
-        {
-            uint16_t i;
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            KafkaLog_Puts(kafka, "\""JSON_PAYLOAD_NAME"\":\"");
-            if(p &&  p->dsize>0){
-                for(i=0;i<p->dsize;++i)
-                    KafkaLog_Print(kafka, "%"PRIx8, p->data[i]);
-            }else{
-                KafkaLog_Puts(kafka, "-");
-            }
-            KafkaLog_Puts(kafka,"\"");
-        }
-        else if(!strncasecmp("proto", type, 5))
-        {
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            if(IPH_IS_VALID(p))
-            {
-                #if 0
-                switch (GET_IPH_PROTO(p))
-                {
-                    case IPPROTO_UDP:
-                        LogJSON_a(kafka,JSON_PROTO_NAME,"UDP");
-                        break;
-                    case IPPROTO_TCP:
-                        LogJSON_a(kafka,JSON_PROTO_NAME,"TCP");
-                        break;
-                    case IPPROTO_ICMP:
-                        LogJSON_a(kafka,JSON_PROTO_NAME,"ICMP");
-                        break;
-                    default: /* Always log something */
-                        LogJSON_a(kafka,JSON_PROTO_NAME,"-");
-                        break;
-                }
-                #endif
-                Number_str_assoc * service_name_asoc = SearchNumberStr(GET_IPH_PROTO(p),jsonData->protocols,PROTOCOLS);
-                LogJSON_i16(kafka,JSON_PROTO_ID_NAME,service_name_asoc?service_name_asoc->number.protocol:0);
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_PROTO_NAME,service_name_asoc?service_name_asoc->human_readable_str:"-");
-            }else{ /* Always log something */
-                LogJSON_i16(kafka,JSON_PROTO_ID_NAME,0);
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_PROTO_NAME,"-");
-            }
-        }
-        else if(!strncasecmp("ethsrc", type, 6))
-        {
-            if(p->eh)
-            {
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                PrintJSONFieldName(kafka,JSON_ETHSRC_NAME);
-                KafkaLog_Print(kafka, "\"%X:%X:%X:%X:%X:%X\"", p->eh->ether_src[0],
-                    p->eh->ether_src[1], p->eh->ether_src[2], p->eh->ether_src[3],
-                    p->eh->ether_src[4], p->eh->ether_src[5]);
-            }
-        }
-        else if(!strncasecmp("ethdst", type, 6))
-        {
-            if(p->eh)
-            {
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                PrintJSONFieldName(kafka,JSON_ETHDST_NAME);
-                KafkaLog_Print(kafka, "\"%X:%X:%X:%X:%X:%X\"", p->eh->ether_dst[0],
-                p->eh->ether_dst[1], p->eh->ether_dst[2], p->eh->ether_dst[3],
-                p->eh->ether_dst[4], p->eh->ether_dst[5]);
-            }
-        }
-        else if(!strncasecmp("ethtype", type, 7))
-        {
-            if(p->eh)
-            {
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                PrintJSONFieldName(kafka,JSON_ETHTYPE_NAME);
-                KafkaLog_Print(kafka, "%"PRIu16,ntohs(p->eh->ether_type));
-            }
-        }
-        else if(!strncasecmp("udplength", type, 9))
-        {
-            if(p->udph){
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                PrintJSONFieldName(kafka,JSON_UDPLENGTH_NAME);
-                KafkaLog_Print(kafka, "%"PRIu16,ntohs(p->udph->uh_len));
-            }
-        }
-        else if(!strncasecmp("ethlen", type, 6))
-        {
-            if(p->eh){
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                PrintJSONFieldName(kafka,JSON_ETHLENGTH_NAME);
-                KafkaLog_Print(kafka, "%"PRIu16,p->pkth->len);
-            }
-        }
 #if 0 /* Maybe in the future */
         else if(!strncasecmp("trheader", type, 8))
         {
@@ -721,274 +1095,12 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         }
 #endif
 
-        else if(!strncasecmp("srcport", type, 7))
-        {
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            if(IPH_IS_VALID(p))
-            {
-                switch(GET_IPH_PROTO(p))
-                {
-                    case IPPROTO_UDP:
-                    case IPPROTO_TCP:
-                    {
-                        Number_str_assoc * service_name_asoc = SearchNumberStr(p->sp,jsonData->services,SERVICES);
-                        LogJSON_i16(kafka,JSON_SRCPORT_NAME,p->sp);
-                        KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                        LogJSON_a(kafka,JSON_SRCPORT_NAME_NAME,service_name_asoc?service_name_asoc->human_readable_str:"-");
-                    }
-                        break;
-                    default: /* Always log something */
-                        LogJSON_i16(kafka,JSON_SRCPORT_NAME,0);
-                        KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                        LogJSON_a(kafka,JSON_SRCPORT_NAME_NAME,"-");
-                        break;
-                }
-            }else{ /* Always Log something */
-                LogJSON_i16(kafka,JSON_SRCPORT_NAME,0);
-            }
-        }
-        else if(!strncasecmp("dstport", type, 7))
-        {
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            if(IPH_IS_VALID(p))
-            {
-                switch(GET_IPH_PROTO(p))
-                {
-                    case IPPROTO_UDP:
-                    case IPPROTO_TCP:
-		    {
-                        Number_str_assoc * service_name_asoc = SearchNumberStr(p->dp,jsonData->services,SERVICES);
-                        LogJSON_i16(kafka,JSON_SRCPORT_NAME,p->dp);
-                        KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                        LogJSON_a(kafka,JSON_DSTPORT_NAME_NAME,service_name_asoc?service_name_asoc->human_readable_str:"-");
-                    }
-                        break;
-                    default:
-                        LogJSON_a(kafka,JSON_DSTPORT_NAME_NAME,"-");
-                        KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                        LogJSON_i16(kafka,JSON_DSTPORT_NAME,0);
-                        break;
-                }
-            }else{ /* Always Log something */
-                LogJSON_i16(kafka,JSON_DSTPORT_NAME,0);
-            }
-        }
-        else if(!strncasecmp("src", type, 3)) // TODO merge with "dst" field
-        {    
-            static char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];
-            const size_t bufLen = sizeof buf;
-            uint32_t ipv4 = IPH_IS_VALID(p) ? ntohl(GET_SRC_ADDR(p).s_addr) : 0;
-
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            /*
-                String version
-                PrintJSONFieldName(kafka,JSON_SRC_NAME);
-                LogOrKafka_Quote(log,kafka, inet_ntoa(GET_SRC_ADDR(p))); 
-            */
-            LogJSON_i32(kafka,JSON_SRC_NAME,ipv4);
-
-            char * ip_str=NULL,*ip_name=NULL;
-            Number_str_assoc * ip_str_node = SearchNumberStr(ipv4,jsonData->hosts,HOSTS);
-            if(ip_str_node){
-                ip_str = ip_str_node->number_as_str;
-                ip_name = ip_str_node->human_readable_str;
-            }else{
-                ip_name = ip_str = _intoa(ipv4, buf, bufLen);
-            }
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_SRC_STR_NAME,ip_str);
-
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_SRC_NAME_NAME,ip_name);
-
-            // networks
-            Number_str_assoc * ip_net = SearchNumberStr(ipv4,jsonData->nets,NETWORKS);
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_SRC_NET_NAME,ip_net?ip_net->number_as_str:"0.0.0.0/0");
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_SRC_NET_NAME_NAME,ip_net?ip_net->human_readable_str:"0.0.0.0/0");
-
-            #ifdef HAVE_GEOIP
-            if(jsonData->gi){
-                const char * country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ipv4);
-                const char * country_code =GeoIP_country_code_by_ipnum(jsonData->gi,ipv4);
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_SRC_COUNTRY_NAME,country_name?country_name:"N/A");
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_SRC_COUNTRY_CODE_NAME,country_code?country_code:"N/A");
-            }
-            #endif
-        }
-        else if(!strncasecmp("dst", type, 3))
-        {
-            /* @TODO merge with "src" field */
-            static char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];
-            const size_t bufLen = sizeof buf;
-            uint32_t ipv4 = IPH_IS_VALID(p) ? ntohl(GET_DST_ADDR(p).s_addr) : 0;
-
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            /*
-                String version
-                PrintJSONFieldName(log,kafka,JSON_SRC_NAME);
-                LogOrKafka_Quote(log,kafka, inet_ntoa(GET_SRC_ADDR(p))); 
-            */
-            LogJSON_i32(kafka,JSON_DST_NAME,ipv4);
-
-            char * ip_str=NULL,*ip_name=NULL;
-            Number_str_assoc * ip_str_node = SearchNumberStr(ipv4,jsonData->hosts,HOSTS);
-            if(ip_str_node){
-                ip_str = ip_str_node->number_as_str;
-                ip_name = ip_str_node->human_readable_str;
-            }else{
-                ip_name = ip_str = _intoa(ipv4, buf, bufLen);
-            }
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_DST_STR_NAME,ip_str);
-
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_DST_NAME_NAME,ip_name);
-
-            // networks
-            Number_str_assoc * ip_net = SearchNumberStr(ipv4,jsonData->nets,NETWORKS);
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_DST_NET_NAME,ip_net?ip_net->number_as_str:"0.0.0.0/0");
-            KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-            LogJSON_a(kafka,JSON_DST_NET_NAME_NAME,ip_net?ip_net->human_readable_str:"0.0.0.0/0");
-
-            #ifdef HAVE_GEOIP
-            if(jsonData->gi){
-                const char * country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ipv4);
-                const char * country_code =GeoIP_country_code_by_ipnum(jsonData->gi,ipv4);
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_DST_COUNTRY_NAME,country_name?country_name:"N/A");
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_DST_COUNTRY_CODE_NAME,country_code?country_code:"N/A");
-            }
-            #endif
-        }
-        else if(!strncasecmp("icmptype",type,8))
-        {
-            if(p->icmph)
-            {
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                PrintJSONFieldName(kafka,JSON_ICMPTYPE_NAME);
-                KafkaLog_Print(kafka, "%d",p->icmph->type);
-            }
-        }
-        else if(!strncasecmp("icmpcode",type,8))
-        {
-            if(p->icmph)
-            {
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                PrintJSONFieldName(kafka,JSON_ICMPCODE_NAME);
-                KafkaLog_Print(kafka, "%d",p->icmph->code);
-            }
-        }
-        else if(!strncasecmp("icmpid",type,6))
-        {
-            if(p->icmph){
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                PrintJSONFieldName(kafka,JSON_ICMPID_NAME);
-                KafkaLog_Print(kafka, "%d",ntohs(p->icmph->s_icmp_id));
-            }
-        }
-        else if(!strncasecmp("icmpseq",type,7))
-        {
-            if(p->icmph){
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                /* Doesn't work because "%d" arbitrary
-                    PrintJSONFieldName(kafka,JSON_ICMPSEQ_NAME);
-                    KafkaLog_Print(kafka, "%d",ntohs(p->icmph->s_icmp_seq));
-                */
-                LogJSON_i16(kafka,JSON_ICMPSEQ_NAME,ntohs(p->icmph->s_icmp_seq));
-            }
-        }
-        else if(!strncasecmp("ttl",type,3))
-        {
-            if(IPH_IS_VALID(p)){
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                PrintJSONFieldName(kafka,JSON_TTL_NAME);
-                KafkaLog_Print(kafka, "%d",GET_IPH_TTL(p));
-            }
-        }
-        else if(!strncasecmp("tos",type,3))
-        {
-            if(IPH_IS_VALID(p)){
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                PrintJSONFieldName(kafka,JSON_TOS_NAME);
-                KafkaLog_Print(kafka, "%d",GET_IPH_TOS(p));
-            }
-        }
-        else if(!strncasecmp("id",type,2))
-        {
-            if(IPH_IS_VALID(p)){
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_i16(kafka,JSON_ID_NAME,IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)));
-            } 
-        }
-        else if(!strncasecmp("iplen",type,5))
-        {
-            if(IPH_IS_VALID(p)){
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                PrintJSONFieldName(kafka,JSON_IPLEN_NAME);
-                KafkaLog_Print(kafka, "%d",GET_IPH_LEN(p) << 2);
-            }
-        }
-        else if(!strncasecmp("dgmlen",type,6))
-        {
-            if(IPH_IS_VALID(p)){
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                PrintJSONFieldName(kafka,JSON_DGMLEN_NAME);
-                // XXX might cause a bug when IPv6 is printed?
-                KafkaLog_Print(kafka, "%d",ntohs(GET_IPH_LEN(p)));
-            }
-        }
-        else if(!strncasecmp("tcpseq",type,6))
-        {
-            if(p->tcph){
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                // PrintJSONFieldName(kafka,JSON_TCPSEQ_NAME);                     // hex format
-                // KafkaLog_Print(kafka, "lX%0x",(u_long) ntohl(p->tcph->th_ack)); // hex format
-                LogJSON_i32(kafka,JSON_TCPSEQ_NAME,ntohl(p->tcph->th_seq));
-            }
-        }
-        else if(!strncasecmp("tcpack",type,6))
-            {
-            if(p->tcph){
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                // PrintJSONFieldName(kafka,JSON_TCPACK_NAME);
-                // KafkaLog_Print(kafka, "0x%lX",(u_long) ntohl(p->tcph->th_ack));
-                LogJSON_i32(kafka,JSON_TCPACK_NAME,ntohl(p->tcph->th_ack));
-            }
-        }
-
-        else if(!strncasecmp("tcplen",type,6))
-        {
-            if(p->tcph){
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                PrintJSONFieldName(kafka,JSON_TCPLEN_NAME);
-                KafkaLog_Print(kafka, "%d",TCP_OFFSET(p->tcph) << 2);
-            }
-        }
-        else if(!strncasecmp("tcpwindow",type,9))
-        {
-            if(p->tcph){
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                //PrintJSONFieldName(kafka,JSON_TCPWINDOW_NAME);         // hex format
-                //KafkaLog_Print(kafka, "0x%X",ntohs(p->tcph->th_win));  // hex format
-                LogJSON_i16(kafka,JSON_TCPWINDOW_NAME,ntohs(p->tcph->th_win));
-            }
-        }
-        else if(!strncasecmp("tcpflags",type,8))
-        {
-            if(p->tcph)
-            {
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                CreateTCPFlagString(p, tcpFlags);
-                PrintJSONFieldName(kafka,JSON_TCPFLAGS_NAME);
-                KafkaLog_Quote(kafka, tcpFlags);
-            }
-        }
+        
+        
+        
+        
+        
+        
 
     }
 

@@ -525,8 +525,15 @@ static bool inline LogJSON_a(KafkaLog *kafka,const char *fieldName,const char *f
 }
 
 /*
- * A faster replacement for inet_ntoa().
- * Extracted from tcpdump
+ * Function: _intoa(unsigned int addr, char* buf, u_short bufLen) 
+ * 
+ * Purpose: A faster replacement for inet_ntoa().Extracted from tcpdump
+ * 
+ * Arguments:   addr => Numeric address.
+ *               buf => Buffer to save string format address.
+ *            bufLen => buf's length.
+ *            
+ * Returns: Position of buffer where string starts.
  */
 char* _intoa(unsigned int addr, char* buf, u_short bufLen) {
   char *cp, *retStr;
@@ -560,14 +567,14 @@ char* _intoa(unsigned int addr, char* buf, u_short bufLen) {
 /*
  * Function: PrintElementWithTemplate(Packet *, char *, FILE *, char *, numargs const int)
  *
- * Purpose: Write a user defined JSON message
+ * Purpose: Write a user defined JSON element.
  *
- * Arguments:     p => packet. (could be NULL)
- *              msg => the message to send
- *             args => JSON output arguements
- *          numargs => number of arguements
- *             log => Log
- * Returns: void function
+ * Arguments:               p => packet. (could be NULL)
+ *                      event => event that cause the alarm.
+ *                 event_type => event type.
+ *                   jsonData => main plugin data.
+ *            templateElement => template element with format.
+ * Returns: 0 if nothing writed to jsonData. !=0 otherwise.
  *
  */
 static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type, AlertJSONData *jsonData, AlertJSONTemplateElement *templateElement){
@@ -916,11 +923,10 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
  *
  * Purpose: Write a user defined JSON message
  *
- * Arguments:     p => packet. (could be NULL)
- *              msg => the message to send
- *             args => JSON output arguements
- *          numargs => number of arguements
- *             log => Log
+ * Arguments:         p => packet. (could be NULL)
+ *                event => event.
+ *           event_type => event type
+ *            json_data => plugin main data
  * Returns: void function
  *
  */

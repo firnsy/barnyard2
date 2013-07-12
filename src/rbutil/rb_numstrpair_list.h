@@ -32,14 +32,13 @@
 #include "sf_ip.h"
 
 typedef struct _Number_str_assoc{
-    char * human_readable_str;
-    char * number_as_str;
+    char * human_readable_str;     /* Example: Google, tcp, ssh... */
+    char * number_as_str;          /* Example: 8.8.8.8, 0x800, 22... String format*/
     union{sfip_t ip;uint16_t service;uint16_t protocol;} number;
     struct _Number_str_assoc * next;
 } Number_str_assoc;
 
-/* Enumeration for FillHostList 
- */
+/* Enumeration for FillHostList */
 typedef enum{HOSTS,NETWORKS,SERVICES,PROTOCOLS} FILLHOSTSLIST_MODE;
 
 void freeNumberStrAssocList(Number_str_assoc * nstrList);

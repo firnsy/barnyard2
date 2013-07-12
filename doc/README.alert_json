@@ -11,34 +11,92 @@ And alert_json plugin will print the barnyard2 output in the correspond file.
 
 
                                        1 Using alert_json kafka's capabilities 
-If you want to use kafka in alert_json barnyard2 plugin, you have to put it in barnyard2.conf file. The format
-of the argument passed to the plugin is:
-output alert_json: kafka://<host>:<port>@<topic>
-
+If you want to use Apache Kafka in alert_json barnyard2 plugin, you have to put it in barnyard2.conf 
+file. The format of the argument passed to the plugin is:
+output alert_json: kafka://<host>:<port>@<topic> start_partition=1 end_partition=5
 Where host, port and topic are the kafka host, port and topic (not zookeepers one).
-
+You can send to multiple partitions with start_ and end_partition. These values are 0 and 
+start_partition by default. Make sure to set end_partition AFTER start_partition. Otherwise it
+will be overwrited.
 Also, you have to configure the project using --enable-kafka flag, and install librdkafka libraries 
 (see https://github.com/edenhill/librdkafka/ for details).
 
 
 
 
-                                        2 Host and network in readable format:
-Alert_json can print a human readable string plus the default host string. For example, if you
+                                    2 Host and network name resolution
+Alert_json can print a human readable string and the default host string. For example, if you
 have the hostname “foo PC” associated with the “192.168.100.3” ip in /etc/hosts file, alert_json will
-print “foo PC” plus “192.168.100.3” and the number representation of the ip. In the same way,
+print “foo PC” and “192.168.100.3” and the number representation of the ip. In the same way,
 alert_json can print the destination or source network of the packet. You have to make an entry
 in “/etc/barnyard_networks” indicating this. For example, the entry “192.168.100.0/24 foo
-network” will make alert_json print the network name plus the network id. In case alert_json does
-not locate the network in the file, it will print “0.0.0.0/0” instead.
+network” will make alert_json print the network name and the network id. In case alert_json does
+not locate the network in the file, it will print “0.0.0.0/0” instead. Alert_json can do the same 
+function to services and protocol names, reading it from /etc/services and /etc/protocols files.
+If you want to use these functions, you have to specify these files in plugin's params:
+
+output alert_json: ... hosts=/etc/hosts networks=/etc/networks services=/etc/services 
+protocols=/etc/protocols ...
+
+And you have to be sure they are in the template. The default template has it, but if you don't
+specify the files, it will always print "0", "0.0.0.0" or "0.0.0.0/0".
+
+The output names are: src_name, dst_name, src_net, src_net_name, dst_net, dst_net_name, proto, 
+proto_id, srcport_name, dstport_name.
 
 
 
                                                       3 GeoIP
 Alert_json can locate the region of the IP too. You just have to have libGeoIP installed and compile
-the sources with GEO_IP macro defined (it's defined by default). Also, you have to put the database
-in “/usr/local/share/GeoIP/GeoIP.dat”
+the sources with GEO_IP macro defined (it's defined by default). Also, you have to specify the 
+database location in json arguments, for example:
+
+output alert_json: ... geoip=/usr/local/share/GeoIP/GeoIP.dat ...
+
 If you want “alert_json” print geo­localization information too, you have to compile barnyard with
 geo­ip support:
-./configure ­­--enable-geo-ip
+./configure ­­--enable-geo-ip.
 
+You have to specify the params you want in the template too. See template params for more details.
+
+                                                4 Template params
+You can modify the template using param= argument. If you don't put 'param=', the default template
+will print all of them. Note that not all template params have the same name in the json output.
+
+timestamp: event timestamp
+sensor_id: sensor id specified in args (e.g. 'output alert_json: sensor_id=4')
+sensor_id_snort: sensor id given by snort
+sig_generator: 
+sig_id:
+sig_rev:
+priority: 
+classification: Alert classification (see snort classification.config file)
+msg: Alert message
+payload: Payload of the message ("-" printed if none)
+proto: Protocol of the message ("tcp", "udp",...). "-" will be printed if no protocols file defined.
+proto_id: Numeric field of protocol.
+src: Source in number format. E.g. "src":134744072, 
+src_str: Source in string format. E. g. "src_str":"8.8.8.8"
+src_name: Source name. Example: "src_name":"google-1st-nameserver" (See "Host and network name resoution")
+src_net: Source net. Example: "src_net":"8.8.0.0/16 (See "Host and network name resolution")
+src_net_name: Source net name. Example: "google-net" (See "Host and network name resolution")
+dst, dst_name, dst_str, dst_net, dst_net_name: Same as src_* ones.
+src_country, dst_country: Source and destination country, e.g.: "United States". See "GeoIP" section.
+src_country_code. dst_country_code: Source and destination country code, e.g.: "US". See "GeoIP" section.
+srcport,dstport: Source and destination layer 4 port, if aviable.
+ethsrc, ethdst: Ethernet source and destination address.
+ethlen: Ethernet packet lenght.
+tcpflags: TCP flags.
+tcpseq: TCP Sequence number.
+tcpack: TCP ACK number.
+tcplen: TCP lenght.
+tcpwindow: TCP congestion window size.
+id: IP header id field.
+dgmlen: IP header lenght.
+ttl: Time-to-live.
+tos: TOS.
+iplen: IP lenght of packet.
+icmptype: ICMP type.
+icmpcode: ICMP code.
+icmpid:   ICMP id.
+icmpseq:  ICMP sequence number.

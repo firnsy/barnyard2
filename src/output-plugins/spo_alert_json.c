@@ -93,66 +93,12 @@
 #define FIELD_NAME_VALUE_SEPARATOR ": "
 #define JSON_FIELDS_SEPARATOR ", "
 
-#define JSON_TIMESTAMP_NAME "event_timestamp"
-#define JSON_SENSOR_ID_SNORT_NAME "sensor_id_snort"
-#define JSON_SENSOR_ID_NAME "sensor_id"
-#define JSON_SENSOR_NAME_NAME "sensor_name"
 #define SENSOR_NOT_FOUND_NUMBER 0
-#define JSON_SIG_GENERATOR_NAME "sig_generator"
-#define JSON_SIG_ID_NAME "sig_id"
-#define JSON_SIG_REV_NAME "rev"
-#define JSON_PRIORITY_NAME "priority"
 #define DEFAULT_PRIORITY 0
-#define JSON_CLASSIFICATION_NAME "classification"
 #define DEFAULT_CLASSIFICATION "-"
-#define JSON_MSG_NAME "msg"
-#define JSON_PAYLOAD_NAME "payload"
 #define DEFAULT_PAYLOAD "-"
-#define JSON_PROTO_NAME "proto"
 #define DEFAULT_PROTO "-"
-#define JSON_PROTO_ID_NAME "proto_id"
 #define DEFAULT_PROTO_ID 0
-#define JSON_ETHSRC_NAME "ethsrc"
-#define JSON_ETHDST_NAME "ethdst"
-#define JSON_ETHTYPE_NAME "ethtype"
-#define JSON_UDPLENGTH_NAME "udplength"
-#define JSON_ETHLENGTH_NAME "ethlength"
-#define JSON_TRHEADER_NAME "trheader"
-#define JSON_SRCPORT_NAME "srcport"
-#define JSON_DSTPORT_NAME "dstport"
-#define JSON_SRCPORT_NAME_NAME "srcport_name"
-#define JSON_DSTPORT_NAME_NAME "dstport_name"
-#define JSON_SRC_NAME "src"
-#define JSON_SRC_STR_NAME "src_str"
-#define JSON_SRC_NAME_NAME "src_name"
-#define JSON_SRC_NET_NAME "src_net"
-#define JSON_SRC_NET_NAME_NAME "src_net_name"
-#define JSON_DST_NAME "dst"
-#define JSON_DST_NAME_NAME "dst_name"
-#define JSON_DST_STR_NAME "dst_str"
-#define JSON_DST_NET_NAME "dst_net"
-#define JSON_DST_NET_NAME_NAME "dst_net_name"
-#define JSON_ICMPTYPE_NAME "icmptype"
-#define JSON_ICMPCODE_NAME "icmpcode"
-#define JSON_ICMPID_NAME "icmpid"
-#define JSON_ICMPSEQ_NAME "icmpseq"
-#define JSON_TTL_NAME "ttl"
-#define JSON_TOS_NAME "tos"
-#define JSON_ID_NAME "id"
-#define JSON_IPLEN_NAME "iplen"
-#define JSON_DGMLEN_NAME "dgmlen"
-#define JSON_TCPSEQ_NAME "tcpseq"
-#define JSON_TCPACK_NAME "tcpack"
-#define JSON_TCPLEN_NAME "tcplen"
-#define JSON_TCPWINDOW_NAME "tcpwindow"
-#define JSON_TCPFLAGS_NAME "tcpflags"
-
-#ifdef HAVE_GEOIP
-#define JSON_SRC_COUNTRY_NAME "src_country"
-#define JSON_DST_COUNTRY_NAME "dst_country"
-#define JSON_SRC_COUNTRY_CODE_NAME "src_country_code"
-#define JSON_DST_COUNTRY_CODE_NAME "dst_country_code"
-#endif // HAVE_GEOIP
 
 #define TIMESTAMP 1
 #define SENSOR_ID_SNORT 2
@@ -234,8 +180,6 @@ typedef struct _AlertJSONData
 {
     KafkaLog * kafka;
     char * jsonargs;
-    char ** args; // @before commit this will be deleted.
-    int numargs;  // same for this
     TemplateElementsList * outputTemplate;
     AlertJSONConfig *config;
     Number_str_assoc * hosts, *nets, *services, *protocols;
@@ -310,9 +254,7 @@ static AlertJSONData *AlertJSONParseArgs(char *);
 static void AlertJSON(Packet *, void *, uint32_t, void *);
 static void AlertJSONCleanExit(int, void *);
 static void AlertRestart(int, void *);
-static void RealAlertJSON(
-    Packet*, void*, uint32_t, char **args, int numargs, AlertJSONData * data
-);
+static void RealAlertJSON(Packet*, void*, uint32_t, AlertJSONData * data);
 
 /*
  * Function: SetupJSON()
@@ -472,9 +414,6 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         }
     }
 
-    data->args = NULL;
-    data->numargs = 0;
-
     mSplitFree(&toks, num_toks);
 
 
@@ -572,7 +511,7 @@ static void AlertRestart(int signal, void *arg)
 static void AlertJSON(Packet *p, void *event, uint32_t event_type, void *arg)
 {
     AlertJSONData *data = (AlertJSONData *)arg;
-    RealAlertJSON(p, event, event_type, data->args, data->numargs, data);
+    RealAlertJSON(p, event, event_type, data);
 }
 
 static bool inline PrintJSONFieldName(KafkaLog * kafka,const char *fieldName){
@@ -581,18 +520,6 @@ static bool inline PrintJSONFieldName(KafkaLog * kafka,const char *fieldName){
 
 static bool inline LogJSON_int(KafkaLog * kafka, const char * fieldName,uint64_t fieldValue,char * fmt){
     return PrintJSONFieldName(kafka,fieldName) && KafkaLog_Print(kafka,fmt,fieldValue);
-}
-
-static bool inline LogJSON_i64(KafkaLog * kafka,const char *fieldName,uint64_t fieldValue){
-    return LogJSON_int(kafka,fieldName,fieldValue,"%"PRIu64);
-}
-
-static bool inline LogJSON_i32(KafkaLog * kafka,const char *fieldName,uint32_t fieldValue){
-    return LogJSON_int(kafka,fieldName,fieldValue,"%"PRIu32);
-}
-
-static bool inline LogJSON_i16(KafkaLog * kafka,const char *fieldName,uint16_t fieldValue){
-    return LogJSON_int(kafka,fieldName,fieldValue,"%"PRIu16);
 }
 
 static bool inline LogJSON_a(KafkaLog *kafka,const char *fieldName,const char *fieldValue){
@@ -687,49 +614,36 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         };
     }
 
-    /* Printing name of field. At the moment, we don't use the template one.*/
-    #if 0
-    PrintJSONFieldName(kafka,templateElement->jsonName);
-    if(templateElement->printFormat == stringFormat)
-        KafkaLog_Putc('"');
-    #endif
-
-
-
     switch(templateElement->id){
         case TIMESTAMP:
-            LogJSON_i64(kafka,JSON_TIMESTAMP_NAME,p->pkth->ts.tv_sec*1000 + p->pkth->ts.tv_usec/1000);
+            KafkaLog_Print(kafka,"%"PRIu64,p->pkth->ts.tv_sec*1000 + p->pkth->ts.tv_usec/1000);
             break;
         case SENSOR_ID_SNORT:
             if(event != NULL)
-                LogJSON_i32(kafka,JSON_SENSOR_ID_SNORT_NAME,ntohl(((Unified2EventCommon *)event)->sensor_id));
+                KafkaLog_Print(kafka,"%"PRIu32,ntohl(((Unified2EventCommon *)event)->sensor_id));
             else
-                LogJSON_i32(kafka,JSON_SENSOR_ID_SNORT_NAME,SENSOR_NOT_FOUND_NUMBER);
+                KafkaLog_Print(kafka,"%"PRIu32,SENSOR_NOT_FOUND_NUMBER);
             break;
         case SENSOR_ID:
-            LogJSON_i32(kafka,JSON_SENSOR_ID_NAME,jsonData->sensor_id);
+            KafkaLog_Print(kafka,"%"PRIu32,jsonData->sensor_id);
             break;
-        
         case SENSOR_NAME:
-            LogJSON_a(kafka,JSON_SENSOR_NAME_NAME,jsonData->sensor_name);
+            KafkaLog_Print(kafka,jsonData->sensor_name);
             break;
         case SIG_GENERATOR:
             if(event != NULL)
-                LogJSON_i64(kafka,JSON_SIG_GENERATOR_NAME,ntohl(((Unified2EventCommon *)event)->generator_id));
+                KafkaLog_Print(kafka,"%"PRIu64,ntohl(((Unified2EventCommon *)event)->generator_id));
             break;
         case SIG_ID:
             if(event != NULL)
-                LogJSON_i64(kafka,JSON_SIG_ID_NAME,ntohl(((Unified2EventCommon *)event)->signature_id));
+                KafkaLog_Print(kafka,"%"PRIu64,ntohl(((Unified2EventCommon *)event)->signature_id));
             break;
         case SIG_REV:
             if(event != NULL)
-                LogJSON_i64(kafka,JSON_SIG_REV_NAME,ntohl(((Unified2EventCommon *)event)->signature_revision));
+                KafkaLog_Print(kafka,"%"PRIu64,ntohl(((Unified2EventCommon *)event)->signature_revision));
             break;
         case PRIORITY:
-            if(event != NULL)
-                LogJSON_i32(kafka,JSON_PRIORITY_NAME, ntohl(((Unified2EventCommon *)event)->priority_id));
-            else /* Always log something */
-                LogJSON_i32(kafka,JSON_PRIORITY_NAME, DEFAULT_PRIORITY);
+            KafkaLog_Print(kafka,"%"PRIu32, event != NULL ? ntohl(((Unified2EventCommon *)event)->priority_id) : DEFAULT_PRIORITY);
             break;
         case CLASSIFICATION:
             if(event != NULL)
@@ -737,11 +651,11 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 uint32_t classification_id = ntohl(((Unified2EventCommon *)event)->classification_id);
                 ClassType *cn = ClassTypeLookupById(barnyard2_conf, classification_id);
                 if ( cn != NULL )
-                    LogJSON_a(kafka,JSON_CLASSIFICATION_NAME,cn->name);
+                    KafkaLog_Print(kafka,cn->name);
                 else
-                    LogJSON_a(kafka,JSON_CLASSIFICATION_NAME, DEFAULT_CLASSIFICATION);
+                    KafkaLog_Print(kafka, DEFAULT_CLASSIFICATION);
             }else{ /* Always log something */
-                LogJSON_a(kafka,JSON_CLASSIFICATION_NAME, DEFAULT_CLASSIFICATION);
+                KafkaLog_Print(kafka, DEFAULT_CLASSIFICATION);
             }
             break;
         case MSG:
@@ -754,44 +668,38 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 if (sn != NULL)
                 {
                     //const int msglen = strlen(sn->msg);
-                    LogJSON_a(kafka,JSON_MSG_NAME,sn->msg);
+                    KafkaLog_Print(kafka,sn->msg);
                 }
             }
             break;
         case PAYLOAD:
             {
                 uint16_t i;
-                KafkaLog_Puts(kafka, "\""JSON_PAYLOAD_NAME"\":\"");
                 if(p &&  p->dsize>0){
                     for(i=0;i<p->dsize;++i)
                         KafkaLog_Print(kafka, "%"PRIx8, p->data[i]);
                 }else{
                     KafkaLog_Puts(kafka, DEFAULT_PAYLOAD);
                 }
-                KafkaLog_Puts(kafka,"\"");
             }
             break;
 
         case PROTO:
-            if(IPH_IS_VALID(p))
-            {
+            if(IPH_IS_VALID(p)){
                 Number_str_assoc * service_name_asoc = SearchNumberStr(GET_IPH_PROTO(p),jsonData->protocols,PROTOCOLS);
-                LogJSON_a(kafka,JSON_PROTO_NAME,service_name_asoc?service_name_asoc->human_readable_str:DEFAULT_PROTO);
+                KafkaLog_Print(kafka,"%"PRIu16,service_name_asoc?service_name_asoc->human_readable_str:DEFAULT_PROTO);
             }else{ /* Always log something */
-                LogJSON_i16(kafka,JSON_PROTO_ID_NAME,0);
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                LogJSON_a(kafka,JSON_PROTO_NAME,DEFAULT_PROTO);
+                KafkaLog_Print(kafka,"%"PRIu16,DEFAULT_PROTO);
             }
             break;
         case PROTO_ID:
-            LogJSON_i16(kafka,JSON_PROTO_ID_NAME,GET_IPH_PROTO(p));
+            KafkaLog_Print(kafka,"%"PRIu16,IPH_IS_VALID(p)?GET_IPH_PROTO(p):0);
             break;
 
         case ETHSRC:
             if(p->eh)
             {
-                PrintJSONFieldName(kafka,JSON_ETHSRC_NAME);
-                KafkaLog_Print(kafka, "\"%X:%X:%X:%X:%X:%X\"", p->eh->ether_src[0],
+                KafkaLog_Print(kafka, "%X:%X:%X:%X:%X:%X", p->eh->ether_src[0],
                     p->eh->ether_src[1], p->eh->ether_src[2], p->eh->ether_src[3],
                     p->eh->ether_src[4], p->eh->ether_src[5]);
             }
@@ -800,8 +708,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case ETHDST:
             if(p->eh)
             {
-                PrintJSONFieldName(kafka,JSON_ETHDST_NAME);
-                KafkaLog_Print(kafka, "\"%X:%X:%X:%X:%X:%X\"", p->eh->ether_dst[0],
+                KafkaLog_Print(kafka, "%X:%X:%X:%X:%X:%X", p->eh->ether_dst[0],
                 p->eh->ether_dst[1], p->eh->ether_dst[2], p->eh->ether_dst[3],
                 p->eh->ether_dst[4], p->eh->ether_dst[5]);
             }
@@ -810,20 +717,17 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case ETHTYPE:
             if(p->eh)
             {
-                PrintJSONFieldName(kafka,JSON_ETHTYPE_NAME);
                 KafkaLog_Print(kafka, "%"PRIu16,ntohs(p->eh->ether_type));
             }
             break;
 
         case UDPLENGTH:
             if(p->udph){
-                PrintJSONFieldName(kafka,JSON_UDPLENGTH_NAME);
                 KafkaLog_Print(kafka, "%"PRIu16,ntohs(p->udph->uh_len));
             }
             break;
         case ETHLENGTH:
             if(p->eh){
-                PrintJSONFieldName(kafka,JSON_ETHLENGTH_NAME);
                 KafkaLog_Print(kafka, "%"PRIu16,p->pkth->len);
             }
             break;
@@ -837,17 +741,15 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                     case IPPROTO_UDP:
                     case IPPROTO_TCP:
                     {
-                        LogJSON_i16(kafka,
-                            templateElement->id==SRCPORT? JSON_SRCPORT_NAME:JSON_DSTPORT_NAME,
-                            templateElement->id==SRCPORT? p->sp:p->dp);
+                        KafkaLog_Print(kafka,"%"PRIu16,templateElement->id==SRCPORT? p->sp:p->dp);
                     }
                         break;
                     default: /* Always log something */
-                        LogJSON_i16(kafka,templateElement->id==SRCPORT?JSON_SRCPORT_NAME:JSON_DSTPORT_NAME,0);
+                        KafkaLog_Print(kafka,"%"PRIu16,0);
                         break;
                 }
             }else{ /* Always Log something */
-                LogJSON_i16(kafka,templateElement->id==SRCPORT?JSON_SRCPORT_NAME:JSON_DSTPORT_NAME,0);
+                KafkaLog_Print(kafka,"%"PRIu16,0);
             }
             break;
         case SRCPORT_NAME:
@@ -861,30 +763,28 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                     {
                         const uint16_t port = templateElement->id==SRCPORT_NAME? p->sp:p->dp;
                         Number_str_assoc * service_name_asoc = SearchNumberStr(port,jsonData->services,SERVICES);
-                        LogJSON_a(kafka,
-                            templateElement->id==SRCPORT_NAME?JSON_SRCPORT_NAME_NAME:JSON_DSTPORT_NAME_NAME,
-                            service_name_asoc?service_name_asoc->human_readable_str:"-");
+                        KafkaLog_Print(kafka,"%s",service_name_asoc?service_name_asoc->human_readable_str:"-");
                     }
                         break;
                     default: /* Always log something */
-                        LogJSON_a(kafka,templateElement->id==SRCPORT_NAME?JSON_SRCPORT_NAME_NAME:JSON_DSTPORT_NAME_NAME,"-");
+                        KafkaLog_Print(kafka,"%s","-");
                         break;
                 };
             }else{ /* Always Log something */
-                LogJSON_i16(kafka,templateElement->id==SRCPORT_NAME?JSON_SRCPORT_NAME_NAME:JSON_DSTPORT_NAME_NAME,0);
+                KafkaLog_Print(kafka,"%s","-");
             }
             break;
 
         case SRC_TEMPLATE_ID:
-            LogJSON_i32(kafka,JSON_SRC_NAME,ipv4);
+            KafkaLog_Print(kafka,"%"PRIu32,ipv4);
             break;
         case DST_TEMPLATE_ID:
-            LogJSON_i32(kafka,JSON_DST_NAME,ipv4);
+            KafkaLog_Print(kafka,"%"PRIu32,ipv4);
             break;
         case SRC_STR:
         case DST_STR:
             {
-                LogJSON_a(kafka,templateElement->id == SRC_STR ? JSON_SRC_STR_NAME : JSON_DST_STR_NAME,_intoa(ipv4, buf, bufLen));
+                KafkaLog_Print(kafka,"%s",_intoa(ipv4, buf, bufLen));
             }
             break;
         case SRC_NAME:
@@ -892,21 +792,21 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             {
                 Number_str_assoc * ip_str_node = SearchNumberStr(ipv4,jsonData->hosts,HOSTS);
                 const char * ip_name = ip_str_node ? ip_str_node->human_readable_str : _intoa(ipv4, buf, bufLen);
-                LogJSON_a(kafka, templateElement->id == SRC_NAME? JSON_SRC_NAME_NAME:JSON_DST_NAME_NAME,ip_name);
+                KafkaLog_Print(kafka, "%s",ip_name);
             }
             break;
         case SRC_NET:
         case DST_NET:
             {
                 Number_str_assoc * ip_net = SearchNumberStr(ipv4,jsonData->nets,NETWORKS);
-                LogJSON_a(kafka,templateElement->id == SRC_NET? JSON_SRC_NET_NAME : JSON_DST_NET_NAME,ip_net?ip_net->number_as_str:"0.0.0.0/0");
+                KafkaLog_Print(kafka,"%s",ip_net?ip_net->number_as_str:"0.0.0.0/0");
             }
             break;
         case SRC_NET_NAME:
         case DST_NET_NAME:
             {
                 Number_str_assoc * ip_net = SearchNumberStr(ipv4,jsonData->nets,NETWORKS);
-                LogJSON_a(kafka,templateElement->id == SRC_NET_NAME?JSON_SRC_NET_NAME_NAME:JSON_DST_NET_NAME_NAME,ip_net?ip_net->human_readable_str:"0.0.0.0/0");
+                KafkaLog_Print(kafka,"%s",ip_net?ip_net->human_readable_str:"0.0.0.0/0");
             }
             break;
 
@@ -915,37 +815,31 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case DST_COUNTRY:
             if(jsonData->gi){
                 const char * country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ipv4);
-                LogJSON_a(kafka,templateElement->id == SRC_COUNTRY ? JSON_SRC_COUNTRY_NAME : JSON_DST_COUNTRY_NAME,country_name?country_name:"N/A");
+                KafkaLog_Print(kafka,"%s",country_name?country_name:"N/A");
             }
             break;
         case SRC_COUNTRY_CODE:
         case DST_COUNTRY_CODE:
             if(jsonData->gi){
-                const uint32_t ipv4 = IPH_IS_VALID(p) ? 
-                    ntohl(templateElement->id == SRC_COUNTRY_CODE? GET_SRC_ADDR(p).s_addr : GET_DST_ADDR(p).s_addr)
-                    : 0;
                 const char * country_code =GeoIP_country_code_by_ipnum(jsonData->gi,ipv4);
-                LogJSON_a(kafka,templateElement->id == SRC_COUNTRY_CODE ? JSON_SRC_COUNTRY_CODE_NAME : JSON_DST_COUNTRY_CODE_NAME,country_code?country_code:"N/A");
+                KafkaLog_Print(kafka,"%s",country_code?country_code:"N/A");
             }
             break;
 #endif /* HAVE_GEOIP */
 
         case ICMPTYPE:
             if(p->icmph){
-                PrintJSONFieldName(kafka,JSON_ICMPTYPE_NAME);
                 KafkaLog_Print(kafka, "%d",p->icmph->type);
             }
             break;
         case ICMPCODE:
             if(p->icmph)
             {
-                PrintJSONFieldName(kafka,JSON_ICMPCODE_NAME);
                 KafkaLog_Print(kafka, "%d",p->icmph->code);
             }
             break;
         case ICMPID:
             if(p->icmph){
-                PrintJSONFieldName(kafka,JSON_ICMPID_NAME);
                 KafkaLog_Print(kafka, "%d",ntohs(p->icmph->s_icmp_id));
             }
             break;
@@ -955,36 +849,32 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                     PrintJSONFieldName(kafka,JSON_ICMPSEQ_NAME);
                     KafkaLog_Print(kafka, "%d",ntohs(p->icmph->s_icmp_seq));
                 */
-                LogJSON_i16(kafka,JSON_ICMPSEQ_NAME,ntohs(p->icmph->s_icmp_seq));
+                KafkaLog_Print(kafka,"%"PRIu16,ntohs(p->icmph->s_icmp_seq));
             }
             break;
         case TTL:
             if(IPH_IS_VALID(p)){
-                PrintJSONFieldName(kafka,JSON_TTL_NAME);
                 KafkaLog_Print(kafka, "%d",GET_IPH_TTL(p));
             }
             break;
 
         case TOS: 
             if(IPH_IS_VALID(p)){
-                PrintJSONFieldName(kafka,JSON_TOS_NAME);
                 KafkaLog_Print(kafka, "%d",GET_IPH_TOS(p));
             }
             break;
         case ID:
             if(IPH_IS_VALID(p)){
-                LogJSON_i16(kafka,JSON_ID_NAME,IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)));
+                KafkaLog_Print(kafka,"%"PRIu16,IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)));
             } 
             break;
         case IPLEN:
             if(IPH_IS_VALID(p)){
-                PrintJSONFieldName(kafka,JSON_IPLEN_NAME);
                 KafkaLog_Print(kafka, "%d",GET_IPH_LEN(p) << 2);
             }
             break;
         case DGMLEN:
             if(IPH_IS_VALID(p)){
-                PrintJSONFieldName(kafka,JSON_DGMLEN_NAME);
                 // XXX might cause a bug when IPv6 is printed?
                 KafkaLog_Print(kafka, "%d",ntohs(GET_IPH_LEN(p)));
             }
@@ -994,19 +884,18 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             if(p->tcph){
                 // PrintJSONFieldName(kafka,JSON_TCPSEQ_NAME);                     // hex format
                 // KafkaLog_Print(kafka, "lX%0x",(u_long) ntohl(p->tcph->th_ack)); // hex format
-                LogJSON_i32(kafka,JSON_TCPSEQ_NAME,ntohl(p->tcph->th_seq));
+                KafkaLog_Print(kafka,"%"PRIx32,ntohl(p->tcph->th_seq));
             }
             break;
         case TCPACK:
             if(p->tcph){
                 // PrintJSONFieldName(kafka,JSON_TCPACK_NAME);
                 // KafkaLog_Print(kafka, "0x%lX",(u_long) ntohl(p->tcph->th_ack));
-                LogJSON_i32(kafka,JSON_TCPACK_NAME,ntohl(p->tcph->th_ack));
+                KafkaLog_Print(kafka,"%"PRIx32,ntohl(p->tcph->th_ack));
             }
             break;
         case TCPLEN:
             if(p->tcph){
-                PrintJSONFieldName(kafka,JSON_TCPLEN_NAME);
                 KafkaLog_Print(kafka, "%d",TCP_OFFSET(p->tcph) << 2);
             }
             break;
@@ -1014,14 +903,13 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             if(p->tcph){
                 //PrintJSONFieldName(kafka,JSON_TCPWINDOW_NAME);         // hex format
                 //KafkaLog_Print(kafka, "0x%X",ntohs(p->tcph->th_win));  // hex format
-                LogJSON_i16(kafka,JSON_TCPWINDOW_NAME,ntohs(p->tcph->th_win));
+                KafkaLog_Print(kafka,"%"PRIx16,ntohs(p->tcph->th_win));
             }
             break;
         case TCPFLAGS:
             if(p->tcph)
             {
                 CreateTCPFlagString(p, tcpFlags);
-                PrintJSONFieldName(kafka,JSON_TCPFLAGS_NAME);
                 KafkaLog_Quote(kafka, tcpFlags);
             }
             break;
@@ -1048,11 +936,8 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
  * Returns: void function
  *
  */
-static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
-        char **args, int numargs, AlertJSONData * jsonData)
+static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSONData * jsonData)
 {
-    int num;
-    char *type;
     TemplateElementsList * iter;
 
     KafkaLog * kafka = jsonData->kafka;
@@ -1066,42 +951,17 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type,
         const int initial_pos = kafka->pos;
         if(iter!=jsonData->outputTemplate)
             KafkaLog_Puts(kafka,JSON_FIELDS_SEPARATOR);
+
+        KafkaLog_Print(kafka,"\"%s\":",iter->templateElement->jsonName);
+
+        if(iter->templateElement->printFormat==stringFormat)
+            KafkaLog_Putc(kafka,'"');
         const int writed = printElementWithTemplate(p,event,event_type,jsonData,iter->templateElement);
+        if(iter->templateElement->printFormat==stringFormat)
+            KafkaLog_Putc(kafka,'"');
+
         if(0==writed)
             kafka->pos = initial_pos; // Revert the insertion of empty element */
-    }
-
-    
-
-
-    for (num = 0; num < numargs; num++)
-    {
-        type = args[num];
-
-        DEBUG_WRAP(DebugMessage(DEBUG_LOG, "JSON Got type %s %d\n", type, num););
-
-        
-        if(0){}
-        
-
-#if 0 /* Maybe in the future */
-        else if(!strncasecmp("trheader", type, 8))
-        {
-            if(p->trh){
-                KafkaLog_Puts(kafka, JSON_FIELDS_SEPARATOR);
-                PrintJSONFieldName(kafka,JSON_TRHEADER_NAME);
-                LogTrHeader(kafka, p);
-            }
-        }
-#endif
-
-        
-        
-        
-        
-        
-        
-
     }
 
     KafkaLog_Putc(kafka,'}');

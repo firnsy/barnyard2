@@ -93,13 +93,6 @@
 #define FIELD_NAME_VALUE_SEPARATOR ": "
 #define JSON_FIELDS_SEPARATOR ", "
 
-#define SENSOR_NOT_FOUND_NUMBER 0
-#define DEFAULT_PRIORITY 0
-#define DEFAULT_CLASSIFICATION "-"
-#define DEFAULT_PAYLOAD "-"
-#define DEFAULT_PROTO "-"
-#define DEFAULT_PROTO_ID 0
-
 #define TIMESTAMP 1
 #define SENSOR_ID_SNORT 2
 #define SENSOR_ID 3
@@ -164,6 +157,7 @@ typedef struct{
     const char * templateName;
     const char * jsonName;
     const JsonPrintFormat printFormat;
+    void * defaultValue;
 }  AlertJSONTemplateElement;
 
 typedef struct _TemplateElementsList{
@@ -192,60 +186,60 @@ typedef struct _AlertJSONData
 
 /* Remember update printElementWithTemplate if some element modified here */
 static AlertJSONTemplateElement template[] = {
-    {TIMESTAMP,"timestamp","event_timestamp",numericFormat},
-    {SENSOR_ID_SNORT,"sensor_id_snort","sensor_id_snort",numericFormat},
-    {SENSOR_ID,"sensor_id","sensor_id",numericFormat},
-    {SENSOR_NAME,"sensor_name","sensor_name",stringFormat},
-    {SIG_GENERATOR,"sig_generator","sig_generator",numericFormat},
-    {SIG_ID,"sig_id","sig_id",numericFormat},
-    {SIG_REV,"sig_rev","rev",numericFormat},
-    {PRIORITY,"priority","priority",numericFormat},
-    {CLASSIFICATION,"classification","classification",stringFormat},
-    {MSG,"msg","msg",stringFormat},
-    {PAYLOAD,"payload","payload",stringFormat},
-    {PROTO,"proto","proto",stringFormat},
-    {PROTO_ID,"proto_id","proto_id",numericFormat},
-    {ETHSRC,"ethsrc","ethsrc",stringFormat},
-    {ETHDST,"ethdst","ethdst",stringFormat},
-    {ETHTYPE,"ethtype","ethtype",numericFormat},
-    {UDPLENGTH,"udplength","udplength",numericFormat},
-    {ETHLENGTH,"ethlen","ethlength",numericFormat},
-    {TRHEADER,"trheader","trheader",stringFormat},
-    {SRCPORT,"srcport","srcport",numericFormat},
-    {SRCPORT_NAME,"srcport_name","srcport_name",stringFormat},
-    {DSTPORT,"dstport","dstport",numericFormat},
-    {DSTPORT_NAME,"dstport_name","dstport_name",stringFormat},
-    {SRC_TEMPLATE_ID,"src","src",numericFormat}, 
-    {SRC_STR,"src_str","src_str",stringFormat},
-    {SRC_NAME,"src_name","src_name",stringFormat},
-    {SRC_NET,"src_net","src_net",stringFormat},
-    {SRC_NET_NAME,"src_net_name","src_net_name",stringFormat},
-    {DST_TEMPLATE_ID,"dst","dst",numericFormat}, 
-    {DST_NAME,"dst_name","dst_name",stringFormat},
-    {DST_STR,"dst_str","dst_str",stringFormat},
-    {DST_NET,"dst_net","dst_net",stringFormat},
-    {DST_NET_NAME,"dst_net_name","dst_net_name",stringFormat},
-    {ICMPTYPE,"icmptype","icmptype",numericFormat},
-    {ICMPCODE,"icmpcode","icmpcode",numericFormat},
-    {ICMPID,"icmpid","icmpid",numericFormat},
-    {ICMPSEQ,"icmpseq","icmpseq",numericFormat},
-    {TTL,"ttl","ttl",numericFormat},
-    {TOS,"tos","tos",numericFormat},
-    {ID,"id","id",numericFormat},
-    {IPLEN,"iplen","iplen",numericFormat},
-    {DGMLEN,"dgmlen","dgmlen",numericFormat},
-    {TCPSEQ,"tcpseq","tcpseq",numericFormat},
-    {TCPACK,"tcpack","tcpack",numericFormat},
-    {TCPLEN,"tcplen","tcplen",numericFormat},
-    {TCPWINDOW,"tcpwindow","tcpwindow",numericFormat},
-    {TCPFLAGS,"tcpflags","tcpflags",stringFormat},
+    {TIMESTAMP,"timestamp","event_timestamp",numericFormat,0},
+    {SENSOR_ID_SNORT,"sensor_id_snort","sensor_id_snort",numericFormat,0},
+    {SENSOR_ID,"sensor_id","sensor_id",numericFormat,0},
+    {SENSOR_NAME,"sensor_name","sensor_name",stringFormat,"-"},
+    {SIG_GENERATOR,"sig_generator","sig_generator",numericFormat,0},
+    {SIG_ID,"sig_id","sig_id",numericFormat,0},
+    {SIG_REV,"sig_rev","rev",numericFormat,0},
+    {PRIORITY,"priority","priority",numericFormat,0},
+    {CLASSIFICATION,"classification","classification",stringFormat,"-"},
+    {MSG,"msg","msg",stringFormat,"-"},
+    {PAYLOAD,"payload","payload",stringFormat,"-"},
+    {PROTO,"proto","proto",stringFormat,"-"},
+    {PROTO_ID,"proto_id","proto_id",numericFormat,0},
+    {ETHSRC,"ethsrc","ethsrc",stringFormat,"-"},
+    {ETHDST,"ethdst","ethdst",stringFormat,"-"},
+    {ETHTYPE,"ethtype","ethtype",numericFormat,0},
+    {UDPLENGTH,"udplength","udplength",numericFormat,0},
+    {ETHLENGTH,"ethlen","ethlength",numericFormat,0},
+    {TRHEADER,"trheader","trheader",stringFormat,"-"},
+    {SRCPORT,"srcport","srcport",numericFormat,0},
+    {SRCPORT_NAME,"srcport_name","srcport_name",stringFormat,"-"},
+    {DSTPORT,"dstport","dstport",numericFormat,0},
+    {DSTPORT_NAME,"dstport_name","dstport_name",stringFormat,"-"},
+    {SRC_TEMPLATE_ID,"src","src",numericFormat,0}, 
+    {SRC_STR,"src_str","src_str",stringFormat,"-"},
+    {SRC_NAME,"src_name","src_name",stringFormat,"-"},
+    {SRC_NET,"src_net","src_net",stringFormat,"0.0.0.0/0"},
+    {SRC_NET_NAME,"src_net_name","src_net_name",stringFormat,"0.0.0.0/0"},
+    {DST_TEMPLATE_ID,"dst","dst",numericFormat,0}, 
+    {DST_NAME,"dst_name","dst_name",stringFormat,"-"},
+    {DST_STR,"dst_str","dst_str",stringFormat,"-"},
+    {DST_NET,"dst_net","dst_net",stringFormat,"0.0.0.0/0"},
+    {DST_NET_NAME,"dst_net_name","dst_net_name",stringFormat,"0.0.0.0/0"},
+    {ICMPTYPE,"icmptype","icmptype",numericFormat,0},
+    {ICMPCODE,"icmpcode","icmpcode",numericFormat,0},
+    {ICMPID,"icmpid","icmpid",numericFormat,0},
+    {ICMPSEQ,"icmpseq","icmpseq",numericFormat,0},
+    {TTL,"ttl","ttl",numericFormat,0},
+    {TOS,"tos","tos",numericFormat,0},
+    {ID,"id","id",numericFormat,0},
+    {IPLEN,"iplen","iplen",numericFormat,0},
+    {DGMLEN,"dgmlen","dgmlen",numericFormat,0},
+    {TCPSEQ,"tcpseq","tcpseq",numericFormat,0},
+    {TCPACK,"tcpack","tcpack",numericFormat,0},
+    {TCPLEN,"tcplen","tcplen",numericFormat,0},
+    {TCPWINDOW,"tcpwindow","tcpwindow",numericFormat,0},
+    {TCPFLAGS,"tcpflags","tcpflags",stringFormat,"-"},
     #ifdef HAVE_GEOIP
-    {SRC_COUNTRY,"src_country","src_country",stringFormat},
-    {DST_COUNTRY,"dst_country","dst_country",stringFormat},
-    {SRC_COUNTRY_CODE,"src_country_code","src_country_code",stringFormat},
-    {DST_COUNTRY_CODE,"dst_country_code","dst_country_code",stringFormat},
+    {SRC_COUNTRY,"src_country","src_country",stringFormat,"N/A"},
+    {DST_COUNTRY,"dst_country","dst_country",stringFormat,"N/A"},
+    {SRC_COUNTRY_CODE,"src_country_code","src_country_code",stringFormat,"N/A"},
+    {DST_COUNTRY_CODE,"dst_country_code","dst_country_code",stringFormat,"N/A"},
     #endif /* HAVE_GEOIP */
-    {TEMPLATE_END_ID,"","",numericFormat}
+    {TEMPLATE_END_ID,"","",numericFormat,0}
 };
 
 /* list of function prototypes for this preprocessor */
@@ -619,10 +613,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             KafkaLog_Print(kafka,"%"PRIu64,p->pkth->ts.tv_sec*1000 + p->pkth->ts.tv_usec/1000);
             break;
         case SENSOR_ID_SNORT:
-            if(event != NULL)
-                KafkaLog_Print(kafka,"%"PRIu32,ntohl(((Unified2EventCommon *)event)->sensor_id));
-            else
-                KafkaLog_Print(kafka,"%"PRIu32,SENSOR_NOT_FOUND_NUMBER);
+            KafkaLog_Print(kafka,"%"PRIu32,event?ntohl(((Unified2EventCommon *)event)->sensor_id):(uint64_t)templateElement->defaultValue);
             break;
         case SENSOR_ID:
             KafkaLog_Print(kafka,"%"PRIu32,jsonData->sensor_id);
@@ -643,19 +634,16 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 KafkaLog_Print(kafka,"%"PRIu64,ntohl(((Unified2EventCommon *)event)->signature_revision));
             break;
         case PRIORITY:
-            KafkaLog_Print(kafka,"%"PRIu32, event != NULL ? ntohl(((Unified2EventCommon *)event)->priority_id) : DEFAULT_PRIORITY);
+            KafkaLog_Print(kafka,"%"PRIu32, event != NULL ? ntohl(((Unified2EventCommon *)event)->priority_id) : (uint64_t)templateElement->defaultValue);
             break;
         case CLASSIFICATION:
             if(event != NULL)
             {
                 uint32_t classification_id = ntohl(((Unified2EventCommon *)event)->classification_id);
-                ClassType *cn = ClassTypeLookupById(barnyard2_conf, classification_id);
-                if ( cn != NULL )
-                    KafkaLog_Print(kafka,cn->name);
-                else
-                    KafkaLog_Print(kafka, DEFAULT_CLASSIFICATION);
+                const ClassType *cn = ClassTypeLookupById(barnyard2_conf, classification_id);
+                KafkaLog_Print(kafka,cn?cn->name:(const char *)templateElement->defaultValue);
             }else{ /* Always log something */
-                KafkaLog_Print(kafka, DEFAULT_CLASSIFICATION);
+                KafkaLog_Print(kafka, (const char *)templateElement->defaultValue);
             }
             break;
         case MSG:
@@ -679,7 +667,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                     for(i=0;i<p->dsize;++i)
                         KafkaLog_Print(kafka, "%"PRIx8, p->data[i]);
                 }else{
-                    KafkaLog_Puts(kafka, DEFAULT_PAYLOAD);
+                    KafkaLog_Puts(kafka, (const char *)templateElement->defaultValue);
                 }
             }
             break;
@@ -687,9 +675,9 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case PROTO:
             if(IPH_IS_VALID(p)){
                 Number_str_assoc * service_name_asoc = SearchNumberStr(GET_IPH_PROTO(p),jsonData->protocols,PROTOCOLS);
-                KafkaLog_Print(kafka,"%"PRIu16,service_name_asoc?service_name_asoc->human_readable_str:DEFAULT_PROTO);
+                KafkaLog_Print(kafka,"%s",service_name_asoc?service_name_asoc->human_readable_str:(const char *)templateElement->defaultValue);
             }else{ /* Always log something */
-                KafkaLog_Print(kafka,"%"PRIu16,DEFAULT_PROTO);
+                KafkaLog_Print(kafka,"%s",(const char *)templateElement->defaultValue);
             }
             break;
         case PROTO_ID:
@@ -763,15 +751,15 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                     {
                         const uint16_t port = templateElement->id==SRCPORT_NAME? p->sp:p->dp;
                         Number_str_assoc * service_name_asoc = SearchNumberStr(port,jsonData->services,SERVICES);
-                        KafkaLog_Print(kafka,"%s",service_name_asoc?service_name_asoc->human_readable_str:"-");
+                        KafkaLog_Print(kafka,"%s",service_name_asoc?service_name_asoc->human_readable_str:(const char *)templateElement->defaultValue);
                     }
                         break;
                     default: /* Always log something */
-                        KafkaLog_Print(kafka,"%s","-");
+                        KafkaLog_Print(kafka,"%s",(const char *)templateElement->defaultValue);
                         break;
                 };
             }else{ /* Always Log something */
-                KafkaLog_Print(kafka,"%s","-");
+                KafkaLog_Print(kafka,"%s",(const char *)templateElement->defaultValue);
             }
             break;
 
@@ -799,14 +787,14 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case DST_NET:
             {
                 Number_str_assoc * ip_net = SearchNumberStr(ipv4,jsonData->nets,NETWORKS);
-                KafkaLog_Print(kafka,"%s",ip_net?ip_net->number_as_str:"0.0.0.0/0");
+                KafkaLog_Print(kafka,"%s",ip_net?ip_net->number_as_str:(const char *)templateElement->defaultValue);
             }
             break;
         case SRC_NET_NAME:
         case DST_NET_NAME:
             {
                 Number_str_assoc * ip_net = SearchNumberStr(ipv4,jsonData->nets,NETWORKS);
-                KafkaLog_Print(kafka,"%s",ip_net?ip_net->human_readable_str:"0.0.0.0/0");
+                KafkaLog_Print(kafka,"%s",ip_net?ip_net->human_readable_str:(const char *)templateElement->defaultValue);
             }
             break;
 
@@ -815,14 +803,14 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case DST_COUNTRY:
             if(jsonData->gi){
                 const char * country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ipv4);
-                KafkaLog_Print(kafka,"%s",country_name?country_name:"N/A");
+                KafkaLog_Print(kafka,"%s",country_name?country_name:(const char *)templateElement->defaultValue);
             }
             break;
         case SRC_COUNTRY_CODE:
         case DST_COUNTRY_CODE:
             if(jsonData->gi){
                 const char * country_code =GeoIP_country_code_by_ipnum(jsonData->gi,ipv4);
-                KafkaLog_Print(kafka,"%s",country_code?country_code:"N/A");
+                KafkaLog_Print(kafka,"%s",country_code?country_code:(const char *)templateElement->defaultValue);
             }
             break;
 #endif /* HAVE_GEOIP */

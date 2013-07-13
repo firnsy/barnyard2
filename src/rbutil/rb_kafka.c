@@ -148,6 +148,7 @@ void KafkaLog_Term (KafkaLog* this)
     free(this->buf);
 
     if ( this->broker ) free(this->broker);
+    if ( this->topic ) free(this->topic);
     #endif
 
     if(this->textLog) TextLog_Term(this->textLog);

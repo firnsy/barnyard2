@@ -77,7 +77,7 @@
 #endif // HAVE_GEOIP
 
 
-#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,sig_generator,sig_id,sig_rev,priority,classification,msg,payload,proto,src,src_str,src_name,src_net,src_net_name,dst_name,dst_str,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,sig_generator,sig_id,sig_rev,priority,classification,msg,payload,proto,proto_id,src,src_str,src_name,src_net,src_net_name,dst_name,dst_str,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"
@@ -93,67 +93,70 @@
 #define FIELD_NAME_VALUE_SEPARATOR ": "
 #define JSON_FIELDS_SEPARATOR ", "
 
-#define TIMESTAMP 1
-#define SENSOR_ID_SNORT 2
-#define SENSOR_ID 3
-#define SENSOR_NAME 4
-#define SIG_GENERATOR 5
-#define SIG_ID 6
-#define SIG_REV 7
-#define PRIORITY 8
-#define CLASSIFICATION 9
-#define MSG 10
-#define PAYLOAD 11
-#define PROTO 12
-#define PROTO_ID 13
-#define ETHSRC 14
-#define ETHDST 15
-#define ETHTYPE 16
-#define UDPLENGTH 17
-#define ETHLENGTH 18
-#define TRHEADER 19
-#define SRCPORT 20
-#define DSTPORT 21
-#define SRCPORT_NAME 22
-#define DSTPORT_NAME 23
-#define SRC_TEMPLATE_ID 24
-#define SRC_STR 25
-#define SRC_NAME 26
-#define SRC_NET 27
-#define SRC_NET_NAME 28
-#define DST_TEMPLATE_ID 29
-#define DST_NAME 30
-#define DST_STR 31
-#define DST_NET 32
-#define DST_NET_NAME 33
-#define ICMPTYPE 34
-#define ICMPCODE 35
-#define ICMPID 36
-#define ICMPSEQ 37
-#define TTL 38
-#define TOS 39
-#define ID 40
-#define IPLEN 41
-#define DGMLEN 42
-#define TCPSEQ 43
-#define TCPACK 44
-#define TCPLEN 45
-#define TCPWINDOW 46
-#define TCPFLAGS 47
+/* If you change some of this, remember to change printElementWithTemplate too */
+typedef enum{
+    TIMESTAMP,
+    SENSOR_ID_SNORT,
+    SENSOR_ID,
+    SENSOR_NAME,
+    SIG_GENERATOR,
+    SIG_ID,
+    SIG_REV,
+    PRIORITY,
+    CLASSIFICATION,
+    MSG,
+    PAYLOAD,
+    PROTO,
+    PROTO_ID,
+    ETHSRC,
+    ETHDST,
+    ETHTYPE,
+    UDPLENGTH,
+    ETHLENGTH,
+    TRHEADER,
+    SRCPORT,
+    DSTPORT,
+    SRCPORT_NAME,
+    DSTPORT_NAME,
+    SRC_TEMPLATE_ID,
+    SRC_STR,
+    SRC_NAME,
+    SRC_NET,
+    SRC_NET_NAME,
+    DST_TEMPLATE_ID,
+    DST_NAME,
+    DST_STR,
+    DST_NET,
+    DST_NET_NAME,
+    ICMPTYPE,
+    ICMPCODE,
+    ICMPID,
+    ICMPSEQ,
+    TTL,
+    TOS,
+    ID,
+    IPLEN,
+    DGMLEN,
+    TCPSEQ,
+    TCPACK,
+    TCPLEN,
+    TCPWINDOW,
+    TCPFLAGS,
 
 #ifdef HAVE_GEOIP
-#define SRC_COUNTRY 48
-#define DST_COUNTRY 49
-#define SRC_COUNTRY_CODE 50
-#define DST_COUNTRY_CODE 51
+    SRC_COUNTRY,
+    DST_COUNTRY,
+    SRC_COUNTRY_CODE,
+    DST_COUNTRY_CODE,
 #endif // HAVE_GEOIP
 
-#define TEMPLATE_END_ID 52 /* Remember to update it if some template element is added */
+    TEMPLATE_END_ID
+}TEMPLATE_ID;
 
 typedef enum{stringFormat,numericFormat} JsonPrintFormat;
 
 typedef struct{
-    const uint32_t id;
+    const TEMPLATE_ID id;
     const char * templateName;
     const char * jsonName;
     const JsonPrintFormat printFormat;
@@ -473,6 +476,7 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
         if(data->kafka)
             KafkaLog_Term(data->kafka);
         free(data->jsonargs);
+        free(data->sensor_name);
         freeNumberStrAssocList(data->hosts);
         freeNumberStrAssocList(data->nets);
         freeNumberStrAssocList(data->services);
@@ -612,6 +616,8 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
 #endif
                 ipv4 = GET_DST_ADDR(p).s_addr;
                 break;
+            default:
+                break;
         };
     }
 
@@ -682,11 +688,12 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case PROTO:
             if(IPH_IS_VALID(p)){
                 Number_str_assoc * service_name_asoc = SearchNumberStr(GET_IPH_PROTO(p),jsonData->protocols,PROTOCOLS);
-                KafkaLog_Print(kafka,"%s",service_name_asoc?service_name_asoc->human_readable_str:(const char *)templateElement->defaultValue);
-            }else{ /* Always log something */
-                KafkaLog_Print(kafka,"%s",(const char *)templateElement->defaultValue);
+                if(service_name_asoc){
+                    KafkaLog_Print(kafka,"%s",service_name_asoc->human_readable_str);
+                    break;
+                } // Else: print PROTO_ID
             }
-            break;
+            /* don't break! */
         case PROTO_ID:
             KafkaLog_Print(kafka,"%"PRIu16,IPH_IS_VALID(p)?GET_IPH_PROTO(p):0);
             break;
@@ -727,6 +734,25 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             }
             break;
 
+        case SRCPORT_NAME:
+        case DSTPORT_NAME:
+            if(IPH_IS_VALID(p))
+            {
+                switch(GET_IPH_PROTO(p))
+                {
+                    case IPPROTO_UDP:
+                    case IPPROTO_TCP:
+                    {
+                        const uint16_t port = templateElement->id==SRCPORT_NAME? p->sp:p->dp;
+                        Number_str_assoc * service_name_asoc = SearchNumberStr(port,jsonData->services,SERVICES);
+                        if(service_name_asoc)
+                            KafkaLog_Print(kafka,"%s",service_name_asoc->human_readable_str);
+                        else /* Log port number */
+                            KafkaLog_Print(kafka,"%"PRIu16,templateElement->id==SRCPORT_NAME? p->sp:p->dp);
+                    }
+                    break;
+                };
+            }
         case SRCPORT:
         case DSTPORT:
             if(IPH_IS_VALID(p))
@@ -745,28 +771,6 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 }
             }else{ /* Always Log something */
                 KafkaLog_Print(kafka,"%"PRIu16,0);
-            }
-            break;
-        case SRCPORT_NAME:
-        case DSTPORT_NAME:
-            if(IPH_IS_VALID(p))
-            {
-                switch(GET_IPH_PROTO(p))
-                {
-                    case IPPROTO_UDP:
-                    case IPPROTO_TCP:
-                    {
-                        const uint16_t port = templateElement->id==SRCPORT_NAME? p->sp:p->dp;
-                        Number_str_assoc * service_name_asoc = SearchNumberStr(port,jsonData->services,SERVICES);
-                        KafkaLog_Print(kafka,"%s",service_name_asoc?service_name_asoc->human_readable_str:(const char *)templateElement->defaultValue);
-                    }
-                        break;
-                    default: /* Always log something */
-                        KafkaLog_Print(kafka,"%s",(const char *)templateElement->defaultValue);
-                        break;
-                };
-            }else{ /* Always Log something */
-                KafkaLog_Print(kafka,"%s",(const char *)templateElement->defaultValue);
             }
             break;
 

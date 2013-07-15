@@ -77,7 +77,7 @@
 #endif // HAVE_GEOIP
 
 
-#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,sig_generator,sig_id,sig_rev,priority,classification,msg,payload,proto,proto_id,src,src_str,src_name,src_net,src_net_name,dst_name,dst_str,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,sig_generator,sig_id,sig_rev,priority,classification,msg,payload,proto,proto_id,src,src_str,src_name,src_net,src_net_name,dst_name,dst_str,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"
@@ -111,6 +111,13 @@ typedef enum{
     ETHSRC,
     ETHDST,
     ETHTYPE,
+    VLAN, /* See vlan header */
+    VLAN_PRIORITY,
+    VLAN_DROP,
+    ARP_HW_SADDR, /* Sender ARP Hardware Address */
+    ARP_HW_SPROT, /* Sender ARP Hardware Protocol */
+    ARP_HW_TADDR, /* Destination ARP Hardware Address */
+    ARP_HW_TPROT, /* Destination ARP Hardware Protocol */
     UDPLENGTH,
     ETHLENGTH,
     TRHEADER,
@@ -205,6 +212,13 @@ static AlertJSONTemplateElement template[] = {
     {ETHSRC,"ethsrc","ethsrc",stringFormat,"-"},
     {ETHDST,"ethdst","ethdst",stringFormat,"-"},
     {ETHTYPE,"ethtype","ethtype",numericFormat,0},
+    {ARP_HW_SADDR,"arp_hw_saddr","arp_hw_saddr",stringFormat,"-"},
+    {ARP_HW_SPROT,"arp_hw_sprot","arp_hw_sprot",stringFormat,"-"},
+    {ARP_HW_TADDR,"arp_hw_taddr","arp_hw_taddr",stringFormat,"-"},
+    {ARP_HW_TPROT,"arp_hw_tprot","arp_hw_tprot",stringFormat,"-"},
+    {VLAN,"vlan","vlan",numericFormat,0},
+    {VLAN_PRIORITY,"vlan_priority","vlan_priority",numericFormat,0},
+    {VLAN_DROP,"vlan_drop","vlan_drop",numericFormat,0},
     {UDPLENGTH,"udplength","udplength",numericFormat,0},
     {ETHLENGTH,"ethlen","ethlength",numericFormat,0},
     {TRHEADER,"trheader","trheader",stringFormat,"-"},
@@ -716,6 +730,39 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             }
             break;
 
+        case ARP_HW_SADDR:
+            if(p->ah)
+            {
+                KafkaLog_Print(kafka, "%X:%X:%X:%X:%X:%X",p->ah->arp_sha[0],
+                    p->ah->arp_sha[1],p->ah->arp_sha[2],p->ah->arp_sha[3],
+                    p->ah->arp_sha[4],p->ah->arp_sha[5]);
+            }
+            break;
+        case ARP_HW_SPROT:
+            if(p->ah)
+            {
+                KafkaLog_Print(kafka, "%X:%X:%X:%X:%X:%X",p->ah->arp_spa[0],
+                    p->ah->arp_spa[1],p->ah->arp_spa[2],p->ah->arp_spa[3],
+                    p->ah->arp_spa[4],p->ah->arp_spa[5]);
+            }
+            break;
+        case ARP_HW_TADDR:
+            if(p->ah)
+            {
+                KafkaLog_Print(kafka, "%X:%X:%X:%X:%X:%X",p->ah->arp_tha[0],
+                    p->ah->arp_tha[1],p->ah->arp_tha[2],p->ah->arp_tha[3],
+                    p->ah->arp_tha[4],p->ah->arp_tha[5]);
+            }
+            break;
+        case ARP_HW_TPROT:
+            if(p->ah)
+            {
+                KafkaLog_Print(kafka, "%X:%X:%X:%X:%X:%X",p->ah->arp_tpa[0],
+                    p->ah->arp_tpa[1],p->ah->arp_tpa[2],p->ah->arp_tpa[3],
+                    p->ah->arp_tpa[4],p->ah->arp_tpa[5]);
+            }
+            break;
+
         case ETHTYPE:
             if(p->eh)
             {
@@ -732,6 +779,19 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             if(p->eh){
                 KafkaLog_Print(kafka, "%"PRIu16,p->pkth->len);
             }
+            break;
+
+        case VLAN_PRIORITY:
+            if(p->vh)
+                KafkaLog_Print(kafka,"%"PRIu16,VTH_PRIORITY(p->vh));
+            break;
+        case VLAN_DROP:
+            if(p->vh)
+                KafkaLog_Print(kafka,"%"PRIu8,VTH_CFI(p->vh));
+            break;
+        case VLAN:
+            if(p->vh)
+                KafkaLog_Print(kafka,"%"PRIu8,VTH_VLAN(p->vh));
             break;
 
         case SRCPORT_NAME:

@@ -86,6 +86,13 @@ src_country_code. dst_country_code: Source and destination country code, e.g.: "
 srcport,dstport: Source and destination layer 4 port, if aviable.
 ethsrc, ethdst: Ethernet source and destination address.
 ethlen: Ethernet packet lenght.
+arp_hw_saddr: sender hardware address
+arp_hw_sprot: sender protocol address
+arp_hw_daddr: target hardware address
+arp_hw_dprot: target protocol address
+vlan: Vlan tag
+vlan_priority: Vlan packet priority
+vlan_drop: DEI tag of vlan field
 tcpflags: TCP flags.
 tcpseq: TCP Sequence number.
 tcpack: TCP ACK number.

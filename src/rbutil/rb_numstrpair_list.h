@@ -34,12 +34,12 @@
 typedef struct _Number_str_assoc{
     char * human_readable_str;     /* Example: Google, tcp, ssh... */
     char * number_as_str;          /* Example: 8.8.8.8, 0x800, 22... String format*/
-    union{sfip_t ip;uint16_t service;uint16_t protocol;} number;
+    union{sfip_t ip;uint16_t service, protocol,vlan;} number;
     struct _Number_str_assoc * next;
 } Number_str_assoc;
 
 /* Enumeration for FillHostList */
-typedef enum{HOSTS,NETWORKS,SERVICES,PROTOCOLS} FILLHOSTSLIST_MODE;
+typedef enum{HOSTS,NETWORKS,SERVICES,PROTOCOLS,VLANS} FILLHOSTSLIST_MODE;
 
 void freeNumberStrAssocList(Number_str_assoc * nstrList);
 void FillHostsList(const char * filename,Number_str_assoc ** list, const FILLHOSTSLIST_MODE mode);

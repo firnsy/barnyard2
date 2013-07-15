@@ -32,21 +32,24 @@ alert_json can print the destination or source network of the packet. You have t
 in “/etc/barnyard_networks” indicating this. For example, the entry “192.168.100.0/24 foo
 network” will make alert_json print the network name and the network id. In case alert_json does
 not locate the network in the file, it will print “0.0.0.0/0” instead. Alert_json can do the same 
-function to services and protocol names, reading it from /etc/services and /etc/protocols files.
+function to services and protocols names, reading it from /etc/services and /etc/protocols files.
 If you want to use these functions, you have to specify these files in plugin's params:
 
 output alert_json: ... hosts=/etc/hosts networks=/etc/networks services=/etc/services 
 protocols=/etc/protocols ...
 
-And you have to be sure they are in the template. The default template has it, but if you don't
+You have to be sure they are in the template. The default template has it, but if you don't
 specify the files, it will always print "0", "0.0.0.0" or "0.0.0.0/0".
 
+Also, alert_json can print the vlan names, reading from a file with the same format at /etc/protocols.
+The argument is vlans=/path/to/file.
+
 The output names are: src_name, dst_name, src_net, src_net_name, dst_net, dst_net_name, proto, 
-proto_id, srcport_name, dstport_name.
+proto_id, srcport_name, dstport_name,vlan_name.
 
 
 
-                                                      3 GeoIP
+                                              3 GeoIP
 Alert_json can locate the region of the IP too. You just have to have libGeoIP installed and compile
 the sources with GEO_IP macro defined (it's defined by default). Also, you have to specify the 
 database location in json arguments, for example:
@@ -91,6 +94,7 @@ arp_hw_sprot: sender protocol address
 arp_hw_daddr: target hardware address
 arp_hw_dprot: target protocol address
 vlan: Vlan tag
+vlan_name: (See host and network name resolution)
 vlan_priority: Vlan packet priority
 vlan_drop: DEI tag of vlan field
 tcpflags: TCP flags.

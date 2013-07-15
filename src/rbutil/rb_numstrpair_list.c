@@ -87,12 +87,15 @@ static Number_str_assoc * FillHostList_Node(char *line_buffer, FILLHOSTSLIST_MOD
                         node=NULL;
                     }
                 }
-                break;
+                    break;
                 case SERVICES:
                     node->number.protocol = atoi(node->number_as_str);
-                break;
+                    break;
                 case PROTOCOLS:
                     node->number.service  = atoi(node->number_as_str);
+                    break;
+                case VLANS:
+                    node->number.vlan  = atoi(node->number_as_str);
                 break;
             };
             mSplitFree(&toks, num_toks);
@@ -167,8 +170,9 @@ Number_str_assoc * SearchNumberStr(uint32_t number,const Number_str_assoc *iplis
         break;
         case SERVICES:
         case PROTOCOLS:
+        case VLANS:
             for(node=(Number_str_assoc *)iplist;node;node=node->next){
-                if(node->number.service /* same as .protocol*/ == number)
+                if(node->number.service /* same as .protocol or .vlan*/ == number)
                     break;
             }
             break;

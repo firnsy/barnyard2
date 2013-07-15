@@ -77,7 +77,7 @@
 #endif // HAVE_GEOIP
 
 
-#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,sig_generator,sig_id,sig_rev,priority,classification,msg,payload,proto,proto_id,src,src_str,src_name,src_net,src_net_name,dst_name,dst_str,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,sig_generator,sig_id,sig_rev,priority,classification,msg,payload,proto,proto_id,src,src_str,src_name,src_net,src_net_name,dst_name,dst_str,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"
@@ -112,6 +112,7 @@ typedef enum{
     ETHDST,
     ETHTYPE,
     VLAN, /* See vlan header */
+    VLAN_NAME,
     VLAN_PRIORITY,
     VLAN_DROP,
     ARP_HW_SADDR, /* Sender ARP Hardware Address */
@@ -186,7 +187,7 @@ typedef struct _AlertJSONData
     char * jsonargs;
     TemplateElementsList * outputTemplate;
     AlertJSONConfig *config;
-    Number_str_assoc * hosts, *nets, *services, *protocols;
+    Number_str_assoc * hosts, *nets, *services, *protocols, *vlans;
     uint64_t sensor_id;
     char * sensor_name;
 #ifdef HAVE_GEOIP
@@ -217,6 +218,7 @@ static AlertJSONTemplateElement template[] = {
     {ARP_HW_TADDR,"arp_hw_taddr","arp_hw_taddr",stringFormat,"-"},
     {ARP_HW_TPROT,"arp_hw_tprot","arp_hw_tprot",stringFormat,"-"},
     {VLAN,"vlan","vlan",numericFormat,0},
+    {VLAN_NAME,"vlan_name","vlan_name",stringFormat,0},
     {VLAN_PRIORITY,"vlan_priority","vlan_priority",numericFormat,0},
     {VLAN_DROP,"vlan_drop","vlan_drop",numericFormat,0},
     {UDPLENGTH,"udplength","udplength",numericFormat,0},
@@ -340,10 +342,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     char* filename = NULL;
     char* kafka_str = NULL;
     int i;
-    char* hostsListPath = NULL;
-    char* networksPath = NULL;
-    char* servicesPath = NULL;
-    char* protocolsPath = NULL;
+    char* hostsListPath = NULL,*networksPath = NULL,*servicesPath = NULL,*protocolsPath = NULL,*vlansPath=NULL;
     #ifdef HAVE_GEOIP
     char * geoIP_path = NULL;
     #endif
@@ -383,6 +382,8 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
             servicesPath = SnortStrdup(tok+strlen("services="));
         }else if(!strncasecmp(tok,"protocols=",strlen("protocols="))){
             protocolsPath = SnortStrdup(tok+strlen("protocols="));
+        }else if(!strncasecmp(tok,"vlans=",strlen("vlans"))){
+            vlansPath = SnortStrdup(tok+strlen("vlans="));
         }else if(!strncasecmp(tok,"start_partition=",strlen("start_partition="))){
             start_partition = end_partition = atol(tok+strlen("start_partition="));
         }else if(!strncasecmp(tok,"end_partition=",strlen("end_partition="))){
@@ -402,10 +403,13 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     if ( !data->sensor_name ) data->sensor_name = SnortStrdup("-");
     if ( !filename ) filename = ProcessFileOption(barnyard2_conf_for_parsing, DEFAULT_FILE);
     if ( !kafka_str ) kafka_str = SnortStrdup(DEFAULT_KAFKA_BROKER);
+    
+    /* names-str assoc */
     if(hostsListPath) FillHostsList(hostsListPath,&data->hosts,HOSTS);
     if(networksPath) FillHostsList(networksPath,&data->nets,NETWORKS);
     if(servicesPath) FillHostsList(servicesPath,&data->services,SERVICES);
     if(protocolsPath) FillHostsList(protocolsPath,&data->protocols,PROTOCOLS);
+    if(vlansPath) FillHostsList(vlansPath,&data->vlans,VLANS);
 
     mSplitFree(&toks, num_toks);
     toks = mSplit(data->jsonargs, ",", 128, &num_toks, 0);
@@ -470,6 +474,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     if( networksPath ) free (networksPath);
     if( servicesPath ) free (servicesPath);
     if( protocolsPath ) free (protocolsPath);
+    if( vlansPath ) free(vlansPath);
     #ifdef HAVE_GEOIP
     if (geoIP_path) free(geoIP_path);
     #endif
@@ -495,6 +500,7 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
         freeNumberStrAssocList(data->nets);
         freeNumberStrAssocList(data->services);
         freeNumberStrAssocList(data->protocols);
+        freeNumberStrAssocList(data->vlans);
         for(iter=data->outputTemplate;iter;iter=aux){
             aux = iter->next;
             free(iter);
@@ -791,7 +797,16 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             break;
         case VLAN:
             if(p->vh)
-                KafkaLog_Print(kafka,"%"PRIu8,VTH_VLAN(p->vh));
+                KafkaLog_Print(kafka,"%"PRIu16,VTH_VLAN(p->vh));
+            break;
+        case VLAN_NAME:
+            if(p->vh){
+                Number_str_assoc * service_name_asoc = SearchNumberStr(VTH_VLAN(p->vh),jsonData->vlans,VLANS);
+                if(service_name_asoc)
+                    KafkaLog_Print(kafka,"%s",service_name_asoc->human_readable_str);
+                else
+                    KafkaLog_Print(kafka,"%"PRIu16,VTH_VLAN(p->vh));
+            }
             break;
 
         case SRCPORT_NAME:
@@ -821,9 +836,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 {
                     case IPPROTO_UDP:
                     case IPPROTO_TCP:
-                    {
                         KafkaLog_Print(kafka,"%"PRIu16,templateElement->id==SRCPORT? p->sp:p->dp);
-                    }
                         break;
                     default: /* Always log something */
                         KafkaLog_Print(kafka,"%"PRIu16,0);
@@ -974,8 +987,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             break;
 
         default:
-            *(int *)NULL = 0;
-            FatalError("Template id %d not found",templateElement->id); /* just for sanity */
+            FatalError("Template id %d not found (line %d)\n",templateElement->id,__LINE__);
             break;
     };
 

@@ -77,7 +77,7 @@
 #endif // HAVE_GEOIP
 
 
-#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,sig_generator,sig_id,sig_rev,priority,classification,msg,payload,proto,proto_id,src,src_str,src_name,src_net,src_net_name,dst_name,dst_str,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,sensor_name,sig_generator,sig_id,sig_rev,priority,classification,msg,payload,proto,proto_id,src,src_str,src_name,src_net,src_net_name,dst_name,dst_str,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"
@@ -622,7 +622,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             case SRC_COUNTRY:
             case SRC_COUNTRY_CODE:
 #endif
-                ipv4 = GET_SRC_ADDR(p).s_addr;
+                ipv4 = ntohl(GET_SRC_ADDR(p).s_addr);
                 break;
 
             case DST_TEMPLATE_ID:
@@ -634,7 +634,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             case DST_COUNTRY:
             case DST_COUNTRY_CODE:
 #endif
-                ipv4 = GET_DST_ADDR(p).s_addr;
+                ipv4 = ntohl(GET_DST_ADDR(p).s_addr);
                 break;
             default:
                 break;

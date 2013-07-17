@@ -99,7 +99,7 @@ static void KafkaLog_Close (rd_kafka_t* handle)
  *-------------------------------------------------------------------
  */
 KafkaLog* KafkaLog_Init (
-    const char* broker, unsigned int maxBuf, const char * topic, const int start_partition, 
+    const char* broker, unsigned int bufLen, const char * topic, const int start_partition, 
     const int end_partition, bool open,  const char*filename
 ) {
     KafkaLog* this;
@@ -107,11 +107,11 @@ KafkaLog* KafkaLog_Init (
     this = (KafkaLog*)malloc(sizeof(KafkaLog));
     #ifdef HAVE_LIBRDKAFKA
     if(this){
-        this->buf = malloc(sizeof(char)*maxBuf);
+        this->buf = malloc(sizeof(char)*bufLen);
 
         if ( !this->buf)
         {
-            FatalError("Unable to allocate a buffer for KafkaLog(%u)!\n", maxBuf);
+            FatalError("Unable to allocate a buffer for KafkaLog(%u)!\n", bufLen);
         }
     }else{
         FatalError("Unable to allocate KafkaLog!\n");
@@ -126,7 +126,7 @@ KafkaLog* KafkaLog_Init (
         FatalError("alert_json: start_partition > end_partition");
     }
 
-    this->maxBuf = maxBuf;
+    this->bufLen = this->start_bufLen = bufLen;
     #endif
     this->textLog = NULL; /* Force NULL by now */
     KafkaLog_Reset(this);
@@ -180,7 +180,8 @@ bool KafkaLog_Flush(KafkaLog* this)
         free(this->buf);
     else
         rd_kafka_produce(this->handler, this->topic, this->actual_partition, RD_KAFKA_OP_F_FREE, this->buf, this->pos);
-    this->buf = malloc(sizeof(char)*this->maxBuf);
+    this->buf = SnortAlloc(sizeof(char)*this->start_bufLen);
+    this->bufLen = this->start_bufLen;
 
     #endif
     if(this->textLog) TextLog_Flush(this->textLog);
@@ -215,26 +216,17 @@ bool KafkaLog_Putc (KafkaLog* this, char c)
 bool KafkaLog_Write (KafkaLog* this, const char* str, int len)
 {
     #ifdef HAVE_LIBRDKAFKA
-    int avail = KafkaLog_Avail(this);
-
-    if ( len >= avail )
+    while ( len >= KafkaLog_Avail(this) )
     {
-        KafkaLog_Flush(this);
-        avail = KafkaLog_Avail(this);
+        this->bufLen*=2;
+        this->buf = realloc(this->buf,this->bufLen);
+        if(NULL==this->buf)
+            return FALSE;
     }
-    len = snprintf(this->buf+this->pos, avail, "%s", str);
-
-    if ( len >= avail )
-    {
-        this->pos = this->maxBuf - 1;
-        this->buf[this->pos] = '\0';
-        return FALSE;
-    }
-    else if ( len < 0 )
-    {
-        return FALSE;
-    }
+    this->buf[this->pos]='\0'; /* just in case */
+    strncat(this->buf+this->pos, str, len);
     this->pos += len;
+    assert(this->buf[this->pos] == '\0');
 
     #endif // HAVE_LIBRDKAFKA
     if(this->textLog) TextLog_Write(this->textLog,str,len);
@@ -250,9 +242,6 @@ bool KafkaLog_Print (KafkaLog* this, const char* fmt, ...)
     int avail = KafkaLog_Avail(this);
     int len;
     va_list ap;
-    #ifdef HAVE_LIBRDKAFKA
-    int currentLenght = this->maxBuf;
-    #endif
 
     va_start(ap, fmt);
     #ifdef HAVE_LIBRDKAFKA
@@ -265,12 +254,12 @@ bool KafkaLog_Print (KafkaLog* this, const char* fmt, ...)
     #ifdef HAVE_LIBRDKAFKA
     while(len >= avail){
         // Send a half json message to Kafka has no sense, so we will try to
-	// increase the buffer's lenght to allocate the full message.
-	// TextLog's print will be not changed, just inlined here.
-        currentLenght*=2;
-	this->buf = realloc(this->buf,currentLenght);
-	if(!this->buf)
-	    FatalError("It was not possible to allocate a buffer");
+        // increase the buffer's lenght to allocate the full message.
+        // TextLog's print will be not changed, just inlined here.
+        this->bufLen*=2;
+        this->buf = realloc(this->buf,this->bufLen);
+        if(!this->buf)
+            FatalError("It was not possible to allocate a buffer");
         va_start(ap, fmt);
         len = vsnprintf(this->buf+this->pos, avail, fmt, ap);
         va_end(ap);
@@ -327,7 +316,7 @@ bool KafkaLog_Quote (KafkaLog* this, const char* qs)
     }
     this->buf[pos++] = '"';
 
-    while ( *qs && (this->maxBuf - pos > 2) )
+    while ( *qs && (this->bufLen - pos > 2) )
     {
         if ( *qs == '"' || *qs == '\\' )
         {

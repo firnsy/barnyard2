@@ -80,7 +80,8 @@ typedef struct _KafkaLog
 
 /* buffer attributes: */
     unsigned int pos;
-    unsigned int maxBuf;
+    unsigned int bufLen;
+    unsigned int start_bufLen;
     char * buf;
 #endif
 /* TextLog helper. Useful for loggind and just send data to a json file */
@@ -88,7 +89,7 @@ typedef struct _KafkaLog
 } KafkaLog;
 
 KafkaLog* KafkaLog_Init (
-    const char* broker, unsigned int maxBuf, const char * topic, const int start_partition, const int end_partition, bool open, const char *filename
+    const char* broker, unsigned int bufLen, const char * topic, const int start_partition, const int end_partition, bool open, const char *filename
 );
 void KafkaLog_Term (KafkaLog* this);
 
@@ -117,7 +118,7 @@ bool KafkaLog_Flush(KafkaLog*);
     #ifndef HAVE_LIBRDKAFKA
     return this->textLog?TextLog_Avail(this->textLog):0;
     #else
-    return this->maxBuf - this->pos - 1;
+    return this->bufLen - this->pos - 1;
     #endif
  }
  

@@ -73,8 +73,8 @@ static Number_str_assoc * FillHostList_Node(char *line_buffer, FILLHOSTSLIST_MOD
     Number_str_assoc * node = SnortAlloc(sizeof(Number_str_assoc));
     if(node){
         if((toks = mSplit((char *)line_buffer, " \t", 2, &num_toks, '\\'))){
-            node->number_as_str = SnortStrdup(mode==HOSTS?toks[0]:toks[1]);
-            node->human_readable_str = SnortStrdup(mode==HOSTS?toks[1]:toks[0]);
+            node->human_readable_str = SnortStrdup(toks[0]);
+            node->number_as_str = SnortStrdup(toks[1]);
             switch(mode){
                 case HOSTS:
                 case NETWORKS:

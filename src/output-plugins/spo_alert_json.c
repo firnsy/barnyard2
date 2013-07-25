@@ -197,7 +197,7 @@ typedef struct _AlertJSONData
 
 /* Remember update printElementWithTemplate if some element modified here */
 static AlertJSONTemplateElement template[] = {
-    {TIMESTAMP,"timestamp","event_timestamp",numericFormat,"0"},
+    {TIMESTAMP,"timestamp","timestamp",numericFormat,"0"},
     {SENSOR_ID_SNORT,"sensor_id_snort","sensor_id_snort",numericFormat,"0"},
     {SENSOR_ID,"sensor_id","sensor_id",numericFormat,"0"},
     {SENSOR_NAME,"sensor_name","sensor_name",stringFormat,"-"},
@@ -673,7 +673,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
 
     switch(templateElement->id){
         case TIMESTAMP:
-            KafkaLog_Puts(kafka,itoa10(p->pkth->ts.tv_sec*1000 + p->pkth->ts.tv_usec/1000, buf_uint64, bufLen_uint64));
+            KafkaLog_Puts(kafka,itoa10(p->pkth->ts.tv_sec, buf_uint64, bufLen_uint64));
             break;
         case SENSOR_ID_SNORT:
             KafkaLog_Puts(kafka,event?itoa10(ntohl(((Unified2EventCommon *)event)->sensor_id),buf_uint64, bufLen_uint64):templateElement->defaultValue);

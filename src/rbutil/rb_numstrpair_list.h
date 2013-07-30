@@ -29,6 +29,8 @@
  * save hostname -> hostip or service_name->service_number pairs.
  */
 
+#include "debug.h"
+#include "fatal.h"
 #include "sf_ip.h"
 
 typedef struct _Number_str_assoc{
@@ -43,4 +45,24 @@ typedef enum{HOSTS,NETWORKS,SERVICES,PROTOCOLS,VLANS} FILLHOSTSLIST_MODE;
 
 void freeNumberStrAssocList(Number_str_assoc * nstrList);
 void FillHostsList(const char * filename,Number_str_assoc ** list, const FILLHOSTSLIST_MODE mode);
-Number_str_assoc * SearchNumberStr(uint32_t number,const Number_str_assoc *iplist,FILLHOSTSLIST_MODE mode);
+
+static inline Number_str_assoc * SearchIpStr(sfip_t ip ,const Number_str_assoc *iplist,FILLHOSTSLIST_MODE mode){
+	if(mode!=HOSTS && mode!=NETWORKS) FatalError("Oops. Wrong use.\n");
+	Number_str_assoc * node;
+	for(node = (Number_str_assoc *)iplist;node;node=node->next)
+	{
+        if(mode==HOSTS ? sfip_equals(ip,node->number.ip) : sfip_fast_cont4(&node->number.ip,&ip))
+            break;
+    }
+    return node;
+}
+
+static inline Number_str_assoc * SearchNumberStr(uint32_t number,const Number_str_assoc *list){
+	Number_str_assoc * node;
+    for(node=(Number_str_assoc *)list;node;node=node->next)
+    {
+        if(node->number.service /* same as .protocol or .vlan*/ == number)
+            break;
+    }
+    return node;
+}

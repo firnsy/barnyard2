@@ -531,45 +531,6 @@ static void AlertJSON(Packet *p, void *event, uint32_t event_type, void *arg)
     AlertJSONData *data = (AlertJSONData *)arg;
     RealAlertJSON(p, event, event_type, data);
 }
-/*
- * Function: _intoa(unsigned int addr, char* buf, u_short bufLen) 
- * 
- * Purpose: A faster replacement for inet_ntoa().Extracted from tcpdump
- * 
- * Arguments:   addr => Numeric address.
- *               buf => Buffer to save string format address.
- *            bufLen => buf's length.
- *            
- * Returns: Position of buffer where string starts.
- */
-char* _intoa(unsigned int addr, char* buf, u_short bufLen) {
-  char *cp, *retStr;
-  u_int byte;
-  int n;
-
-  cp = &buf[bufLen];
-  *--cp = '\0';
-
-  n = 4;
-  do {
-    byte = addr & 0xff;
-    *--cp = byte % 10 + '0';
-    byte /= 10;
-    if (byte > 0) {
-      *--cp = byte % 10 + '0';
-      byte /= 10;
-      if (byte > 0)
-        *--cp = byte + '0';
-    }
-    *--cp = '.';
-    addr >>= 8;
-  } while (--n > 0);
-
-  /* Convert the string to lowercase */
-  retStr = (char*)(cp+1);
-
-  return(retStr);
-}
 
 /*
  * Function: C++ version 0.4 char* style "itoa", Written by Lukás Chmela. (Modified)
@@ -631,14 +592,15 @@ static inline void printHWaddr(KafkaLog *kafka,const uint8_t *addr,char * buf,co
 static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type, AlertJSONData *jsonData, AlertJSONTemplateElement *templateElement){
     SigNode *sn;
     char tcpFlags[9];
-    char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];
+  /*char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];*/
+    char buf[sizeof "0000:0000:0000:0000:0000:0000:0000:0000"];
     const size_t bufLen = sizeof buf;
-    char * buf_uint64 = buf;
-    const size_t bufLen_uint64 = bufLen;
-    /* sizeof "18446744073709551616" = 2^64 < sizeof buf. So it's enough with buf.*/
     KafkaLog * kafka = jsonData->kafka;
-    uint32_t ipv4 = 0;
-    const int initial_buffer_pos = kafka->pos;
+    sfip_t ip;
+    const int initial_buffer_pos = KafkaLog_Tell(jsonData->kafka);
+#ifdef HAVE_GEOIP
+    geoipv6_t ipv6;
+#endif
 
     /* Avoid repeated code */
     if(IPH_IS_VALID(p)){
@@ -652,7 +614,14 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             case SRC_COUNTRY:
             case SRC_COUNTRY_CODE:
 #endif
-                ipv4 = ntohl(GET_SRC_ADDR(p).s_addr);
+#ifdef SUP_IP6
+                sfip_set_ip(&ip,GET_SRC_ADDR(p));
+#else
+                {
+                    int ipv4 = ntohl(GET_SRC_ADDR(p).s_addr);
+                    sfip_set_raw(&ip,&ipv4,AF_INET);
+                }
+#endif
                 break;
 
             case DST_TEMPLATE_ID:
@@ -664,40 +633,62 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             case DST_COUNTRY:
             case DST_COUNTRY_CODE:
 #endif
-                ipv4 = ntohl(GET_DST_ADDR(p).s_addr);
+#ifdef SUP_IP6
+                sfip_set_ip(&ip,GET_DST_ADDR(p));
+#else
+                {
+                    int ipv4 = ntohl(GET_DST_ADDR(p).s_addr);
+                    sfip_set_raw(&ip,&ipv4,AF_INET);
+                }
+#endif
                 break;
             default:
                 break;
         };
+
+#ifdef HAVE_GEOIP
+        if(ip.family == AF_INET6){
+            switch(templateElement->id){
+                case SRC_COUNTRY:
+                case SRC_COUNTRY_CODE:
+                case DST_COUNTRY:
+                case DST_COUNTRY_CODE:
+                    memcpy(ipv6.s6_addr, ip.ip8, sizeof(ipv6.s6_addr));
+                    break;
+                default:
+                    break;
+            };
+        }
+#endif
     }
 
     switch(templateElement->id){
         case TIMESTAMP:
-            KafkaLog_Puts(kafka,itoa10(p->pkth->ts.tv_sec, buf_uint64, bufLen_uint64));
+            KafkaLog_Puts(kafka,itoa10(p->pkth->ts.tv_sec, buf, bufLen));
             break;
         case SENSOR_ID_SNORT:
-            KafkaLog_Puts(kafka,event?itoa10(ntohl(((Unified2EventCommon *)event)->sensor_id),buf_uint64, bufLen_uint64):templateElement->defaultValue);
+            KafkaLog_Puts(kafka,event?itoa10(ntohl(((Unified2EventCommon *)event)->sensor_id),buf, bufLen):templateElement->defaultValue);
             break;
         case SENSOR_ID:
-            KafkaLog_Puts(kafka,itoa10(jsonData->sensor_id,buf_uint64,bufLen_uint64));
+            KafkaLog_Puts(kafka,itoa10(jsonData->sensor_id,buf,bufLen));
             break;
         case SENSOR_NAME:
             KafkaLog_Puts(kafka,jsonData->sensor_name);
             break;
         case SIG_GENERATOR:
             if(event != NULL)
-                KafkaLog_Puts(kafka,itoa10(ntohl(((Unified2EventCommon *)event)->generator_id),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka,itoa10(ntohl(((Unified2EventCommon *)event)->generator_id),buf,bufLen));
             break;
         case SIG_ID:
             if(event != NULL)
-                KafkaLog_Puts(kafka,itoa10(ntohl(((Unified2EventCommon *)event)->signature_id),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka,itoa10(ntohl(((Unified2EventCommon *)event)->signature_id),buf,bufLen));
             break;
         case SIG_REV:
             if(event != NULL)
-                KafkaLog_Puts(kafka,itoa10(ntohl(((Unified2EventCommon *)event)->signature_revision),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka,itoa10(ntohl(((Unified2EventCommon *)event)->signature_revision),buf,bufLen));
             break;
         case PRIORITY:
-            KafkaLog_Puts(kafka,event? itoa10(ntohl(((Unified2EventCommon *)event)->priority_id),buf_uint64,bufLen_uint64): templateElement->defaultValue);
+            KafkaLog_Puts(kafka,event? itoa10(ntohl(((Unified2EventCommon *)event)->priority_id),buf,bufLen): templateElement->defaultValue);
             break;
         case CLASSIFICATION:
             if(event != NULL)
@@ -728,7 +719,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 uint16_t i;
                 if(p &&  p->dsize>0){
                     for(i=0;i<p->dsize;++i)
-                        KafkaLog_Puts(kafka, itoa16(p->data[i],buf_uint64,bufLen_uint64));
+                        KafkaLog_Puts(kafka, itoa16(p->data[i],buf,bufLen));
                 }else{
                     KafkaLog_Puts(kafka, templateElement->defaultValue);
                 }
@@ -737,7 +728,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
 
         case PROTO:
             if(IPH_IS_VALID(p)){
-                Number_str_assoc * service_name_asoc = SearchNumberStr(GET_IPH_PROTO(p),jsonData->protocols,PROTOCOLS);
+                Number_str_assoc * service_name_asoc = SearchNumberStr(GET_IPH_PROTO(p),jsonData->protocols);
                 if(service_name_asoc){
                     KafkaLog_Puts(kafka,service_name_asoc->human_readable_str);
                     break;
@@ -745,85 +736,85 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             }
             /* don't break! */
         case PROTO_ID:
-            KafkaLog_Puts(kafka,itoa10(IPH_IS_VALID(p)?GET_IPH_PROTO(p):0,buf_uint64,bufLen_uint64));
+            KafkaLog_Puts(kafka,itoa10(IPH_IS_VALID(p)?GET_IPH_PROTO(p):0,buf,bufLen));
             break;
 
         case ETHSRC:
             if(p->eh)
-                printHWaddr(kafka, p->eh->ether_src, buf_uint64,bufLen_uint64);
+                printHWaddr(kafka, p->eh->ether_src, buf,bufLen);
             break;
 
         case ETHDST:
             if(p->eh)
-                printHWaddr(kafka,p->eh->ether_dst,buf_uint64,bufLen_uint64);
+                printHWaddr(kafka,p->eh->ether_dst,buf,bufLen);
             break;
 
         case ARP_HW_SADDR:
             if(p->ah)
-                printHWaddr(kafka,p->ah->arp_sha,buf_uint64,bufLen_uint64);
+                printHWaddr(kafka,p->ah->arp_sha,buf,bufLen);
             break;
         case ARP_HW_SPROT:
             if(p->ah)
             {
                 KafkaLog_Puts(kafka, "0x");
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_spa[0],buf_uint64,bufLen_uint64));
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_spa[1],buf_uint64,bufLen_uint64));
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_spa[2],buf_uint64,bufLen_uint64));
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_spa[3],buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka, itoa16(p->ah->arp_spa[0],buf,bufLen));
+                KafkaLog_Puts(kafka, itoa16(p->ah->arp_spa[1],buf,bufLen));
+                KafkaLog_Puts(kafka, itoa16(p->ah->arp_spa[2],buf,bufLen));
+                KafkaLog_Puts(kafka, itoa16(p->ah->arp_spa[3],buf,bufLen));
             }
             break;
         case ARP_HW_TADDR:
             if(p->ah)
-                printHWaddr(kafka,p->ah->arp_tha,buf_uint64,bufLen_uint64);
+                printHWaddr(kafka,p->ah->arp_tha,buf,bufLen);
             break;
         case ARP_HW_TPROT:
             if(p->ah)
             {
                 KafkaLog_Puts(kafka, "0x");
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_tpa[0],buf_uint64,bufLen_uint64));
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_tpa[1],buf_uint64,bufLen_uint64));
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_tpa[2],buf_uint64,bufLen_uint64));
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_tpa[3],buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka, itoa16(p->ah->arp_tpa[0],buf,bufLen));
+                KafkaLog_Puts(kafka, itoa16(p->ah->arp_tpa[1],buf,bufLen));
+                KafkaLog_Puts(kafka, itoa16(p->ah->arp_tpa[2],buf,bufLen));
+                KafkaLog_Puts(kafka, itoa16(p->ah->arp_tpa[3],buf,bufLen));
             }
             break;
 
         case ETHTYPE:
             if(p->eh)
             {
-                KafkaLog_Puts(kafka, itoa10(ntohs(p->eh->ether_type),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka, itoa10(ntohs(p->eh->ether_type),buf,bufLen));
             }
             break;
 
         case UDPLENGTH:
             if(p->udph){
-                KafkaLog_Puts(kafka, itoa10(ntohs(p->udph->uh_len),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka, itoa10(ntohs(p->udph->uh_len),buf,bufLen));
             }
             break;
         case ETHLENGTH:
             if(p->eh){
-                KafkaLog_Puts(kafka, itoa10(p->pkth->len,buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka, itoa10(p->pkth->len,buf,bufLen));
             }
             break;
 
         case VLAN_PRIORITY:
             if(p->vh)
-                KafkaLog_Puts(kafka,itoa10(VTH_PRIORITY(p->vh),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka,itoa10(VTH_PRIORITY(p->vh),buf,bufLen));
             break;
         case VLAN_DROP:
             if(p->vh)
-                KafkaLog_Puts(kafka,itoa10(VTH_CFI(p->vh),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka,itoa10(VTH_CFI(p->vh),buf,bufLen));
             break;
         case VLAN:
             if(p->vh)
-                KafkaLog_Puts(kafka,itoa10(VTH_VLAN(p->vh),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka,itoa10(VTH_VLAN(p->vh),buf,bufLen));
             break;
         case VLAN_NAME:
             if(p->vh){
-                Number_str_assoc * service_name_asoc = SearchNumberStr(VTH_VLAN(p->vh),jsonData->vlans,VLANS);
+                Number_str_assoc * service_name_asoc = SearchNumberStr(VTH_VLAN(p->vh),jsonData->vlans);
                 if(service_name_asoc)
                     KafkaLog_Puts(kafka,service_name_asoc->human_readable_str);
                 else
-                    KafkaLog_Puts(kafka,itoa10(VTH_VLAN(p->vh),buf_uint64,bufLen_uint64));
+                    KafkaLog_Puts(kafka,itoa10(VTH_VLAN(p->vh),buf,bufLen));
             }
             break;
 
@@ -837,11 +828,11 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                     case IPPROTO_TCP:
                     {
                         const uint16_t port = templateElement->id==SRCPORT_NAME? p->sp:p->dp;
-                        Number_str_assoc * service_name_asoc = SearchNumberStr(port,jsonData->services,SERVICES);
+                        Number_str_assoc * service_name_asoc = SearchNumberStr(port,jsonData->services);
                         if(service_name_asoc)
                             KafkaLog_Puts(kafka,service_name_asoc->human_readable_str);
                         else /* Log port number */
-                            KafkaLog_Puts(kafka,itoa10(templateElement->id==SRCPORT_NAME? p->sp:p->dp,buf_uint64,bufLen_uint64));
+                            KafkaLog_Puts(kafka,itoa10(templateElement->id==SRCPORT_NAME? p->sp:p->dp,buf,bufLen));
                     }
                     break;
                 };
@@ -854,7 +845,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 {
                     case IPPROTO_UDP:
                     case IPPROTO_TCP:
-                        KafkaLog_Puts(kafka,itoa10(templateElement->id==SRCPORT? p->sp:p->dp,buf_uint64,bufLen_uint64));
+                        KafkaLog_Puts(kafka,itoa10(templateElement->id==SRCPORT? p->sp:p->dp,buf,bufLen));
                         break;
                     default: /* Always log something */
                         KafkaLog_Puts(kafka,templateElement->defaultValue);
@@ -866,36 +857,39 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             break;
 
         case SRC_TEMPLATE_ID:
-            KafkaLog_Puts(kafka,itoa10(ipv4,buf_uint64,bufLen_uint64));
-            break;
         case DST_TEMPLATE_ID:
-            KafkaLog_Puts(kafka,itoa10(ipv4,buf_uint64,bufLen_uint64));
+            /*if(sfip_family(&ip)==AF_INET){ // buggy sfip_family macro...*/
+            if(ip.family==AF_INET)
+            {
+                KafkaLog_Puts(kafka,itoa10(*ip.ip32, buf,bufLen));
+            }
+            /* doesn't make very sense print so large number. If you want, make me know. */
             break;
         case SRC_STR:
         case DST_STR:
             {
-                KafkaLog_Puts(kafka,_intoa(ipv4, buf, bufLen));
+                KafkaLog_Puts(kafka,sfip_to_str(&ip));
             }
             break;
         case SRC_NAME:
         case DST_NAME:
             {
-                Number_str_assoc * ip_str_node = SearchNumberStr(ipv4,jsonData->hosts,HOSTS);
-                const char * ip_name = ip_str_node ? ip_str_node->human_readable_str : _intoa(ipv4, buf, bufLen);
+                Number_str_assoc * ip_str_node = SearchIpStr(ip,jsonData->hosts,HOSTS);
+                const char * ip_name = ip_str_node ? ip_str_node->human_readable_str : sfip_to_str(&ip);
                 KafkaLog_Puts(kafka,ip_name);
             }
             break;
         case SRC_NET:
         case DST_NET:
             {
-                Number_str_assoc * ip_net = SearchNumberStr(ipv4,jsonData->nets,NETWORKS);
+                Number_str_assoc * ip_net = SearchIpStr(ip,jsonData->nets,NETWORKS);
                 KafkaLog_Puts(kafka,ip_net?ip_net->number_as_str:templateElement->defaultValue);
             }
             break;
         case SRC_NET_NAME:
         case DST_NET_NAME:
             {
-                Number_str_assoc * ip_net = SearchNumberStr(ipv4,jsonData->nets,NETWORKS);
+                Number_str_assoc * ip_net = SearchIpStr(ip,jsonData->nets,NETWORKS);
                 KafkaLog_Puts(kafka,ip_net?ip_net->human_readable_str:templateElement->defaultValue);
             }
             break;
@@ -904,30 +898,38 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case SRC_COUNTRY:
         case DST_COUNTRY:
             if(jsonData->gi){
-                const char * country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ipv4);
+                const char * country_name = NULL;
+                if(ip.family == AF_INET)
+                    country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ip.ip32[0]);
+                else
+                    country_name = GeoIP_country_name_by_ipnum_v6(jsonData->gi,ipv6);
                 KafkaLog_Puts(kafka,country_name?country_name:templateElement->defaultValue);
             }
             break;
         case SRC_COUNTRY_CODE:
         case DST_COUNTRY_CODE:
             if(jsonData->gi){
-                const char * country_code =GeoIP_country_code_by_ipnum(jsonData->gi,ipv4);
-                KafkaLog_Puts(kafka,country_code?country_code:templateElement->defaultValue);
+                const char * country_name = NULL;
+                if(ip.family == AF_INET)
+                    country_name = GeoIP_country_code_by_ipnum(jsonData->gi,ip.ip32[0]);
+                else
+                    country_name = GeoIP_country_code_by_ipnum_v6(jsonData->gi,ipv6);
+                KafkaLog_Puts(kafka,country_name?country_name:templateElement->defaultValue);
             }
             break;
 #endif /* HAVE_GEOIP */
 
         case ICMPTYPE:
             if(p->icmph)
-                KafkaLog_Puts(kafka, itoa10(p->icmph->type,buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka, itoa10(p->icmph->type,buf,bufLen));
             break;
         case ICMPCODE:
             if(p->icmph)
-                KafkaLog_Puts(kafka, itoa10(p->icmph->code,buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka, itoa10(p->icmph->code,buf,bufLen));
             break;
         case ICMPID:
             if(p->icmph)
-                KafkaLog_Puts(kafka, itoa10(ntohs(p->icmph->s_icmp_id),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka, itoa10(ntohs(p->icmph->s_icmp_id),buf,bufLen));
             break;
         case ICMPSEQ:
             if(p->icmph){
@@ -935,54 +937,54 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                     PrintJSONFieldName(kafka,JSON_ICMPSEQ_NAME);
                     KafkaLog_Print(kafka, "%d",ntohs(p->icmph->s_icmp_seq));
                 */
-                KafkaLog_Puts(kafka,itoa10(ntohs(p->icmph->s_icmp_seq),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka,itoa10(ntohs(p->icmph->s_icmp_seq),buf,bufLen));
             }
             break;
         case TTL:
             if(IPH_IS_VALID(p))
-                KafkaLog_Puts(kafka,itoa10(GET_IPH_TTL(p),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka,itoa10(GET_IPH_TTL(p),buf,bufLen));
             break;
 
         case TOS: 
             if(IPH_IS_VALID(p))
-                KafkaLog_Puts(kafka,itoa10(GET_IPH_TOS(p),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka,itoa10(GET_IPH_TOS(p),buf,bufLen));
             break;
         case ID:
             if(IPH_IS_VALID(p))
-                KafkaLog_Puts(kafka,itoa10(IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka,itoa10(IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)),buf,bufLen));
             break;
         case IPLEN:
             if(IPH_IS_VALID(p))
-                KafkaLog_Puts(kafka,itoa10(GET_IPH_LEN(p) << 2,buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka,itoa10(GET_IPH_LEN(p) << 2,buf,bufLen));
             break;
         case DGMLEN:
             if(IPH_IS_VALID(p)){
                 // XXX might cause a bug when IPv6 is printed?
-                KafkaLog_Puts(kafka, itoa10(ntohs(GET_IPH_LEN(p)),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka, itoa10(ntohs(GET_IPH_LEN(p)),buf,bufLen));
             }
             break;
 
         case TCPSEQ:
             if(p->tcph){
                 // KafkaLog_Print(kafka, "lX%0x",(u_long) ntohl(p->tcph->th_ack)); // hex format
-                KafkaLog_Puts(kafka,itoa16(ntohl(p->tcph->th_seq),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka,itoa16(ntohl(p->tcph->th_seq),buf,bufLen));
             }
             break;
         case TCPACK:
             if(p->tcph){
                 // KafkaLog_Print(kafka, "0x%lX",(u_long) ntohl(p->tcph->th_ack));
-                KafkaLog_Puts(kafka,itoa16(ntohl(p->tcph->th_ack),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka,itoa16(ntohl(p->tcph->th_ack),buf,bufLen));
             }
             break;
         case TCPLEN:
             if(p->tcph){
-                KafkaLog_Puts(kafka, itoa10(TCP_OFFSET(p->tcph) << 2,buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka, itoa10(TCP_OFFSET(p->tcph) << 2,buf,bufLen));
             }
             break;
         case TCPWINDOW:
             if(p->tcph){
                 //KafkaLog_Print(kafka, "0x%X",ntohs(p->tcph->th_win));  // hex format
-                KafkaLog_Puts(kafka,itoa16(ntohs(p->tcph->th_win),buf_uint64,bufLen_uint64));
+                KafkaLog_Puts(kafka,itoa16(ntohs(p->tcph->th_win),buf,bufLen));
             }
             break;
         case TCPFLAGS:
@@ -998,7 +1000,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             break;
     };
 
-    return kafka->pos-initial_buffer_pos; /* if we have write something */
+    return KafkaLog_Tell(kafka)-initial_buffer_pos; /* if we have write something */
 }
 
 /*
@@ -1025,7 +1027,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSO
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Logging JSON Alert data\n"););
     KafkaLog_Putc(kafka,'{');
     for(iter=jsonData->outputTemplate;iter;iter=iter->next){
-        const int initial_pos = kafka->pos;
+        const int initial_pos = KafkaLog_Tell(kafka);
         if(iter!=jsonData->outputTemplate)
             KafkaLog_Puts(kafka,JSON_FIELDS_SEPARATOR);
 
@@ -1039,8 +1041,12 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSO
         if(iter->templateElement->printFormat==stringFormat)
             KafkaLog_Putc(kafka,'"');
 
-        if(0==writed)
+        if(0==writed){
+            #ifdef HAVE_LIBRDKAFKA
             kafka->pos = initial_pos; // Revert the insertion of empty element */
+            #endif
+            kafka->textLog->pos = initial_pos;
+        }
     }
 
     KafkaLog_Putc(kafka,'}');

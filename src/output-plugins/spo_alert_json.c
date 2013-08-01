@@ -68,6 +68,7 @@
 #include "sfutil/sf_textlog.h"
 #include "rbutil/rb_kafka.h"
 #include "rbutil/rb_numstrpair_list.h"
+#include "rbutil/rb_pointers.h"
 #include "errno.h"
 #include "signal.h"
 #include "log_text.h"
@@ -77,7 +78,7 @@
 #endif // HAVE_GEOIP
 
 
-#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,sensor_name,sig_generator,sig_id,sig_rev,priority,classification,msg,payload,proto,proto_id,src,src_str,src_name,src_net,src_net_name,dst_name,dst_str,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,type,sensor_name,domain,domain_id,sig_generator,sig_id,sig_rev,priority,classification,msg,payload,proto,proto_id,src,src_str,src_name,src_net,src_net_name,dst_name,dst_str,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"
@@ -99,6 +100,9 @@ typedef enum{
     SENSOR_ID_SNORT,
     SENSOR_ID,
     SENSOR_NAME,
+    DOMAIN,
+    DOMAIN_ID,
+    TYPE,
     SIG_GENERATOR,
     SIG_ID,
     SIG_REV,
@@ -188,8 +192,8 @@ typedef struct _AlertJSONData
     TemplateElementsList * outputTemplate;
     AlertJSONConfig *config;
     Number_str_assoc * hosts, *nets, *services, *protocols, *vlans;
-    uint64_t sensor_id;
-    char * sensor_name;
+    uint32_t sensor_id,domain_id;
+    char * sensor_name, *sensor_type,*domain;
 #ifdef HAVE_GEOIP
     GeoIP *gi;
 #endif
@@ -201,6 +205,9 @@ static AlertJSONTemplateElement template[] = {
     {SENSOR_ID_SNORT,"sensor_id_snort","sensor_id_snort",numericFormat,"0"},
     {SENSOR_ID,"sensor_id","sensor_id",numericFormat,"0"},
     {SENSOR_NAME,"sensor_name","sensor_name",stringFormat,"-"},
+    {DOMAIN,"domain","domain",stringFormat,"-"},
+    {DOMAIN_ID,"domain_id","domain_id",numericFormat,"-"},
+    {TYPE,"type","type",stringFormat,"-"},
     {SIG_GENERATOR,"sig_generator","sig_generator",numericFormat,"0"},
     {SIG_ID,"sig_id","sig_id",numericFormat,"0"},
     {SIG_REV,"sig_rev","rev",numericFormat,"0"},
@@ -332,7 +339,7 @@ static void AlertJSONInit(char *args)
  * id  ::= number
  * Arguments: args => argument list
  *
- * Returns: void function
+ * Returns: New filled AlertJSONData struct.
  */
 static AlertJSONData *AlertJSONParseArgs(char *args)
 {
@@ -361,38 +368,78 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     for (i = 0; i < num_toks; i++)
     {
         const char* tok = toks[i];
-
-        if ( !strncasecmp(tok, "filename=",strlen("filename=")) && !filename){
-            filename = SnortStrdup(tok+strlen("filename="));
-        }else if(!strncasecmp(tok,"params=",strlen("params=")) && !data->jsonargs){
-            data->jsonargs = SnortStrdup(tok+strlen("params="));
-        }else if(!strncasecmp(tok, KAFKA_PROT,strlen(KAFKA_PROT)) && !kafka_str){
-            kafka_str = SnortStrdup(tok);
-        }else if ( !strncasecmp("default", tok,strlen("default")) && !data->jsonargs){
-            data->jsonargs = SnortStrdup(DEFAULT_JSON);
-        }else if(!strncasecmp(tok,"sensor_name=",strlen("sensor_name=")) && !data->sensor_name){
-			data->sensor_name = SnortStrdup(tok+strlen("sensor_name="));
-		}else if(!strncasecmp(tok,"sensor_id=",strlen("sensor_id="))){
+        if ( !strncasecmp(tok, "filename=",strlen("filename=")) && !filename)
+        {
+            RB_IF_CLEAN(filename,filename = SnortStrdup(tok+strlen("filename=")),"%s(%i) param setted twice\n",tok,i);
+        }
+        else if(!strncasecmp(tok,"params=",strlen("params=")) && !data->jsonargs)
+        {
+            RB_IF_CLEAN(data->jsonargs,data->jsonargs = SnortStrdup(tok+strlen("params=")),"%s(%i) param setted twice\n",tok,i);
+        }
+        else if(!strncasecmp(tok, KAFKA_PROT,strlen(KAFKA_PROT)) && !kafka_str)
+        {
+            RB_IF_CLEAN(kafka_str,kafka_str = SnortStrdup(tok),"%s(%i) param setted twice\n",tok,i);
+        }
+        else if ( !strncasecmp(tok, "default", strlen("default")) && !data->jsonargs)
+        {
+            RB_IF_CLEAN(data->jsonargs,data->jsonargs = SnortStrdup(DEFAULT_JSON),"%s(%i) param setted twice\n",tok,i);
+        }
+        else if(!strncasecmp(tok,"sensor_name=",strlen("sensor_name=")) && !data->sensor_name)
+        {
+			RB_IF_CLEAN(data->sensor_name,data->sensor_name = SnortStrdup(tok+strlen("sensor_name=")),"%s(%i) param setted twice\n",tok,i);
+		}
+        else if(!strncasecmp(tok,"sensor_id=",strlen("sensor_id=")))
+        {
 	        data->sensor_id = atol(tok + strlen("sensor_id="));
-        }else if(!strncasecmp(tok,"hosts=",strlen("hosts="))){
-            hostsListPath = SnortStrdup(tok+strlen("hosts="));
-        }else if(!strncasecmp(tok,"networks=",strlen("networks="))){
-            networksPath = SnortStrdup(tok+strlen("networks="));
-        }else if(!strncasecmp(tok,"services=",strlen("services="))){
-            servicesPath = SnortStrdup(tok+strlen("services="));
-        }else if(!strncasecmp(tok,"protocols=",strlen("protocols="))){
-            protocolsPath = SnortStrdup(tok+strlen("protocols="));
-        }else if(!strncasecmp(tok,"vlans=",strlen("vlans"))){
-            vlansPath = SnortStrdup(tok+strlen("vlans="));
-        }else if(!strncasecmp(tok,"start_partition=",strlen("start_partition="))){
+        }
+        else if(!strncasecmp(tok,"sensor_type=",strlen("sensor_type=")))
+        {
+            RB_IF_CLEAN(data->sensor_type,data->sensor_type = SnortStrdup(tok + strlen("sensor_type=")),"%s(%i) param setted twice.\n",tok,i);
+        }
+        else if(!strncasecmp(tok,"hosts=",strlen("hosts=")))
+        {
+            RB_IF_CLEAN(hostsListPath, hostsListPath = SnortStrdup(tok+strlen("hosts=")),"%s(%i) param setted twice.\n",tok,i);
+        }
+        else if(!strncasecmp(tok,"networks=",strlen("networks=")))
+        {
+            RB_IF_CLEAN(networksPath,networksPath = SnortStrdup(tok+strlen("networks=")),"%s(%i) param setted twice.\n",tok,i);
+        }
+        else if(!strncasecmp(tok,"services=",strlen("services=")))
+        {
+            RB_IF_CLEAN(servicesPath, servicesPath = SnortStrdup(tok+strlen("services=")),"%s(%i) param setted twice.\n",tok,i);
+        }
+        else if(!strncasecmp(tok,"protocols=",strlen("protocols=")))
+        {
+            RB_IF_CLEAN(protocolsPath, protocolsPath = SnortStrdup(tok+strlen("protocols=")),"%s(%i) param setted twice.\n",tok,i);
+        }
+        else if(!strncasecmp(tok,"vlans=",strlen("vlans")))
+        {
+            RB_IF_CLEAN(vlansPath, vlansPath = SnortStrdup(tok+strlen("vlans=")),"%s(%i) param setted twice.\n",tok,i);
+        }
+        else if(!strncasecmp(tok,"start_partition=",strlen("start_partition=")))
+        {
             start_partition = end_partition = atol(tok+strlen("start_partition="));
-        }else if(!strncasecmp(tok,"end_partition=",strlen("end_partition="))){
+        }
+        else if(!strncasecmp(tok,"end_partition=",strlen("end_partition=")))
+        {
             end_partition = atol(tok+strlen("end_partition="));
+        }
+        else if(!strncasecmp(tok,"domain=",strlen("domain=")))
+        {
+            RB_IF_CLEAN(data->domain, data->domain = SnortStrdup(tok+strlen("domain=")),"%s(%i) param setted twice.\n",tok,i);
+        }
+        else if(!strncasecmp(tok,"domain_id=",strlen("domain_id=")))
+        {
+            data->domain_id = atol(tok+strlen("domain_id="));
+        }
         #ifdef HAVE_GEOIP
-        }else if(!strncasecmp(tok,"geoip=",strlen("geoip="))){
-            geoIP_path = SnortStrdup(tok+strlen("geoip="));
+        else if(!strncasecmp(tok,"geoip=",strlen("geoip=")))
+        {
+            RB_IF_CLEAN(geoIP_path,geoIP_path = SnortStrdup(tok+strlen("geoip=")),"%s(%i) param setted twice.\n",tok,i);
+        }
         #endif // HAVE_GEOIP
-        }else{
+        else
+        {
 			FatalError("alert_json: Cannot parse %s(%i): %s\n",
 			file_name, file_line, tok);
         }
@@ -647,7 +694,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         };
 
 #ifdef HAVE_GEOIP
-        if(ip.family == AF_INET6){
+        if(IPH_IS_VALID(p) && ip.family == AF_INET6){
             switch(templateElement->id){
                 case SRC_COUNTRY:
                 case SRC_COUNTRY_CODE:
@@ -662,6 +709,9 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
 #endif
     }
 
+    #ifdef DEBUG
+    if(NULL==templateElement) FatalError("TemplateElement was not setted (File %s line %d)\n.",__FILE__,__LINE__);
+    #endif
     switch(templateElement->id){
         case TIMESTAMP:
             KafkaLog_Puts(kafka,itoa10(p->pkth->ts.tv_sec, buf, bufLen));
@@ -674,6 +724,15 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             break;
         case SENSOR_NAME:
             KafkaLog_Puts(kafka,jsonData->sensor_name);
+            break;
+        case DOMAIN:
+            if(jsonData->domain) KafkaLog_Puts(kafka,jsonData->domain);
+            break;
+        case DOMAIN_ID:
+            KafkaLog_Puts(kafka,itoa10(jsonData->domain_id,buf,bufLen));
+            break;
+        case TYPE:
+            if(jsonData->sensor_type) KafkaLog_Puts(kafka,jsonData->sensor_type);
             break;
         case SIG_GENERATOR:
             if(event != NULL)
@@ -996,7 +1055,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             break;
 
         default:
-            FatalError("Template id %d not found (line %d)\n",templateElement->id,__LINE__);
+            FatalError("Template %s(%d) not found\n",templateElement->templateName,templateElement->id);
             break;
     };
 
@@ -1045,7 +1104,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSO
             #ifdef HAVE_LIBRDKAFKA
             kafka->pos = initial_pos; // Revert the insertion of empty element */
             #endif
-            kafka->textLog->pos = initial_pos;
+            if(kafka->textLog) kafka->textLog->pos = initial_pos;
         }
     }
 

@@ -903,7 +903,9 @@ char *inettoa(unsigned long ip)
 
     ips.s_addr=ip;
     toggle=(toggle+1)&3;
+    #ifndef SUP_IP6 /* redborder change: if not, the project don't compile. remove it. */
     strncpy(addr[toggle],inet_ntoa(ips),18);
+    #endif /* redborder change */
     return addr[toggle];
 }
 #endif

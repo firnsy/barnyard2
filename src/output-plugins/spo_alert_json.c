@@ -691,7 +691,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 sfip_set_ip(&ip,GET_SRC_ADDR(p));
 #else
                 {
-                    int ipv4 = ntohl(GET_SRC_ADDR(p).s_addr);
+                    int ipv4 = GET_SRC_ADDR(p).s_addr;
                     sfip_set_raw(&ip,&ipv4,AF_INET);
                 }
 #endif
@@ -710,7 +710,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 sfip_set_ip(&ip,GET_DST_ADDR(p));
 #else
                 {
-                    int ipv4 = ntohl(GET_DST_ADDR(p).s_addr);
+                    int ipv4 = GET_DST_ADDR(p).s_addr;
                     sfip_set_raw(&ip,&ipv4,AF_INET);
                 }
 #endif
@@ -761,7 +761,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             if(jsonData->sensor_type) KafkaLog_Puts(kafka,jsonData->sensor_type);
             break;
         case ACTION:
-            if(str_aux = actionOfEvent(event,event_type))
+            if((str_aux = actionOfEvent(event,event_type)))
                 KafkaLog_Puts(kafka,str_aux);
             break;
         case SIG_GENERATOR:

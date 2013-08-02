@@ -75,7 +75,7 @@ static void KafkaLog_Close (rd_kafka_t* handle)
     if ( !handle ) return;
 
     /* Wait for messaging to finish. */
-    while (rd_kafka_outq_len(handle) > 0)
+    while (rd_kafka_outq_len(handle) > 0 && handle->rk_state!=RD_KAFKA_STATE_DOWN)
         usleep(50000);
 
     /* Since there is no ack for produce messages in 0.7 

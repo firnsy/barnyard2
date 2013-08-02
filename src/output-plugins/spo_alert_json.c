@@ -77,8 +77,7 @@
 #include "GeoIP.h"
 #endif // HAVE_GEOIP
 
-
-#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,type,sensor_name,domain,domain_id,sig_generator,sig_id,sig_rev,priority,classification,msg,payload,proto,proto_id,src,src_str,src_name,src_net,src_net_name,dst_name,dst_str,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,type,sensor_name,domain,domain_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,proto,proto_id,src,src_str,src_name,src_net,src_net_name,dst_name,dst_str,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"
@@ -107,6 +106,7 @@ typedef enum{
     SIG_ID,
     SIG_REV,
     PRIORITY,
+    ACTION,
     CLASSIFICATION,
     MSG,
     PAYLOAD,
@@ -208,6 +208,7 @@ static AlertJSONTemplateElement template[] = {
     {DOMAIN,"domain","domain",stringFormat,"-"},
     {DOMAIN_ID,"domain_id","domain_id",numericFormat,"-"},
     {TYPE,"type","type",stringFormat,"-"},
+    {ACTION,"action","action",stringFormat,"-"},
     {SIG_GENERATOR,"sig_generator","sig_generator",numericFormat,"0"},
     {SIG_ID,"sig_id","sig_id",numericFormat,"0"},
     {SIG_REV,"sig_rev","rev",numericFormat,"0"},
@@ -623,6 +624,30 @@ static inline void printHWaddr(KafkaLog *kafka,const uint8_t *addr,char * buf,co
     }
 }
 
+static const char * actionOfEvent(void * voidevent,uint32_t event_type){
+    #define EVENT_IMPACT_FLAG(e) e->impact_flag
+    #define EVENT_BLOCKED(e)     e->blocked
+    #define ACTION_OF_EVENT(e) \
+        if(EVENT_IMPACT_FLAG(event)==0 && EVENT_BLOCKED(event)==0) return "alert";\
+        if(EVENT_IMPACT_FLAG(event)==32 && EVENT_BLOCKED(event)==1) return "drop";\
+        if(event==NULL && event_type ==0) return "log"
+
+    switch(event_type){
+        case 7:
+        {
+            Unified2IDSEvent_legacy *event = (Unified2IDSEvent_legacy *)voidevent;
+            ACTION_OF_EVENT(e);
+        }
+        case 104:
+        {
+            Unified2IDSEvent *event = (Unified2IDSEvent *)voidevent;
+            ACTION_OF_EVENT(e);
+        }
+        /* IPV6 pending */
+    };
+    return NULL;
+}
+
 /*
  * Function: PrintElementWithTemplate(Packet *, char *, FILE *, char *, numargs const int)
  *
@@ -642,6 +667,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
   /*char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];*/
     char buf[sizeof "0000:0000:0000:0000:0000:0000:0000:0000"];
     const size_t bufLen = sizeof buf;
+    const char * str_aux=NULL;
     KafkaLog * kafka = jsonData->kafka;
     sfip_t ip;
     const int initial_buffer_pos = KafkaLog_Tell(jsonData->kafka);
@@ -733,6 +759,10 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             break;
         case TYPE:
             if(jsonData->sensor_type) KafkaLog_Puts(kafka,jsonData->sensor_type);
+            break;
+        case ACTION:
+            if(str_aux = actionOfEvent(event,event_type))
+                KafkaLog_Puts(kafka,str_aux);
             break;
         case SIG_GENERATOR:
             if(event != NULL)
@@ -1026,13 +1056,13 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case TCPSEQ:
             if(p->tcph){
                 // KafkaLog_Print(kafka, "lX%0x",(u_long) ntohl(p->tcph->th_ack)); // hex format
-                KafkaLog_Puts(kafka,itoa16(ntohl(p->tcph->th_seq),buf,bufLen));
+                KafkaLog_Puts(kafka,itoa10(ntohl(p->tcph->th_seq),buf,bufLen));
             }
             break;
         case TCPACK:
             if(p->tcph){
                 // KafkaLog_Print(kafka, "0x%lX",(u_long) ntohl(p->tcph->th_ack));
-                KafkaLog_Puts(kafka,itoa16(ntohl(p->tcph->th_ack),buf,bufLen));
+                KafkaLog_Puts(kafka,itoa10(ntohl(p->tcph->th_ack),buf,bufLen));
             }
             break;
         case TCPLEN:
@@ -1043,7 +1073,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case TCPWINDOW:
             if(p->tcph){
                 //KafkaLog_Print(kafka, "0x%X",ntohs(p->tcph->th_win));  // hex format
-                KafkaLog_Puts(kafka,itoa16(ntohs(p->tcph->th_win),buf,bufLen));
+                KafkaLog_Puts(kafka,itoa10(ntohs(p->tcph->th_win),buf,bufLen));
             }
             break;
         case TCPFLAGS:

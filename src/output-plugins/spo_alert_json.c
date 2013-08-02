@@ -620,6 +620,8 @@ static inline void printHWaddr(KafkaLog *kafka,const uint8_t *addr,char * buf,co
     for(i=0;i<6;++i){
         if(i>0)
             KafkaLog_Putc(kafka,':');
+        if(addr[i]<0x10)
+            KafkaLog_Putc(kafka,'0');
         KafkaLog_Puts(kafka, itoa16(addr[i],buf,bufLen));
     }
 }

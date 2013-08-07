@@ -73,9 +73,14 @@ typedef struct _KafkaLog
     rd_kafka_t * handler;
     char* broker;
     char * topic;
+    #if RD_KAFKA_VERSION == 0x00080000
+    rd_kafka_topic_t *rkt;
+    #endif
+    #if RD_KAFKA_VERSION < 0x00080000
     int start_partition;
     int end_partition;
     int actual_partition;
+    #endif
 
 
 /* buffer attributes: */

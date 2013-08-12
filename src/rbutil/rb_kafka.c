@@ -53,29 +53,51 @@
 
 #define KAFKA_MESSAGES_QUEUE_MAXLEN (25*1024*1024)
 
+
+#ifdef HAVE_LIBRDKAFKA
+
+/*-------------------------------------------------------------------
+ * msg_delivered: just a debug function. See rdkafka library example
+ *-------------------------------------------------------------------
+ */
+static inline void msg_delivered (rd_kafka_t *rk,
+               void *payload, size_t len,
+               int error_code,
+               void *opaque, void *msg_opaque) {
+
+    if (error_code)
+        fprintf(stderr,"%% Message delivery failed: %s\n",
+               rd_kafka_err2str(rk, error_code));
+    else
+        fprintf(stderr,"%% Message delivered (%zd bytes)\n", len);
+}
+
 /*-------------------------------------------------------------------
  * TextLog_Open/Close: open/close associated log file
  *-------------------------------------------------------------------
  */
-#ifdef HAVE_LIBRDKAFKA
+#if RD_KAFKA_VERSION == 0x00080000
+rd_kafka_t* KafkaLog_Open ()
+#else
 rd_kafka_t* KafkaLog_Open (const char* brokers)
+#endif /* RD_KAFKA_VERSION */
 {
-    if ( !brokers ) return NULL;
     #if RD_KAFKA_VERSION == 0x00080000
+
     char errstr[256];
     rd_kafka_conf_t conf;
     rd_kafka_defaultconf_set(&conf);
+    conf.producer.dr_cb = msg_delivered; /* debug */
     rd_kafka_t * kafka_handle = rd_kafka_new(RD_KAFKA_PRODUCER, &conf, errstr, sizeof(errstr));
+    /*rd_kafka_set_log_level (kafka_handle, LOG_DEBUG);*/
     if(NULL==kafka_handle)
     {
         perror("kafka_new producer");
         FatalError("Failed to create new producer: %s\n",errstr);
     }
-    if (rd_kafka_brokers_add(kafka_handle, brokers) == 0) 
-    {
-        FatalError("Kafka: No valid brokers specified\n");
-    }
+
     #else
+    if ( !brokers ) return NULL;
     rd_kafka_t * kafka_handle = rd_kafka_new(RD_KAFKA_PRODUCER, brokers, NULL);
     if(NULL == kafka_handle)
     {
@@ -84,7 +106,9 @@ rd_kafka_t* KafkaLog_Open (const char* brokers)
     }else{
         kafka_handle->rk_conf.producer.max_outq_msg_cnt = KAFKA_MESSAGES_QUEUE_MAXLEN;
     }
+
     #endif
+
     return kafka_handle;
 }
 
@@ -122,11 +146,11 @@ static void KafkaLog_Close (rd_kafka_t* handle)
  */
 KafkaLog* KafkaLog_Init (
     const char* broker, unsigned int bufLen, const char * topic, const int start_partition, 
-    const int end_partition, bool open /* @TODO Delete in 0.8 */,  const char*filename
+    const int end_partition, bool open,  const char*filename
 ) {
     KafkaLog* this;
 
-    this = (KafkaLog*)malloc(sizeof(KafkaLog));
+    this = (KafkaLog*)SnortAlloc(sizeof(KafkaLog));
     #ifdef HAVE_LIBRDKAFKA
     if(this){
         this->buf = malloc(sizeof(char)*bufLen);
@@ -140,19 +164,10 @@ KafkaLog* KafkaLog_Init (
     }
     this->broker = broker ? SnortStrdup(broker) : NULL;
     this->topic = topic ? SnortStrdup(topic) : NULL;
-    this->handler = 
-        #if RD_KAFKA_VERSION == 0x00080000
-        KafkaLog_Open(this->broker); /* don't have any sense dthe delayed open */
-        #else
-        open ? KafkaLog_Open(this->broker):NULL;
-        #endif
+    #ifndef RD_KAFKA_VERSION 
+    this->handler = open ? KafkaLog_Open(this->broker):NULL; /* will always start in Flush */
+    #endif
     
-
-
-    rd_kafka_topic_conf_t topic_conf;
-    rd_kafka_topic_defaultconf_set(&topic_conf);
-    this->rkt = rd_kafka_topic_new(this->handler, topic, &topic_conf);
-
     #if RD_KAFKA_VERSION < 0x00080000
 
     this->start_partition = this->actual_partition = start_partition;
@@ -195,6 +210,7 @@ void KafkaLog_Term (KafkaLog* this)
 }
 
 
+
 /*-------------------------------------------------------------------
  * KafkaLog_Flush: send buffered stream to a kafka server 
  *-------------------------------------------------------------------
@@ -205,13 +221,34 @@ bool KafkaLog_Flush(KafkaLog* this)
     if ( !this->pos ) return FALSE;
 
     // In daemon mode, we must start the handler here
-    if(this->handler==NULL && BcDaemonMode()){
-	this->handler = KafkaLog_Open(this->broker);
-	if(!this->handler)
-	   FatalError("There was not possible to solve %s direction",this->broker);
+    if(this->handler==NULL && this->broker && this->topic)
+    {
+#if RD_KAFKA_VERSION == 0x00080000
+
+        this->handler = KafkaLog_Open();
+        if(!this->handler)
+            FatalError("It was not possible create a kafka handler\n",this->broker);
+        rd_kafka_topic_conf_t topic_conf;
+        rd_kafka_topic_defaultconf_set(&topic_conf);
+        this->rkt = rd_kafka_topic_new(this->handler, this->topic, &topic_conf);
+	if(NULL==this->rkt)
+            FatalError("It was not possible create a kafka topic %s\n",this->topic);
+        if (rd_kafka_brokers_add(this->handler, this->broker) == 0) 
+            FatalError("Kafka: No valid brokers specified in %s\n",this->broker);
+
+#else
+
+        this->handler = KafkaLog_Open(this->broker);
+        if(!this->handler)
+           FatalError("There was not possible to solve %s direction",this->broker);
+
+#endif /* RD_KAFKA_VERSION*/
     }
 
+    /* rd_kafka_dump(stdout,this->handler); */
+
     #if RD_KAFKA_VERSION == 0x00080000
+
 
     rd_kafka_produce(this->rkt, RD_KAFKA_PARTITION_UA,
                      RD_KAFKA_MSG_F_FREE,
@@ -225,7 +262,9 @@ bool KafkaLog_Flush(KafkaLog* this)
                      NULL);
     /* Poll to handle delivery reports */
     rd_kafka_poll(this->handler, 10);
+
     #else
+
     this->actual_partition++;
     if(this->actual_partition>this->end_partition)
         this->actual_partition=this->start_partition;
@@ -234,11 +273,14 @@ bool KafkaLog_Flush(KafkaLog* this)
         free(this->buf);
     else
         rd_kafka_produce(this->handler, this->topic, this->actual_partition, RD_KAFKA_OP_F_FREE, this->buf, this->pos);
+
     #endif
+
     this->buf = SnortAlloc(sizeof(char)*this->start_bufLen);
     this->bufLen = this->start_bufLen;
 
     #endif /* HAVE_LIBRDKAFKA */
+
     if(this->textLog) TextLog_Flush(this->textLog);
 
     KafkaLog_Reset(this);

@@ -544,6 +544,8 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
             KafkaLog_Term(data->kafka);
         free(data->jsonargs);
         free(data->sensor_name);
+        free(data->sensor_type);
+        free(data->domain);
         freeNumberStrAssocList(data->hosts);
         freeNumberStrAssocList(data->nets);
         freeNumberStrAssocList(data->services);

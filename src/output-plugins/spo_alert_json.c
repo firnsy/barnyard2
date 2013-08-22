@@ -77,7 +77,7 @@
 #include "GeoIP.h"
 #endif // HAVE_GEOIP
 
-#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,type,sensor_name,domain,domain_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,proto,proto_id,src,src_str,src_name,src_net,src_net_name,dst_name,dst_str,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,type,sensor_name,domain,domain_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,proto,proto_name,src,src_asnum,src_name,src_net,src_net_name,dst_name,dst_asnum,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"
@@ -216,8 +216,8 @@ static AlertJSONTemplateElement template[] = {
     {CLASSIFICATION,"classification","classification",stringFormat,"-"},
     {MSG,"msg","msg",stringFormat,"-"},
     {PAYLOAD,"payload","payload",stringFormat,"-"},
-    {PROTO,"proto","proto",stringFormat,"-"},
-    {PROTO_ID,"proto_id","proto_id",numericFormat,"0"},
+    {PROTO,"proto_name","proto_name",stringFormat,"-"},
+    {PROTO_ID,"proto","proto",numericFormat,"0"},
     {ETHSRC,"ethsrc","ethsrc",stringFormat,"-"},
     {ETHDST,"ethdst","ethdst",stringFormat,"-"},
     {ETHTYPE,"ethtype","ethtype",numericFormat,"0"},
@@ -236,8 +236,8 @@ static AlertJSONTemplateElement template[] = {
     {SRCPORT_NAME,"srcport_name","srcport_name",stringFormat,"-"},
     {DSTPORT,"dstport","dstport",numericFormat,"0"},
     {DSTPORT_NAME,"dstport_name","dstport_name",stringFormat,"-"},
-    {SRC_TEMPLATE_ID,"src","src",numericFormat,"0"}, 
-    {SRC_STR,"src_str","src_str",stringFormat,"-"},
+    {SRC_TEMPLATE_ID,"src_asnum","src_asnum",numericFormat,"0"}, 
+    {SRC_STR,"src","src",stringFormat,"-"},
     {SRC_NAME,"src_name","src_name",stringFormat,"-"},
     {SRC_NET,"src_net","src_net",stringFormat,"0.0.0.0/0"},
     {SRC_NET_NAME,"src_net_name","src_net_name",stringFormat,"0.0.0.0/0"},

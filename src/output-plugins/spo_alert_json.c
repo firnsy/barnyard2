@@ -77,7 +77,8 @@
 #include "GeoIP.h"
 #endif // HAVE_GEOIP
 
-#define DEFAULT_JSON "timestamp,sensor_id,sensor_id_snort,type,sensor_name,domain,domain_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,proto,proto_name,src,src_asnum,src_name,src_net,src_net_name,dst_name,dst_asnum,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+// Not including: sensor_id_snort
+#define DEFAULT_JSON "timestamp,sensor_id,type,sensor_name,domain,domain_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,proto,proto_name,src,src_asnum,src_name,src_net,src_net_name,dst_name,dst_asnum,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"

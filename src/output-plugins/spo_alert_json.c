@@ -77,8 +77,14 @@
 #include "GeoIP.h"
 #endif // HAVE_GEOIP
 
-// Not including: sensor_id_snort
-#define DEFAULT_JSON "timestamp,sensor_id,type,sensor_name,domain,domain_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,proto,proto_name,src,src_asnum,src_name,src_net,src_net_name,dst_name,dst_asnum,dst_net,dst_net_name,src_country,dst_country,src_country_code,dst_country_code,srcport,dst,dstport,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+// Not including: sensor_id_snort.
+// @TODO find a more elegant way
+#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain,domain_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,proto,proto_name,src,src_name,src_net,src_net_name,dst,dst_name,dst_net,dst_net_name,srcport,srcport_name,dstport,dstport_name,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#ifdef HAVE_GEOIP
+#define DEFAULT_JSON DEFAULT_JSON_0 ",src_country,dst_country,src_country_code,dst_country_code" /* link with previous string */
+#else
+#define DEFAULT_JSON DEFAULT_JSON_0
+#endif
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"
@@ -100,6 +106,7 @@ typedef enum{
     SENSOR_ID_SNORT,
     SENSOR_ID,
     SENSOR_NAME,
+    SENSOR_IP,
     DOMAIN,
     DOMAIN_ID,
     TYPE,
@@ -194,7 +201,7 @@ typedef struct _AlertJSONData
     AlertJSONConfig *config;
     Number_str_assoc * hosts, *nets, *services, *protocols, *vlans;
     uint32_t sensor_id,domain_id;
-    char * sensor_name, *sensor_type,*domain;
+    char * sensor_name, *sensor_type,*domain,*sensor_ip;
 #ifdef HAVE_GEOIP
     GeoIP *gi;
 #endif
@@ -205,6 +212,7 @@ static AlertJSONTemplateElement template[] = {
     {TIMESTAMP,"timestamp","timestamp",numericFormat,"0"},
     {SENSOR_ID_SNORT,"sensor_id_snort","sensor_id_snort",numericFormat,"0"},
     {SENSOR_ID,"sensor_id","sensor_id",numericFormat,"0"},
+    {SENSOR_IP,"sensor_ip","sensor_ip",stringFormat,"0"},
     {SENSOR_NAME,"sensor_name","sensor_name",stringFormat,"-"},
     {DOMAIN,"domain","domain",stringFormat,"-"},
     {DOMAIN_ID,"domain_id","domain_id",numericFormat,"-"},
@@ -242,9 +250,9 @@ static AlertJSONTemplateElement template[] = {
     {SRC_NAME,"src_name","src_name",stringFormat,"-"},
     {SRC_NET,"src_net","src_net",stringFormat,"0.0.0.0/0"},
     {SRC_NET_NAME,"src_net_name","src_net_name",stringFormat,"0.0.0.0/0"},
-    {DST_TEMPLATE_ID,"dst","dst",numericFormat,"0"}, 
+    {DST_TEMPLATE_ID,"dst_asnum","dst_asnum",stringFormat,"0"}, 
     {DST_NAME,"dst_name","dst_name",stringFormat,"-"},
-    {DST_STR,"dst_str","dst_str",stringFormat,"-"},
+    {DST_STR,"dst","dst",stringFormat,"-"},
     {DST_NET,"dst_net","dst_net",stringFormat,"0.0.0.0/0"},
     {DST_NET_NAME,"dst_net_name","dst_net_name",stringFormat,"0.0.0.0/0"},
     {ICMPTYPE,"icmptype","icmptype",numericFormat,"0"},
@@ -393,6 +401,10 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         else if(!strncasecmp(tok,"sensor_id=",strlen("sensor_id=")))
         {
 	        data->sensor_id = atol(tok + strlen("sensor_id="));
+        }
+        else if(!strncasecmp(tok,"sensor_ip=",strlen("sensor_ip=")))
+        {
+	        data->sensor_ip = strdup(tok + strlen("sensor_ip="));
         }
         else if(!strncasecmp(tok,"sensor_type=",strlen("sensor_type=")))
         {
@@ -545,6 +557,7 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
             KafkaLog_Term(data->kafka);
         free(data->jsonargs);
         free(data->sensor_name);
+        free(data->sensor_ip);
         free(data->sensor_type);
         free(data->domain);
         freeNumberStrAssocList(data->hosts);
@@ -753,6 +766,9 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case SENSOR_ID:
             KafkaLog_Puts(kafka,itoa10(jsonData->sensor_id,buf,bufLen));
             break;
+        case SENSOR_IP:
+            if(jsonData->sensor_ip) KafkaLog_Puts(kafka,jsonData->sensor_ip);
+            break;
         case SENSOR_NAME:
             KafkaLog_Puts(kafka,jsonData->sensor_name);
             break;
@@ -931,6 +947,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                     break;
                 };
             }
+            break;
         case SRCPORT:
         case DSTPORT:
             if(IPH_IS_VALID(p))

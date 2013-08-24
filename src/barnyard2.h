@@ -63,7 +63,7 @@
 #define VER_MAJOR	"2"
 #define VER_MINOR	"1"
 #define VER_REVISION	"13"
-#define VER_BUILD	"327"
+#define VER_BUILD	"334"
 
 #define STD_BUF  1024
 
@@ -132,7 +132,8 @@
 
 
 /* SIDMAP V2 */
-#define SIDMAPV2STRING "v2\n"
+#define SIDMAPV1STRING "v1"
+#define SIDMAPV2STRING "v2"
 #define SIDMAPV1 0x01
 #define SIDMAPV2 0x02
 /* SIDMAP V2 */

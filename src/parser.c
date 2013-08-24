@@ -284,8 +284,12 @@ Barnyard2Config * ParseBarnyard2Conf(void)
     /* Need to set this for plugin configurations since they're using
      * lists of callbacks */
     barnyard2_conf_for_parsing = bc;
+    
 
     InitParser();
+
+    /* By default */
+    bc->alert_on_each_packet_in_stream_flag=1;
 
     /* We're not going to parse rules on the first pass */
     parse_rules = 0;

@@ -106,8 +106,31 @@ u_int32_t CacheSynchronize(DatabaseData *data);
 void MasterCacheFlush(DatabaseData *data,u_int32_t flushFlag);
 /* Destructor */
 
+/* Return largest string lenght */
+inline u_int32_t glsl(char *a,char *b)
+{
+    u_int32_t alen = 0;
+    u_int32_t blen = 0;
+    
+    alen = strlen(a);
+    blen = strlen(b);
+    
+    if(alen > blen)
+    {
+	return alen;
+    }
+    else if(alen < blen)
+    {
+	return blen;
+    }
+    if(alen == blen)
+    {
+	return alen;
+    }
 
-
+    abort();
+    return 0;
+}
 
 #if DEBUG
 u_int32_t file_reference_object_count = 0;
@@ -235,7 +258,9 @@ u_int32_t cacheSignatureLookup(dbSignatureObj *iLookup,cacheSignatureObj *iHead)
 
     while(iHead != NULL)
     {
-	if( (strncasecmp(iLookup->message,iHead->obj.message,strlen(iHead->obj.message)) == 0) &&
+	
+	if( (strncasecmp(iLookup->message,iHead->obj.message,
+			 glsl(iLookup->message,iHead->obj.message)) == 0) &&
             (iLookup->sid == iHead->obj.sid) &&
             (iLookup->gid == iHead->obj.gid) &&
             (iLookup->rev == iHead->obj.rev))
@@ -277,7 +302,8 @@ cacheSignatureObj * cacheSignatureGetObject(dbSignatureObj *iLookup,cacheSignatu
 
     while(iHead != NULL)
     {
-	if( (strncasecmp(iLookup->message,iHead->obj.message,strlen(iHead->obj.message)) == 0) &&
+	if( (strncasecmp(iLookup->message,iHead->obj.message,
+			 glsl(iLookup->message,iHead->obj.message)) == 0) &&
             (iLookup->sid == iHead->obj.sid) &&
             (iLookup->gid == iHead->obj.gid) &&
             (iLookup->rev == iHead->obj.rev))
@@ -420,7 +446,8 @@ u_int32_t cacheReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead,
     
     while(iHead != NULL)
     {
-	if( (strncasecmp(iLookup->ref_tag,iHead->obj.ref_tag,strlen(iLookup->ref_tag)) == 0))
+	if( (strncasecmp(iLookup->ref_tag,iHead->obj.ref_tag,
+			 glsl(iLookup->ref_tag,iHead->obj.ref_tag)) == 0))
 	{
 	    /* Match */
 	    *retRefLookupNode = iHead;
@@ -526,7 +553,8 @@ u_int32_t dbReferenceLookup(dbReferenceObj *iLookup,cacheReferenceObj *iHead)
     
     while(iHead != NULL)
     {
-	if( (strncasecmp(iLookup->ref_tag,iHead->obj.ref_tag,strlen(iHead->obj.ref_tag)) == 0))
+	if( (strncasecmp(iLookup->ref_tag,iHead->obj.ref_tag,
+			 glsl(iLookup->ref_tag,iHead->obj.ref_tag))) == 0)
 	{
             /* Found */
 	    if(iHead->flag & CACHE_INTERNAL_ONLY)
@@ -577,7 +605,8 @@ u_int32_t dbSystemLookup(dbSystemObj *iLookup,cacheSystemObj *iHead)
     
     while(iHead != NULL)
     {
-	if((strncasecmp(iLookup->ref_system_name,iHead->obj.ref_system_name,strlen(iHead->obj.ref_system_name)) == 0))
+	if((strncasecmp(iLookup->ref_system_name,iHead->obj.ref_system_name, 
+			glsl(iLookup->ref_system_name,iHead->obj.ref_system_name))) == 0)
 	{
             /* Found */
 	    if(  iHead->flag & CACHE_INTERNAL_ONLY)
@@ -631,7 +660,8 @@ u_int32_t dbSignatureLookup(dbSignatureObj *iLookup,cacheSignatureObj *iHead)
     
     while(iHead != NULL)
     {
-	if( (strncasecmp(iLookup->message,iHead->obj.message,strlen(iHead->obj.message)) == 0) &&
+	if( (strncasecmp(iLookup->message,iHead->obj.message,
+			 glsl(iLookup->message,iHead->obj.message)) == 0) &&
 	    (iLookup->sid == iHead->obj.sid) &&
 	    (iLookup->gid == iHead->obj.gid))
         {
@@ -718,7 +748,8 @@ u_int32_t dbClassificationLookup(dbClassificationObj *iLookup,cacheClassificatio
     
     while(iHead != NULL)
     {
-	if( (strncasecmp(iLookup->sig_class_name,iHead->obj.sig_class_name,strlen(iHead->obj.sig_class_name)) == 0))
+	if( (strncasecmp(iLookup->sig_class_name,iHead->obj.sig_class_name,
+			 glsl(iLookup->sig_class_name,iHead->obj.sig_class_name)) == 0))
 	{
             /* Found */
 	    if(  iHead->flag & CACHE_INTERNAL_ONLY)
@@ -1810,7 +1841,7 @@ u_int32_t ClassificationPopulateDatabase(DatabaseData  *data,cacheClassification
     {
 	if(cacheHead->flag & CACHE_INTERNAL_ONLY)
 	{
-
+	    
 #if DEBUG
             inserted_classification_object_count++;
 #endif

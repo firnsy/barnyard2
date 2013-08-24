@@ -895,6 +895,7 @@ void FWsamNewStationKey(FWsamStation *station,FWsamPacket *packet)
  * unlike inet_ntoa which keeps only one. This is used for (s)printf's were two IP
  * addresses are printed.
 */
+/*
 char *inettoa(unsigned long ip)
 {
     struct in_addr ips;
@@ -906,6 +907,7 @@ char *inettoa(unsigned long ip)
     strncpy(addr[toggle],inet_ntoa(ips),18);
     return addr[toggle];
 }
+*/
 #endif
 
 

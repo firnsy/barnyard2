@@ -1796,14 +1796,19 @@ static Barnyard2Config * MergeBarnyard2Confs(Barnyard2Config *cmd_line, Barnyard
     if (cmd_line->pid_path[0] != '\0')
         ConfigPidPath(config_file, cmd_line->pid_path);
     
-    if( (config_file->alert_on_each_packet_in_stream_flag == 0) &&
-	(cmd_line->alert_on_each_packet_in_stream_flag == 1))
+    if( config_file->alert_on_each_packet_in_stream_flag == 0)
     {
-	config_file->alert_on_each_packet_in_stream_flag = 0;
+	LogMessage("[INFO]: Alerting on each packet in stream has been disabled by configuration file,\n"
+		   "\tevents will only be outputed for the first matching event/packet,\n"
+		   "\tfurther packets matching previous processed events will be ignored");
     }
-    else
+    else if( cmd_line->alert_on_each_packet_in_stream_flag == 0 )
     {
-	config_file->alert_on_each_packet_in_stream_flag  = cmd_line->alert_on_each_packet_in_stream_flag;
+	LogMessage("[INFO]: Alerting on each packet in stream has been disabled by command line option,\n"
+		   "\tevents will only be outputed for the first matching event/packet,\n"
+		   "\tfurther packets matching previous processed events will be ignored");
+
+	config_file->alert_on_each_packet_in_stream_flag = cmd_line->alert_on_each_packet_in_stream_flag;
     }
     
     config_file->process_new_records_only_flag = cmd_line->process_new_records_only_flag;

@@ -1043,7 +1043,7 @@ void ParseDatabaseArgs(DatabaseData *data)
              !strncasecmp(type, KEYWORD_MSSQL, strlen(KEYWORD_MSSQL))  ||
              !strncasecmp(type, KEYWORD_ORACLE, strlen(KEYWORD_ORACLE)) )
         {
-            ErrorMessage("ERROR database: '%s' support is not compiled into this build of snort\n\n", type);
+            ErrorMessage("ERROR database: '%s' support is not compiled into this build of barnyard2\n\n", type);
             FatalError(FATAL_NO_SUPPORT_1, type, type, type, FATAL_NO_SUPPORT_2);
         }
         else
@@ -1501,14 +1501,14 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 	    }
 	    
 	    /* If we have an "uninitialized signature save it */
-	    if( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev == 0) || 
-		(data->mc.plgSigCompare[x].cacheSigObj->obj.rev < revision) ||
+	    if( ( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev == 0) || 
+		  (data->mc.plgSigCompare[x].cacheSigObj->obj.rev < revision)) ||
 		
 		/* So we have a signature that was inserted, probably a preprocessor signature,
 		   but it has probably never been logged before lets set it as a temporary unassigned signature */
 		((data->mc.plgSigCompare[x].cacheSigObj->obj.rev == revision) && 
-		 (data->mc.plgSigCompare[x].cacheSigObj->obj.class_id == 0  ||
-		  (data->mc.plgSigCompare[x].cacheSigObj->obj.priority_id == 0))))
+		 ( data->mc.plgSigCompare[x].cacheSigObj->obj.class_id == 0  ||
+		   data->mc.plgSigCompare[x].cacheSigObj->obj.priority_id == 0)))
 	    {
 		memcpy(&unInitSig,data->mc.plgSigCompare[x].cacheSigObj,sizeof(cacheSignatureObj));
 		
@@ -3130,7 +3130,7 @@ int CheckDBVersion(DatabaseData * data)
        if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                           "SELECT vseq FROM [schema]")) != SNORT_SNPRINTF_SUCCESS)
        {
-	   return -1;
+	   return 1;
        }
    }
    else
@@ -3146,7 +3146,7 @@ int CheckDBVersion(DatabaseData * data)
 	  if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                              "SELECT vseq FROM `schema`")) != SNORT_SNPRINTF_SUCCESS)
 	  {
-	      return -1;
+	      return 1;
 	  }
       }
       else
@@ -3155,7 +3155,7 @@ int CheckDBVersion(DatabaseData * data)
 	  if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                              "SELECT vseq FROM schema")) != SNORT_SNPRINTF_SUCCESS)
 	  {
-	      return -1;
+	      return 1;
 	  }
       }
    }
@@ -4464,7 +4464,7 @@ void DatabasePrintUsage(void)
     puts(" The configuration I am currently using is MySQL with the database");
     puts(" name of \"snort\". The user \"snortusr@localhost\" has INSERT and SELECT");
     puts(" privileges on the \"snort\" database and does not require a password.");
-    puts(" The following line enables snort to log to this database.\n");
+    puts(" The following line enables barnyard2 to log to this database.\n");
 
     puts(" output database: log, mysql, dbname=snort user=snortusr host=localhost\n");
 }

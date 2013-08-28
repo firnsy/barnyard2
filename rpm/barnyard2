@@ -36,7 +36,7 @@ start() {
 		PIDFILE="/var/lock/subsys/barnyard2-$INT.pid"
 		ARCHIVEDIR="$SNORTDIR/$INT/archive"
 		WALDO_FILE="$SNORTDIR/$INT/barnyard2.waldo"
-		BARNYARD_OPTS="-D -c $CONF -d $SNORTDIR/${INT} -w $WALDO_FILE -L $SNORTDIR/${INT} -a $ARCHIVEDIR -f $LOG_FILE -X $PIDFILE $EXTRA_ARGS"
+		BARNYARD_OPTS="-D -c $CONF -d $SNORTDIR/${INT} -w $WALDO_FILE -l $SNORTDIR/${INT} -a $ARCHIVEDIR -f $LOG_FILE -X $PIDFILE $EXTRA_ARGS"
 		daemon $prog $BARNYARD_OPTS
 	done
 	RETVAL=$?

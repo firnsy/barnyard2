@@ -132,7 +132,15 @@ make
 %{__install} -m 644 rpm/barnyard2.config $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/barnyard2
 %{__install} -m 755 rpm/barnyard2 $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/barnyard2
 %{__mv} $RPM_BUILD_ROOT%{_sysconfdir}/barnyard2.conf $RPM_BUILD_ROOT%{_sysconfdir}/snort/
-
+if [ %{mysql} = 1 ]; then
+  %{__install} -m 755 schemas/create_mysql $RPM_BUILD_ROOT%{_datadir}/snort/create_mysql
+fi
+if [ %{oracle} = 1 ]; then
+  %{__install} -m 755 schemas/create_oracle.sql $RPM_BUILD_ROOT%{_datadir}/snort/create_oracle.sql
+fi
+if [ %{postgresql} = 1 ]; then
+  %{__install} -m 755 schemas/create_postgresql $RPM_BUILD_ROOT%{_datadir}/snort/create_postgresql
+fi
 
 %clean
 if [ -d $RPM_BUILD_ROOT ] && [ "$RPM_BUILD_ROOT" != "/"  ] ; then
@@ -142,12 +150,30 @@ fi
 %files
 %defattr(-,root,root)
 %doc LICENSE doc/INSTALL doc/README.*
-%attr(755,root,root)       %{_bindir}/barnyard2
-%attr(640,root,root) %config %{_sysconfdir}/snort/barnyard2.conf
-%attr(755,root,root) %config %{_sysconfdir}/rc.d/init.d/barnyard2
-%attr(644,root,root) %config %{_sysconfdir}/sysconfig/barnyard2
+%attr(755,root,root)       		%{_bindir}/barnyard2
+%attr(640,root,root) %config(noreplace) %{_sysconfdir}/snort/barnyard2.conf
+%attr(755,root,root) %config(noreplace) %{_sysconfdir}/rc.d/init.d/barnyard2
+%attr(644,root,root) %config(noreplace) %{_sysconfdir}/sysconfig/barnyard2
+
+%if %{mysql}
+%files mysql
+%attr(755,root,root) %{_datadir}/snort/create_mysql
+%endif
+
+%if %{postgresql}
+%files postgresql
+%attr(755,root,root) %{_datadir}/snort/create_postgresql
+%endif
+
+%if %{oracle}
+%files oracle
+%attr(755,root,root) %{_datadir}/snort/create_oracle.sql
+%endif
 
 %changelog
+* Wed Aug 28 2013 Bill Bernsen <bernsen@gmail.com>
+- Added conditional packaging of database schemas
+
 * Thu Feb 02 2012 Brent Woodruff <brent@fprimex.com>
 - Removed Source2 and Source3
 - Removed unused realname variable

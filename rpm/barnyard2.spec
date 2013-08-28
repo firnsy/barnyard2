@@ -44,13 +44,14 @@
 Summary: Snort Log Backend 
 Name: barnyard2
 Version: 1.13
-Source0: https://github.com/firnsy/barnyard2/archive/v2-%{version}.tar.gz
+Source0: https://github.com/firnsy/barnyard2/archive/barnyard2-%{version}.tar.gz
 Release: 1%{?dist}
 License: GPL
 Group: Applications/Internet
 Url: http://www.github.com/firnsy/barnyard2
 
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
+BuildRequires: libtool
 %if %{libpcap1}
 BuildRequires: libpcap1-devel
 %else
@@ -107,6 +108,7 @@ ORACLE_HOME=%{OracleHome}
 
 
 %build
+./autogen.sh
 
 %configure \
    %if %{libpcap1}
@@ -129,6 +131,7 @@ make
 %makeinstall 
 
 %{__install} -d -p $RPM_BUILD_ROOT%{_sysconfdir}/{sysconfig,rc.d/init.d,snort} 
+%{__install} -d -p $RPM_BUILD_ROOT%{_datadir}/snort
 %{__install} -m 644 rpm/barnyard2.config $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/barnyard2
 %{__install} -m 755 rpm/barnyard2 $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/barnyard2
 %{__mv} $RPM_BUILD_ROOT%{_sysconfdir}/barnyard2.conf $RPM_BUILD_ROOT%{_sysconfdir}/snort/
@@ -173,6 +176,9 @@ fi
 %changelog
 * Wed Aug 28 2013 Bill Bernsen <bernsen@gmail.com>
 - Added conditional packaging of database schemas
+- Added ./autogen.sh
+- BuildRequires libtool
+- Changed Source0 name to streamline packaging
 
 * Thu Feb 02 2012 Brent Woodruff <brent@fprimex.com>
 - Removed Source2 and Source3

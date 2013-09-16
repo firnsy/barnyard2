@@ -79,7 +79,7 @@
 
 // Not including: sensor_id_snort.
 // @TODO find a more elegant way
-#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain,domain_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,proto,proto_name,src,src_name,src_net,src_net_name,dst,dst_name,dst_net,dst_net_name,srcport,srcport_name,dstport,dstport_name,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain,domain_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,l4_proto,l4_proto_name,src,src_name,src_net,src_net_name,dst,dst_name,dst_net,dst_net_name,l4_srcport,l4_srcport_name,l4_dstport,l4_dstport_name,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 #ifdef HAVE_GEOIP
 #define DEFAULT_JSON DEFAULT_JSON_0 ",src_country,dst_country,src_country_code,dst_country_code" /* link with previous string */
 #else
@@ -225,8 +225,8 @@ static AlertJSONTemplateElement template[] = {
     {CLASSIFICATION,"classification","classification",stringFormat,"-"},
     {MSG,"msg","msg",stringFormat,"-"},
     {PAYLOAD,"payload","payload",stringFormat,"-"},
-    {PROTO,"proto_name","proto_name",stringFormat,"-"},
-    {PROTO_ID,"proto","proto",numericFormat,"0"},
+    {PROTO,"l4_proto_name","l4_proto_name",stringFormat,"-"},
+    {PROTO_ID,"l4_proto","l4_proto",numericFormat,"0"},
     {ETHSRC,"ethsrc","ethsrc",stringFormat,"-"},
     {ETHDST,"ethdst","ethdst",stringFormat,"-"},
     {ETHTYPE,"ethtype","ethtype",numericFormat,"0"},
@@ -241,10 +241,10 @@ static AlertJSONTemplateElement template[] = {
     {UDPLENGTH,"udplength","udplength",numericFormat,"0"},
     {ETHLENGTH,"ethlen","ethlength",numericFormat,"0"},
     {TRHEADER,"trheader","trheader",stringFormat,"-"},
-    {SRCPORT,"srcport","srcport",numericFormat,"0"},
-    {SRCPORT_NAME,"srcport_name","srcport_name",stringFormat,"-"},
-    {DSTPORT,"dstport","dstport",numericFormat,"0"},
-    {DSTPORT_NAME,"dstport_name","dstport_name",stringFormat,"-"},
+    {SRCPORT,"l4_srcport","src_port",numericFormat,"0"},
+    {SRCPORT_NAME,"l4_srcport_name","src_port_name",stringFormat,"-"},
+    {DSTPORT,"l4_dstport","dst_port",numericFormat,"0"},
+    {DSTPORT_NAME,"l4_dstport_name","dst_port_name",stringFormat,"-"},
     {SRC_TEMPLATE_ID,"src_asnum","src_asnum",numericFormat,"0"}, 
     {SRC_STR,"src","src",stringFormat,"-"},
     {SRC_NAME,"src_name","src_name",stringFormat,"-"},

@@ -44,8 +44,18 @@
 #include "log.h"
 #include "util.h"
 #include "assert.h"
+#include "unistd.h"
 
 #include "barnyard2.h"
+
+/* branch predictions */
+#ifdef __GNUC__
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
+#else
+#define likely(x)       (x)
+#define unlikely(x)     (x)
+#endif
 
 /* some reasonable minimums */
 #define MIN_BUF  (1*K_BYTES)
@@ -72,22 +82,19 @@ static inline void msg_delivered (rd_kafka_t *rk,
         fprintf(stderr,"%% Message delivered (%zd bytes)\n", len);
 }
 
+#endif
+
 /*-------------------------------------------------------------------
  * TextLog_Open/Close: open/close associated log file
  *-------------------------------------------------------------------
  */
-#if RD_KAFKA_VERSION == 0x00080000
-rd_kafka_t* KafkaLog_Open ()
-#else
 rd_kafka_t* KafkaLog_Open (const char* brokers)
-#endif /* RD_KAFKA_VERSION */
 {
-    #if RD_KAFKA_VERSION == 0x00080000
-
     char errstr[256];
     rd_kafka_conf_t conf;
     rd_kafka_defaultconf_set(&conf);
-    conf.producer.dr_cb = msg_delivered; /* debug */
+    
+    //conf.producer.dr_cb = msg_delivered; /* debug */
     rd_kafka_t * kafka_handle = rd_kafka_new(RD_KAFKA_PRODUCER, &conf, errstr, sizeof(errstr));
     /*rd_kafka_set_log_level (kafka_handle, LOG_DEBUG);*/
     if(NULL==kafka_handle)
@@ -95,19 +102,6 @@ rd_kafka_t* KafkaLog_Open (const char* brokers)
         perror("kafka_new producer");
         FatalError("Failed to create new producer: %s\n",errstr);
     }
-
-    #else
-    if ( !brokers ) return NULL;
-    rd_kafka_t * kafka_handle = rd_kafka_new(RD_KAFKA_PRODUCER, brokers, NULL);
-    if(NULL == kafka_handle)
-    {
-        perror("kafka_new producer");
-        FatalError("There was impossible to allocate a kafka handle.");
-    }else{
-        kafka_handle->rk_conf.producer.max_outq_msg_cnt = KAFKA_MESSAGES_QUEUE_MAXLEN;
-    }
-
-    #endif
 
     return kafka_handle;
 }
@@ -117,23 +111,24 @@ static void KafkaLog_Close (rd_kafka_t* handle)
     if ( !handle ) return;
 
     /* Wait for messaging to finish. */
-    #if RD_KAFKA_VERSION == 0x00080000
-    rd_kafka_poll(handle, 0);
-    #else
-    while (rd_kafka_outq_len(handle) > 0 && handle->rk_state!=RD_KAFKA_STATE_DOWN)
-        usleep(50000);
-
-    /* Since there is no ack for produce messages in 0.7 
-     * we wait some more for any packets to be sent.
-     * This is fixed in protocol version 0.8 */
-    //if (sendcnt > 0)
-        usleep(500000);
-    #endif
+    unsigned throw_msg_count = 10;
+    unsigned msg_left,prev_msg_left;
+    while((msg_left = rd_kafka_outq_len (handle) > 0) && throw_msg_count)
+    {
+        if(prev_msg_left == msg_left) /* Send no messages in a second? probably, the broker has fall down */
+            throw_msg_count--;
+        else
+            throw_msg_count = 10;
+        DEBUG_WRAP(DebugMessage(DEBUG_OUTPUT_PLUGIN, 
+            "[Thread %u] Waiting for messages to send. Still %u messages to be exported. %u retries left.\n"););
+        prev_msg_left = msg_left;
+        sleep(1);
+        //rd_kafka_poll();
+    }
 
     /* Destroy the handle */
     rd_kafka_destroy(handle);
 }
-#endif
 
 /*-------------------------------------------------------------------
  * KafkaLog_Init: constructor
@@ -153,7 +148,7 @@ KafkaLog* KafkaLog_Init (
     this = (KafkaLog*)SnortAlloc(sizeof(KafkaLog));
     #ifdef HAVE_LIBRDKAFKA
     if(this){
-        this->buf = malloc(sizeof(char)*bufLen);
+        this->buf = SnortAlloc(sizeof(char)*bufLen);
 
         if ( !this->buf)
         {
@@ -164,21 +159,6 @@ KafkaLog* KafkaLog_Init (
     }
     this->broker = broker ? SnortStrdup(broker) : NULL;
     this->topic = topic ? SnortStrdup(topic) : NULL;
-    #ifndef RD_KAFKA_VERSION 
-    this->handler = open ? KafkaLog_Open(this->broker):NULL; /* will always start in Flush */
-    #endif
-    
-    #if RD_KAFKA_VERSION < 0x00080000
-
-    this->start_partition = this->actual_partition = start_partition;
-    this->end_partition = end_partition;
-
-
-    if(this->start_partition > this->end_partition){
-        FatalError("alert_json: start_partition > end_partition");
-    }
-
-    #endif
 
     this->bufLen = this->start_bufLen = bufLen;
     #endif /* HAVE_LIBRDKAFKA */
@@ -217,40 +197,28 @@ void KafkaLog_Term (KafkaLog* this)
  */
 bool KafkaLog_Flush(KafkaLog* this)
 {
-    #if HAVE_LIBRDKAFKA
+#if HAVE_LIBRDKAFKA
     if ( !this->pos ) return FALSE;
 
     // In daemon mode, we must start the handler here
-    if(this->handler==NULL && this->broker && this->topic)
+    if(unlikely(this->handler==NULL && this->broker && this->topic))
     {
-#if RD_KAFKA_VERSION == 0x00080000
-
-        this->handler = KafkaLog_Open();
+        this->handler = KafkaLog_Open(this->broker);
         if(!this->handler)
             FatalError("It was not possible create a kafka handler\n",this->broker);
         rd_kafka_topic_conf_t topic_conf;
         rd_kafka_topic_defaultconf_set(&topic_conf);
         this->rkt = rd_kafka_topic_new(this->handler, this->topic, &topic_conf);
-	if(NULL==this->rkt)
+        if(NULL==this->rkt)
             FatalError("It was not possible create a kafka topic %s\n",this->topic);
         if (rd_kafka_brokers_add(this->handler, this->broker) == 0) 
             FatalError("Kafka: No valid brokers specified in %s\n",this->broker);
-
-#else
-
-        this->handler = KafkaLog_Open(this->broker);
-        if(!this->handler)
-           FatalError("There was not possible to solve %s direction",this->broker);
-
-#endif /* RD_KAFKA_VERSION*/
     }
 
     /* rd_kafka_dump(stdout,this->handler); */
 
-    #if RD_KAFKA_VERSION == 0x00080000
 
-
-    rd_kafka_produce(this->rkt, RD_KAFKA_PARTITION_UA,
+    if(unlikely(0 != rd_kafka_produce(this->rkt, RD_KAFKA_PARTITION_UA,
                      RD_KAFKA_MSG_F_FREE,
                      /* Payload and length */
                      this->buf, this->pos,
@@ -259,27 +227,17 @@ bool KafkaLog_Flush(KafkaLog* this)
                      /* Message opaque, provided in
                       * delivery report callback as
                       * msg_opaque. */
-                     NULL);
+                     NULL)))
+    {
+      free(this->buf);
+    }
     /* Poll to handle delivery reports */
-    rd_kafka_poll(this->handler, 10);
-
-    #else
-
-    this->actual_partition++;
-    if(this->actual_partition>this->end_partition)
-        this->actual_partition=this->start_partition;
-    /* This if prevent the memory overflow if the server is down */
-    if(this->handler->rk_state == RD_KAFKA_STATE_DOWN)
-        free(this->buf);
-    else
-        rd_kafka_produce(this->handler, this->topic, this->actual_partition, RD_KAFKA_OP_F_FREE, this->buf, this->pos);
-
-    #endif
+    //rd_kafka_poll(this->handler, 10);
 
     this->buf = SnortAlloc(sizeof(char)*this->start_bufLen);
     this->bufLen = this->start_bufLen;
 
-    #endif /* HAVE_LIBRDKAFKA */
+#endif /* HAVE_LIBRDKAFKA */
 
     if(this->textLog) TextLog_Flush(this->textLog);
 
@@ -312,7 +270,7 @@ bool KafkaLog_Putc (KafkaLog* this, char c)
  */
 bool KafkaLog_Write (KafkaLog* this, const char* str, int len)
 {
-    #ifdef HAVE_LIBRDKAFKA
+#ifdef HAVE_LIBRDKAFKA
     while ( len >= KafkaLog_Avail(this) )
     {
         this->bufLen*=2;
@@ -325,7 +283,7 @@ bool KafkaLog_Write (KafkaLog* this, const char* str, int len)
     this->pos += len;
     assert(this->buf[this->pos] == '\0');
 
-    #endif // HAVE_LIBRDKAFKA
+#endif // HAVE_LIBRDKAFKA
     if(this->textLog) TextLog_Write(this->textLog,str,len);
     return TRUE;
 }
@@ -341,14 +299,14 @@ bool KafkaLog_Print (KafkaLog* this, const char* fmt, ...)
     va_list ap;
 
     va_start(ap, fmt);
-    #ifdef HAVE_LIBRDKAFKA
+#ifdef HAVE_LIBRDKAFKA
     len = vsnprintf(this->buf+this->pos, avail, fmt, ap);
-    #endif
+#endif
     if(this->textLog)
         vsnprintf(this->textLog->buf+this->textLog->pos, avail, fmt, ap);
     va_end(ap);
 
-    #ifdef HAVE_LIBRDKAFKA
+#ifdef HAVE_LIBRDKAFKA
     while(len >= avail){
         // Send a half json message to Kafka has no sense, so we will try to
         // increase the buffer's lenght to allocate the full message.
@@ -361,7 +319,7 @@ bool KafkaLog_Print (KafkaLog* this, const char* fmt, ...)
         len = vsnprintf(this->buf+this->pos, avail, fmt, ap);
         va_end(ap);
     }
-    #endif
+#endif
 
 
     // TextLog's TextLog_Print
@@ -387,9 +345,9 @@ bool KafkaLog_Print (KafkaLog* this, const char* fmt, ...)
     {
         // NOPE! return FALSE;
     }
-    #ifdef HAVE_LIBRDKAFKA
+#ifdef HAVE_LIBRDKAFKA
     this->pos += len;
-    #endif
+#endif
     if(this->textLog) this->textLog->pos += len;
     return TRUE;
 }
@@ -402,7 +360,7 @@ bool KafkaLog_Print (KafkaLog* this, const char* fmt, ...)
  */
 bool KafkaLog_Quote (KafkaLog* this, const char* qs)
 {
-    #ifdef HAVE_LIBRDKAFKA
+#ifdef HAVE_LIBRDKAFKA
     int pos = this->pos;
 
     if ( KafkaLog_Avail(this) < 3 )
@@ -425,7 +383,7 @@ bool KafkaLog_Quote (KafkaLog* this, const char* qs)
 
     this->buf[pos++] = '"';
     this->pos = pos;
-    #endif
+#endif
 
     if(this->textLog) TextLog_Quote(this->textLog,qs);
 

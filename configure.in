@@ -186,7 +186,6 @@ if test "x$enable_kafka" = "x$enableval"; then
       [
         echo "Error: Librdkafka headers not found."
         echo "You can download and install it from https://github.com/edenhill/librdkafka"
-        echo "Remember you have to use 0.7 branch"
         exit 1
       ])
 
@@ -194,12 +193,10 @@ if test "x$enable_kafka" = "x$enableval"; then
     [
       echo "Error: Librdkafka library not found."
       echo "You can download and install it from https://github.com/edenhill/librdkafka"
-      echo "Remember you have to use 0.7 branch"
       exit 1
     ])
 
   LDFLAGS="${LDFLAGS} -lrdkafka"  
-  AC_DEFINE([HAVE_RDKAFKA],[],[Have Apache Kafka library])
 fi
 
 

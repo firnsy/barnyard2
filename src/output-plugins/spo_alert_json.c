@@ -79,7 +79,7 @@
 
 // Not including: sensor_id_snort.
 // @TODO find a more elegant way
-#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain,domain_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,l4_proto,l4_proto_name,src,src_name,src_net,src_net_name,dst,dst_name,dst_net,dst_net_name,l4_srcport,l4_srcport_name,l4_dstport,l4_dstport_name,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,l4_proto,l4_proto_name,src,src_name,src_net,src_net_name,dst,dst_name,dst_net,dst_net_name,l4_srcport,l4_srcport_name,l4_dstport,l4_dstport_name,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 #ifdef HAVE_GEOIP
 #define DEFAULT_JSON DEFAULT_JSON_0 ",src_country,dst_country,src_country_code,dst_country_code" /* link with previous string */
 #else
@@ -107,8 +107,10 @@ typedef enum{
     SENSOR_ID,
     SENSOR_NAME,
     SENSOR_IP,
-    DOMAIN,
     DOMAIN_ID,
+    DOMAIN_NAME,
+    GROUP_ID,
+    GROUP_NAME,
     TYPE,
     SIG_GENERATOR,
     SIG_ID,
@@ -200,8 +202,8 @@ typedef struct _AlertJSONData
     TemplateElementsList * outputTemplate;
     AlertJSONConfig *config;
     Number_str_assoc * hosts, *nets, *services, *protocols, *vlans;
-    uint32_t sensor_id,domain_id;
-    char * sensor_name, *sensor_type,*domain,*sensor_ip;
+    uint32_t sensor_id,domain_id,group_id;
+    char * sensor_name, *sensor_type,*domain,*sensor_ip,*group_name;
 #ifdef HAVE_GEOIP
     GeoIP *gi;
 #endif
@@ -214,8 +216,10 @@ static AlertJSONTemplateElement template[] = {
     {SENSOR_ID,"sensor_id","sensor_id",numericFormat,"0"},
     {SENSOR_IP,"sensor_ip","sensor_ip",stringFormat,"0"},
     {SENSOR_NAME,"sensor_name","sensor_name",stringFormat,"-"},
-    {DOMAIN,"domain","domain",stringFormat,"-"},
-    {DOMAIN_ID,"domain_id","domain_id",numericFormat,"-"},
+    {DOMAIN_NAME,"domain_name","domain_name",stringFormat,"-"},
+ /*   {DOMAIN_ID,"domain_id","domain_id",numericFormat,"-"}, */
+    {GROUP_NAME,"group_name","group_name",stringFormat,"-"},
+    {GROUP_ID,"group_id","group_id",numericFormat,"-"},
     {TYPE,"type","type",stringFormat,"-"},
     {ACTION,"action","action",stringFormat,"-"},
     {SIG_GENERATOR,"sig_generator","sig_generator",numericFormat,"0"},
@@ -400,11 +404,19 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
 		}
         else if(!strncasecmp(tok,"sensor_id=",strlen("sensor_id=")))
         {
-	        data->sensor_id = atol(tok + strlen("sensor_id="));
+            data->sensor_id = atol(tok + strlen("sensor_id="));
         }
         else if(!strncasecmp(tok,"sensor_ip=",strlen("sensor_ip=")))
         {
-	        data->sensor_ip = strdup(tok + strlen("sensor_ip="));
+            data->sensor_ip = strdup(tok + strlen("sensor_ip="));
+        }
+        else if(!strncasecmp(tok,"group_id=",strlen("group_id=")))
+        {
+	        data->group_id = atol(tok + strlen("group_id="));
+        }
+        else if(!strncasecmp(tok,"group_name=",strlen("group_name=")))
+        {
+            data->group_name = strdup(tok + strlen("group_name="));
         }
         else if(!strncasecmp(tok,"sensor_type=",strlen("sensor_type=")))
         {
@@ -438,14 +450,16 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         {
             end_partition = atol(tok+strlen("end_partition="));
         }
-        else if(!strncasecmp(tok,"domain=",strlen("domain=")))
+        else if(!strncasecmp(tok,"domain_name=",strlen("domain_name=")))
         {
-            RB_IF_CLEAN(data->domain, data->domain = SnortStrdup(tok+strlen("domain=")),"%s(%i) param setted twice.\n",tok,i);
+            RB_IF_CLEAN(data->domain, data->domain = SnortStrdup(tok+strlen("domain_name=")),"%s(%i) param setted twice.\n",tok,i);
         }
+        #if 0
         else if(!strncasecmp(tok,"domain_id=",strlen("domain_id=")))
         {
             data->domain_id = atol(tok+strlen("domain_id="));
         }
+        #endif
         #ifdef HAVE_GEOIP
         else if(!strncasecmp(tok,"geoip=",strlen("geoip=")))
         {
@@ -772,11 +786,17 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case SENSOR_NAME:
             KafkaLog_Puts(kafka,jsonData->sensor_name);
             break;
-        case DOMAIN:
+        case DOMAIN_NAME:
             if(jsonData->domain) KafkaLog_Puts(kafka,jsonData->domain);
             break;
         case DOMAIN_ID:
             KafkaLog_Puts(kafka,itoa10(jsonData->domain_id,buf,bufLen));
+            break;
+        case GROUP_NAME:
+            if(jsonData->group_name) KafkaLog_Puts(kafka,jsonData->group_name);
+            break;
+        case GROUP_ID:
+            KafkaLog_Puts(kafka,itoa10(jsonData->group_id,buf,bufLen));
             break;
         case TYPE:
             if(jsonData->sensor_type) KafkaLog_Puts(kafka,jsonData->sensor_type);

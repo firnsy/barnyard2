@@ -33,7 +33,6 @@
 #include <stdlib.h>
 #include "rb_numstrpair_list.h"
 #include "barnyard2.h"
-#include "util.h"
 #include "mstring.h"
 
 
@@ -96,6 +95,9 @@ static Number_str_assoc * FillHostList_Node(char *line_buffer, FILLHOSTSLIST_MOD
                     break;
                 case VLANS:
                     node->number.vlan  = atoi(node->number_as_str);
+                    break;
+                default:
+                    FatalError("Value not handled in %s %s(%d)",__FUNCTION__,__FILE__,__LINE__);
                 break;
             };
             mSplitFree(&toks, num_toks);
@@ -133,6 +135,39 @@ void FillHostsList(const char * filename,Number_str_assoc ** list, const FILLHOS
             *llinst_iterator = ip_str;
             llinst_iterator = &ip_str->next;
             ip_str->next=NULL;
+        }
+    }
+
+    fclose(file);
+}
+
+void FillFixLengthList(const char *filename,char ** list,const int listlen)
+{
+    char line_buffer[1024];
+    FILE * file;
+    int aok=1;
+    int num_toks=0;
+    char ** toks=NULL;
+    
+    if((file = fopen(filename, "r")) == NULL)
+    {
+        FatalError("fopen() alert file %s: %s\n",filename, strerror(errno));
+    }
+
+    while(NULL != fgets(line_buffer,1024,file) && aok){
+        if(line_buffer[0]!='#' && line_buffer[0]!='\n'){
+            if((toks = mSplit((char *)line_buffer, " \t", 2, &num_toks, '\\'))){
+                int number = atoi(toks[1]);
+                if(number<listlen)
+                    list[number] = SnortStrdup(toks[0]);
+                else
+                    FatalError("Number %d more than maximum(%d) in %s\n",number,listlen,filename);
+                mSplitFree(&toks, num_toks);
+            }
+            else
+            {
+                FatalError("Error splitting line '%s' into 2 tokens with ( \\t)",line_buffer);
+            }
         }
     }
 

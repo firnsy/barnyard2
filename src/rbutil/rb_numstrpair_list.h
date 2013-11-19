@@ -32,6 +32,7 @@
 #include "debug.h"
 #include "fatal.h"
 #include "sf_ip.h"
+#include "util.h"
 
 typedef struct _Number_str_assoc{
     char * human_readable_str;     /* Example: Google, tcp, ssh... */
@@ -41,10 +42,11 @@ typedef struct _Number_str_assoc{
 } Number_str_assoc;
 
 /* Enumeration for FillHostList */
-typedef enum{HOSTS,NETWORKS,SERVICES,PROTOCOLS,VLANS} FILLHOSTSLIST_MODE;
+typedef enum{HOSTS,NETWORKS,SERVICES,PROTOCOLS,VLANS,PRIORITIES} FILLHOSTSLIST_MODE;
 
 void freeNumberStrAssocList(Number_str_assoc * nstrList);
 void FillHostsList(const char * filename,Number_str_assoc ** list, const FILLHOSTSLIST_MODE mode);
+void FillFixLengthList(const char *filename,char ** list,const int listlen);
 
 static inline Number_str_assoc * SearchIpStr(sfip_t ip ,const Number_str_assoc *iplist,FILLHOSTSLIST_MODE mode){
 	if(mode!=HOSTS && mode!=NETWORKS) FatalError("Oops. Wrong use.\n");

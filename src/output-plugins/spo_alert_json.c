@@ -77,9 +77,16 @@
 #include "GeoIP.h"
 #endif // HAVE_GEOIP
 
+#ifdef HAVE_LIBRD
+#include "librd/rd.h"
+#endif
+
+#include "math.h"
+
+
 // Not including: sensor_id_snort.
 // @TODO find a more elegant way
-#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,l4_proto,l4_proto_name,src,src_name,src_net,src_net_name,dst,dst_name,dst_net,dst_net_name,l4_srcport,l4_srcport_name,l4_dstport,l4_dstport_name,ethsrc,ethdst,ethlen,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,priority_name,classification,action,msg,payload,l4_proto,l4_proto_name,src,src_name,src_net,src_net_name,dst,dst_name,dst_net,dst_net_name,l4_srcport,l4_srcport_name,l4_dstport,l4_dstport_name,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
 #ifdef HAVE_GEOIP
 #define DEFAULT_JSON DEFAULT_JSON_0 ",src_country,dst_country,src_country_code,dst_country_code" /* link with previous string */
 #else
@@ -116,6 +123,7 @@ typedef enum{
     SIG_ID,
     SIG_REV,
     PRIORITY,
+    PRIORITY_NAME,
     ACTION,
     CLASSIFICATION,
     MSG,
@@ -135,6 +143,7 @@ typedef enum{
     ARP_HW_TPROT, /* Destination ARP Hardware Protocol */
     UDPLENGTH,
     ETHLENGTH,
+    ETHLENGTH_RANGE,
     TRHEADER,
     SRCPORT,
     DSTPORT,
@@ -158,6 +167,7 @@ typedef enum{
     TOS,
     ID,
     IPLEN,
+    IPLEN_RANGE,
     DGMLEN,
     TCPSEQ,
     TCPACK,
@@ -204,6 +214,8 @@ typedef struct _AlertJSONData
     Number_str_assoc * hosts, *nets, *services, *protocols, *vlans;
     uint32_t sensor_id,domain_id,group_id;
     char * sensor_name, *sensor_type,*domain,*sensor_ip,*group_name;
+    #define MAX_PRIORITIES 16
+    char * priority_name[MAX_PRIORITIES];
 #ifdef HAVE_GEOIP
     GeoIP *gi;
 #endif
@@ -226,6 +238,7 @@ static AlertJSONTemplateElement template[] = {
     {SIG_ID,"sig_id","sig_id",numericFormat,"0"},
     {SIG_REV,"sig_rev","rev",numericFormat,"0"},
     {PRIORITY,"priority","priority",numericFormat,"0"},
+    {PRIORITY_NAME,"priority_name","priority_name",stringFormat,"0"},
     {CLASSIFICATION,"classification","classification",stringFormat,"-"},
     {MSG,"msg","msg",stringFormat,"-"},
     {PAYLOAD,"payload","payload",stringFormat,"-"},
@@ -244,6 +257,7 @@ static AlertJSONTemplateElement template[] = {
     {VLAN_DROP,"vlan_drop","vlan_drop",numericFormat,"0"},
     {UDPLENGTH,"udplength","udplength",numericFormat,"0"},
     {ETHLENGTH,"ethlen","ethlength",numericFormat,"0"},
+    {ETHLENGTH_RANGE,"ethlength_range","ethlength_range",stringFormat,"0"},
     {TRHEADER,"trheader","trheader",stringFormat,"-"},
     {SRCPORT,"l4_srcport","src_port",numericFormat,"0"},
     {SRCPORT_NAME,"l4_srcport_name","src_port_name",stringFormat,"-"},
@@ -267,6 +281,7 @@ static AlertJSONTemplateElement template[] = {
     {TOS,"tos","tos",numericFormat,"0"},
     {ID,"id","id",numericFormat,"0"},
     {IPLEN,"iplen","iplen",numericFormat,"0"},
+    {IPLEN_RANGE,"iplen_range","iplen_range",stringFormat,"0"},
     {DGMLEN,"dgmlen","dgmlen",numericFormat,"0"},
     {TCPSEQ,"tcpseq","tcpseq",numericFormat,"0"},
     {TCPACK,"tcpack","tcpack",numericFormat,"0"},
@@ -363,7 +378,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     char* filename = NULL;
     char* kafka_str = NULL;
     int i;
-    char* hostsListPath = NULL,*networksPath = NULL,*servicesPath = NULL,*protocolsPath = NULL,*vlansPath=NULL;
+    char* hostsListPath = NULL,*networksPath = NULL,*servicesPath = NULL,*protocolsPath = NULL,*vlansPath=NULL,*prioritiesPath=NULL;
     #ifdef HAVE_GEOIP
     char * geoIP_path = NULL;
     #endif
@@ -438,6 +453,10 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         {
             RB_IF_CLEAN(protocolsPath, protocolsPath = SnortStrdup(tok+strlen("protocols=")),"%s(%i) param setted twice.\n",tok,i);
         }
+        else if(!strncasecmp(tok,"priorities=",strlen("priorities=")))
+        {
+            RB_IF_CLEAN(prioritiesPath, prioritiesPath = SnortStrdup(tok+strlen("priorities=")),"%s(%i) param setted twice.\n",tok,i);
+        }
         else if(!strncasecmp(tok,"vlans=",strlen("vlans")))
         {
             RB_IF_CLEAN(vlansPath, vlansPath = SnortStrdup(tok+strlen("vlans=")),"%s(%i) param setted twice.\n",tok,i);
@@ -446,6 +465,27 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         {
             start_partition = end_partition = atol(tok+strlen("start_partition="));
         }
+        #if 0
+        else if(!strncasecmp(tok,"object_files=",strlen("object_files=")))
+        {
+            #ifdef HAVE_LIBRD
+            RB_IF_CLEAN(data->objects_path,data->objects_path = SnortStrdup(tok+strlen("objects_files=")),"%s(%i) param setted twice.\n",tok,i);
+            #else
+            FatalError("objects_files can only be setted if --enable-librd has been setted in configuration.\n")
+            #endif
+        }
+        else if(!strncasecmp(tok,"ethlength_ranges=",strlen("ethlength_ranges=")))
+        {
+            unsigned num_intervals_limits,i=0;
+            char ** limits = mSplit((char *)tok+strlen("ethlength_ranges"), ",", 0, &num_intervals_limits, '\\');
+            data->eth_range_lengths = SnortAlloc(num_intervals_limits+1);
+            for(i=0;i<num_intervals_limits;i++)
+            {
+                data->eth_range_lengths[i]=atoi(limits);
+            }
+            data->eth_range_lengths[num_intervals_limits]=0;
+        }
+        #endif
         else if(!strncasecmp(tok,"end_partition=",strlen("end_partition=")))
         {
             end_partition = atol(tok+strlen("end_partition="));
@@ -485,6 +525,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     if(servicesPath) FillHostsList(servicesPath,&data->services,SERVICES);
     if(protocolsPath) FillHostsList(protocolsPath,&data->protocols,PROTOCOLS);
     if(vlansPath) FillHostsList(vlansPath,&data->vlans,VLANS);
+    if(prioritiesPath) FillFixLengthList(prioritiesPath,data->priority_name,MAX_PRIORITIES);
 
     mSplitFree(&toks, num_toks);
     toks = mSplit(data->jsonargs, ",", 128, &num_toks, 0);
@@ -817,6 +858,16 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             if(event != NULL)
                 KafkaLog_Puts(kafka,itoa10(ntohl(((Unified2EventCommon *)event)->signature_revision),buf,bufLen));
             break;
+        case PRIORITY_NAME:
+            {
+                const uint32_t prio = event?ntohl(((Unified2EventCommon *)event)->priority_id):MAX_PRIORITIES;
+                if( event && prio<MAX_PRIORITIES && jsonData->priority_name[prio])
+                {
+                    KafkaLog_Puts(kafka,jsonData->priority_name[prio]);
+                    break;
+                }
+            }
+            /* don't break*/;
         case PRIORITY:
             KafkaLog_Puts(kafka,event? itoa10(ntohl(((Unified2EventCommon *)event)->priority_id),buf,bufLen): templateElement->defaultValue);
             break;
@@ -925,6 +976,40 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 KafkaLog_Puts(kafka, itoa10(p->pkth->len,buf,bufLen));
             }
             break;
+
+        case ETHLENGTH_RANGE:
+            if(p->eh){
+                if(p->pkth->len==0)
+                    KafkaLog_Write(kafka, "0",sizeof("0")-1);
+                if(p->pkth->len<=64)
+                    KafkaLog_Write(kafka, "(0-64]",sizeof("(0-64]")-1);
+                else if(p->pkth->len<=128)
+                    KafkaLog_Write(kafka, "(64-128]",sizeof("(64-128]")-1);
+                else if(p->pkth->len<=256)
+                    KafkaLog_Write(kafka, "(128-256]",sizeof("(128-256]")-1);
+                else if(p->pkth->len<=512)
+                    KafkaLog_Write(kafka, "(256-512]",sizeof("(256-512]")-1);
+                else if(p->pkth->len<=768)
+                    KafkaLog_Write(kafka, "(512-768]",sizeof("(512-768]")-1);
+                else if(p->pkth->len<=1024)
+                    KafkaLog_Write(kafka, "(768-1024]",sizeof("(768-1024]")-1);
+                else if(p->pkth->len<=1280)
+                    KafkaLog_Write(kafka, "(1024-1280]",sizeof("(1024-1280]")-1);
+                else if(p->pkth->len<=1514)
+                    KafkaLog_Write(kafka, "(1280-1514]",sizeof("(1280-1514]")-1);
+                else if(p->pkth->len<=2048)
+                    KafkaLog_Write(kafka, "(1514-2048]",sizeof("(1514-2048]")-1);
+                else if(p->pkth->len<=4096)
+                    KafkaLog_Write(kafka, "(2048-4096]",sizeof("(2048-4096]")-1);
+                else if(p->pkth->len<=8192)
+                    KafkaLog_Write(kafka, "(4096-8192]",sizeof("(4096-8192]")-1);
+                else if(p->pkth->len<=16384)
+                    KafkaLog_Write(kafka, "(8192-16384]",sizeof("(8192-16384]")-1);
+                else if(p->pkth->len<=32768)
+                    KafkaLog_Write(kafka, "(16384-32768]",sizeof("(16384-32768]")-1);
+                else
+                    KafkaLog_Write(kafka, ">32768",sizeof(">32768")-1);
+            }
 
         case VLAN_PRIORITY:
             if(p->vh)
@@ -1087,6 +1172,19 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case IPLEN:
             if(IPH_IS_VALID(p))
                 KafkaLog_Puts(kafka,itoa10(GET_IPH_LEN(p) << 2,buf,bufLen));
+            break;
+        case IPLEN_RANGE:
+            if(IPH_IS_VALID(p))
+            {
+                const double borrar = log2(8);
+                const double log2_len = log2(GET_IPH_LEN(p) << 2);
+                const unsigned int lower_limit = pow(2.0,floor(log2_len));
+                const unsigned int upper_limit = pow(2.0,ceil(log2_len));
+                //printf("log2_len: %0lf; floor: %0lf; ceil: %0lf; low_limit: %0lf; upper_limit:%0lf\n",
+                //    log2_len,floor(log2_len),ceil(log2_len),pow(floor(log2_len),2.0),pow(ceil(log2_len),2));
+                KafkaLog_Print(kafka,"[%u-%u)",lower_limit,upper_limit);
+                //printf(kafka,"[%lf-%lf)\n",lower_limit,upper_limit);
+            }
             break;
         case DGMLEN:
             if(IPH_IS_VALID(p)){

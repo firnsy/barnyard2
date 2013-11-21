@@ -566,7 +566,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         data->gi = GeoIP_open(geoIP_path, GEOIP_MEMORY_CACHE);
 
         if (data->gi == NULL)
-            FatalError("alert_json: Error opening database %s\n",geoIP_path);
+            ErrorMessage("alert_json: Error opening database %s\n",geoIP_path);
         else
             DEBUG_WRAP(DebugMessage(DEBUG_INIT, "alert_json: Success opening geoip database: %s\n", geoIP_path););
     }else{
@@ -578,7 +578,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         data->gi_org = GeoIP_open(geoIP_org_path, GEOIP_MEMORY_CACHE);
 
         if (data->gi_org == NULL)
-            FatalError("alert_json: Error opening database %s\n",geoIP_org_path);
+            ErrorMessage("alert_json: Error opening database %s\n",geoIP_org_path);
         else
             DEBUG_WRAP(DebugMessage(DEBUG_INIT, "alert_json: Success opening geoip database: %s\n", geoIP_org_path););
     }else{

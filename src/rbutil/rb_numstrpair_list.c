@@ -97,7 +97,7 @@ static Number_str_assoc * FillHostList_Node(char *line_buffer, FILLHOSTSLIST_MOD
                     node->number.vlan  = atoi(node->number_as_str);
                     break;
                 default:
-                    FatalError("Value not handled in %s %s(%d)",__FUNCTION__,__FILE__,__LINE__);
+                    ErrorMessage("Value not handled in %s %s(%d)",__FUNCTION__,__FILE__,__LINE__);
                 break;
             };
             mSplitFree(&toks, num_toks);
@@ -123,7 +123,7 @@ void FillHostsList(const char * filename,Number_str_assoc ** list, const FILLHOS
     
     if((file = fopen(filename, "r")) == NULL)
     {
-        FatalError("fopen() alert file %s: %s\n",filename, strerror(errno));
+        ErrorMessage("fopen() alert file %s: %s\n",filename, strerror(errno));
     }
 
     Number_str_assoc ** llinst_iterator = list;
@@ -131,10 +131,15 @@ void FillHostsList(const char * filename,Number_str_assoc ** list, const FILLHOS
         if(line_buffer[0]!='#' && line_buffer[0]!='\n'){
             Number_str_assoc * ip_str= FillHostList_Node(line_buffer,mode);
             if(ip_str==NULL)
-                FatalError("alert_json: cannot parse '%s' line in '%s' file\n",line_buffer,filename);
-            *llinst_iterator = ip_str;
-            llinst_iterator = &ip_str->next;
-            ip_str->next=NULL;
+            {
+                ErrorMessage("alert_json: cannot parse '%s' line in '%s' file\n",line_buffer,filename);
+            }
+            else
+            {
+                *llinst_iterator = ip_str;
+                llinst_iterator = &ip_str->next;
+                ip_str->next=NULL;
+            }
         }
     }
 
@@ -151,7 +156,7 @@ void FillFixLengthList(const char *filename,char ** list,const int listlen)
     
     if((file = fopen(filename, "r")) == NULL)
     {
-        FatalError("fopen() alert file %s: %s\n",filename, strerror(errno));
+        ErrorMessage("fopen() alert file %s: %s\n",filename, strerror(errno));
     }
 
     while(NULL != fgets(line_buffer,1024,file) && aok){

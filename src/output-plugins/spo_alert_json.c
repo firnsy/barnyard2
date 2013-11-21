@@ -86,7 +86,7 @@
 
 // Not including: sensor_id_snort.
 // @TODO find a more elegant way
-#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,priority_name,classification,action,msg,payload,l4_proto,l4_proto_name,src,src_name,src_net,src_net_name,dst,dst_name,dst_net,dst_net_name,l4_srcport,l4_srcport_name,l4_dstport,l4_dstport_name,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,priority_name,classification,action,msg,payload,l4_proto,l4_proto_name,src,src_name,src_net,src_net_name,src_as,src_as_name,dst,dst_name,dst_net,dst_net_name,dst_as,dst_as_name,l4_srcport,l4_srcport_name,l4_dstport,l4_dstport_name,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
 #ifdef HAVE_GEOIP
 #define DEFAULT_JSON DEFAULT_JSON_0 ",src_country,dst_country,src_country_code,dst_country_code" /* link with previous string */
 #else
@@ -180,6 +180,10 @@ typedef enum{
     DST_COUNTRY,
     SRC_COUNTRY_CODE,
     DST_COUNTRY_CODE,
+    SRC_AS,
+    DST_AS,
+    SRC_AS_NAME,
+    DST_AS_NAME,
 #endif // HAVE_GEOIP
 
     TEMPLATE_END_ID
@@ -217,7 +221,7 @@ typedef struct _AlertJSONData
     #define MAX_PRIORITIES 16
     char * priority_name[MAX_PRIORITIES];
 #ifdef HAVE_GEOIP
-    GeoIP *gi;
+    GeoIP *gi,*gi_org;
 #endif
 } AlertJSONData;
 
@@ -293,6 +297,10 @@ static AlertJSONTemplateElement template[] = {
     {DST_COUNTRY,"dst_country","dst_country",stringFormat,"N/A"},
     {SRC_COUNTRY_CODE,"src_country_code","src_country_code",stringFormat,"N/A"},
     {DST_COUNTRY_CODE,"dst_country_code","dst_country_code",stringFormat,"N/A"},
+    {SRC_AS,"src_as","src_as",numericFormat, 0},
+    {DST_AS,"dst_as","dst_as",numericFormat, 0},
+    {SRC_AS_NAME,"src_as_name","src_as_name",stringFormat,"N/A"},
+    {DST_AS_NAME,"dst_as_name","dst_as_name",stringFormat,"N/A"},
     #endif /* HAVE_GEOIP */
     {TEMPLATE_END_ID,"","",numericFormat,"0"}
 };
@@ -381,6 +389,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     char* hostsListPath = NULL,*networksPath = NULL,*servicesPath = NULL,*protocolsPath = NULL,*vlansPath=NULL,*prioritiesPath=NULL;
     #ifdef HAVE_GEOIP
     char * geoIP_path = NULL;
+    char * geoIP_org_path = NULL;
     #endif
     int start_partition=KAFKA_PARTITION,end_partition=KAFKA_PARTITION;
 
@@ -505,6 +514,10 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         {
             RB_IF_CLEAN(geoIP_path,geoIP_path = SnortStrdup(tok+strlen("geoip=")),"%s(%i) param setted twice.\n",tok,i);
         }
+        else if(!strncasecmp(tok,"geoip_org=",strlen("geoip_org=")))
+        {
+            RB_IF_CLEAN(geoIP_org_path,geoIP_org_path = SnortStrdup(tok+strlen("geoip_org=")),"%s(%i) param setted twice.\n",tok,i);
+        }
         #endif // HAVE_GEOIP
         else
         {
@@ -560,6 +573,18 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         DEBUG_WRAP(DebugMessage(DEBUG_INIT, "alert_json: No geoip database specified.\n"););
     }
 
+    if(geoIP_org_path)
+    {
+        data->gi_org = GeoIP_open(geoIP_org_path, GEOIP_MEMORY_CACHE);
+
+        if (data->gi_org == NULL)
+            FatalError("alert_json: Error opening database %s\n",geoIP_org_path);
+        else
+            DEBUG_WRAP(DebugMessage(DEBUG_INIT, "alert_json: Success opening geoip database: %s\n", geoIP_org_path););
+    }else{
+        DEBUG_WRAP(DebugMessage(DEBUG_INIT, "alert_json: No geoip organization database specified.\n"););
+    }
+
 #endif // HAVE_GEOIP
 
     DEBUG_WRAP(DebugMessage(
@@ -590,9 +615,11 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     if( networksPath ) free (networksPath);
     if( servicesPath ) free (servicesPath);
     if( protocolsPath ) free (protocolsPath);
+    if( prioritiesPath ) free (prioritiesPath);
     if( vlansPath ) free(vlansPath);
     #ifdef HAVE_GEOIP
     if (geoIP_path) free(geoIP_path);
+    if (geoIP_org_path) free(geoIP_org_path);
     #endif
 
 
@@ -614,12 +641,14 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
         free(data->sensor_name);
         free(data->sensor_ip);
         free(data->sensor_type);
+        free(data->group_name);
         free(data->domain);
         freeNumberStrAssocList(data->hosts);
         freeNumberStrAssocList(data->nets);
         freeNumberStrAssocList(data->services);
         freeNumberStrAssocList(data->protocols);
         freeNumberStrAssocList(data->vlans);
+        freeFixLengthList(data->priority_name,MAX_PRIORITIES);
         for(iter=data->outputTemplate;iter;iter=aux){
             aux = iter->next;
             free(iter);
@@ -627,7 +656,8 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
 
 
         #ifdef HAVE_GEOIP
-        GeoIP_delete(data->gi);
+        if(data->gi) GeoIP_delete(data->gi);
+        if(data->gi_org) GeoIP_delete(data->gi_org);
         #endif // GWO_IP
         /* free memory from SpoJSONData */
         free(data);
@@ -746,6 +776,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
     const int initial_buffer_pos = KafkaLog_Tell(jsonData->kafka);
 #ifdef HAVE_GEOIP
     geoipv6_t ipv6;
+    char * as_name=NULL;
 #endif
 
     /* Avoid repeated code */
@@ -759,6 +790,8 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
 #ifdef HAVE_GEOIP
             case SRC_COUNTRY:
             case SRC_COUNTRY_CODE:
+            case SRC_AS:
+            case SRC_AS_NAME:
 #endif
 #ifdef SUP_IP6
                 sfip_set_ip(&ip,GET_SRC_ADDR(p));
@@ -778,6 +811,8 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
 #ifdef HAVE_GEOIP
             case DST_COUNTRY:
             case DST_COUNTRY_CODE:
+            case DST_AS:
+            case DST_AS_NAME:
 #endif
 #ifdef SUP_IP6
                 sfip_set_ip(&ip,GET_DST_ADDR(p));
@@ -800,6 +835,27 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 case DST_COUNTRY:
                 case DST_COUNTRY_CODE:
                     memcpy(ipv6.s6_addr, ip.ip8, sizeof(ipv6.s6_addr));
+                    break;
+                default:
+                    break;
+            };
+        }
+
+        if(IPH_IS_VALID(p))
+        {
+            switch(templateElement->id)
+            {
+                case SRC_AS:
+                case SRC_AS_NAME:
+                case DST_AS:
+                case DST_AS_NAME:
+                    if(jsonData->gi_org)
+                    {
+                        if(ip.family == AF_INET)
+                            as_name = GeoIP_name_by_ipnum(jsonData->gi_org,ip.ip32[0]);
+                        else
+                            as_name = GeoIP_name_by_ipnum_v6(jsonData->gi_org,ipv6);
+                    }
                     break;
                 default:
                     break;
@@ -1122,6 +1178,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 KafkaLog_Puts(kafka,country_name?country_name:templateElement->defaultValue);
             }
             break;
+
         case SRC_COUNTRY_CODE:
         case DST_COUNTRY_CODE:
             if(jsonData->gi){
@@ -1133,6 +1190,27 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 KafkaLog_Puts(kafka,country_name?country_name:templateElement->defaultValue);
             }
             break;
+
+        case SRC_AS:
+        case DST_AS:
+            if(as_name)
+            {
+                const char * space = strchr(as_name,' ');
+                if(space)
+                    KafkaLog_Write(kafka,as_name+2,space - &as_name[2]);
+            }
+            break;
+
+        case SRC_AS_NAME:
+        case DST_AS_NAME:
+            if(as_name)
+            {
+                const char * space = strchr(as_name,' ');
+                if(space)
+                    KafkaLog_Puts(kafka,space+1);
+            }
+            break;
+
 #endif /* HAVE_GEOIP */
 
         case ICMPTYPE:
@@ -1176,7 +1254,6 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case IPLEN_RANGE:
             if(IPH_IS_VALID(p))
             {
-                const double borrar = log2(8);
                 const double log2_len = log2(GET_IPH_LEN(p) << 2);
                 const unsigned int lower_limit = pow(2.0,floor(log2_len));
                 const unsigned int upper_limit = pow(2.0,ceil(log2_len));
@@ -1228,6 +1305,9 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             FatalError("Template %s(%d) not found\n",templateElement->templateName,templateElement->id);
             break;
     };
+
+    if(as_name)
+        free(as_name);
 
     return KafkaLog_Tell(kafka)-initial_buffer_pos; /* if we have write something */
 }

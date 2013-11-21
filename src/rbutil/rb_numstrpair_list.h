@@ -47,6 +47,12 @@ typedef enum{HOSTS,NETWORKS,SERVICES,PROTOCOLS,VLANS,PRIORITIES} FILLHOSTSLIST_M
 void freeNumberStrAssocList(Number_str_assoc * nstrList);
 void FillHostsList(const char * filename,Number_str_assoc ** list, const FILLHOSTSLIST_MODE mode);
 void FillFixLengthList(const char *filename,char ** list,const int listlen);
+static inline void freeFixLengthList(char ** list,const int listlen)
+{
+    int i;
+    for(i=0;i<listlen;++i)
+        if(list[i]) free(list[i]);
+}
 
 static inline Number_str_assoc * SearchIpStr(sfip_t ip ,const Number_str_assoc *iplist,FILLHOSTSLIST_MODE mode){
 	if(mode!=HOSTS && mode!=NETWORKS) FatalError("Oops. Wrong use.\n");

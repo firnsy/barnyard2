@@ -77,7 +77,7 @@ static inline void msg_delivered (rd_kafka_t *rk,
 
     if (error_code)
         fprintf(stderr,"%% Message delivery failed: %s\n",
-               rd_kafka_err2str(rk, error_code));
+               rd_kafka_err2str(error_code));
     else
         fprintf(stderr,"%% Message delivered (%zd bytes)\n", len);
 }
@@ -91,11 +91,10 @@ static inline void msg_delivered (rd_kafka_t *rk,
 rd_kafka_t* KafkaLog_Open (const char* brokers)
 {
     char errstr[256];
-    rd_kafka_conf_t conf;
-    rd_kafka_defaultconf_set(&conf);
+    rd_kafka_conf_t * conf = rd_kafka_conf_new();
     
     //conf.producer.dr_cb = msg_delivered; /* debug */
-    rd_kafka_t * kafka_handle = rd_kafka_new(RD_KAFKA_PRODUCER, &conf, errstr, sizeof(errstr));
+    rd_kafka_t * kafka_handle = rd_kafka_new(RD_KAFKA_PRODUCER, conf, errstr, sizeof(errstr));
     /*rd_kafka_set_log_level (kafka_handle, LOG_DEBUG);*/
     if(NULL==kafka_handle)
     {
@@ -206,9 +205,8 @@ bool KafkaLog_Flush(KafkaLog* this)
         this->handler = KafkaLog_Open(this->broker);
         if(!this->handler)
             FatalError("It was not possible create a kafka handler\n",this->broker);
-        rd_kafka_topic_conf_t topic_conf;
-        rd_kafka_topic_defaultconf_set(&topic_conf);
-        this->rkt = rd_kafka_topic_new(this->handler, this->topic, &topic_conf);
+        rd_kafka_topic_conf_t * topic_conf = rd_kafka_topic_conf_new();
+        this->rkt = rd_kafka_topic_new(this->handler, this->topic, topic_conf);
         if(NULL==this->rkt)
             FatalError("It was not possible create a kafka topic %s\n",this->topic);
         if (rd_kafka_brokers_add(this->handler, this->broker) == 0) 

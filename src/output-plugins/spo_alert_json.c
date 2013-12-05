@@ -1036,35 +1036,35 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case ETHLENGTH_RANGE:
             if(p->eh){
                 if(p->pkth->len==0)
-                    KafkaLog_Write(kafka, "0",sizeof("0")-1);
+                    KafkaLog_Puts(kafka, "0");
                 if(p->pkth->len<=64)
-                    KafkaLog_Write(kafka, "(0-64]",sizeof("(0-64]")-1);
+                    KafkaLog_Puts(kafka, "(0-64]");
                 else if(p->pkth->len<=128)
-                    KafkaLog_Write(kafka, "(64-128]",sizeof("(64-128]")-1);
+                    KafkaLog_Puts(kafka, "(64-128]");
                 else if(p->pkth->len<=256)
-                    KafkaLog_Write(kafka, "(128-256]",sizeof("(128-256]")-1);
+                    KafkaLog_Puts(kafka, "(128-256]");
                 else if(p->pkth->len<=512)
-                    KafkaLog_Write(kafka, "(256-512]",sizeof("(256-512]")-1);
+                    KafkaLog_Puts(kafka, "(256-512]");
                 else if(p->pkth->len<=768)
-                    KafkaLog_Write(kafka, "(512-768]",sizeof("(512-768]")-1);
+                    KafkaLog_Puts(kafka, "(512-768]");
                 else if(p->pkth->len<=1024)
-                    KafkaLog_Write(kafka, "(768-1024]",sizeof("(768-1024]")-1);
+                    KafkaLog_Puts(kafka, "(768-1024]");
                 else if(p->pkth->len<=1280)
-                    KafkaLog_Write(kafka, "(1024-1280]",sizeof("(1024-1280]")-1);
+                    KafkaLog_Puts(kafka, "(1024-1280]");
                 else if(p->pkth->len<=1514)
-                    KafkaLog_Write(kafka, "(1280-1514]",sizeof("(1280-1514]")-1);
+                    KafkaLog_Puts(kafka, "(1280-1514]");
                 else if(p->pkth->len<=2048)
-                    KafkaLog_Write(kafka, "(1514-2048]",sizeof("(1514-2048]")-1);
+                    KafkaLog_Puts(kafka, "(1514-2048]");
                 else if(p->pkth->len<=4096)
-                    KafkaLog_Write(kafka, "(2048-4096]",sizeof("(2048-4096]")-1);
+                    KafkaLog_Puts(kafka, "(2048-4096]");
                 else if(p->pkth->len<=8192)
-                    KafkaLog_Write(kafka, "(4096-8192]",sizeof("(4096-8192]")-1);
+                    KafkaLog_Puts(kafka, "(4096-8192]");
                 else if(p->pkth->len<=16384)
-                    KafkaLog_Write(kafka, "(8192-16384]",sizeof("(8192-16384]")-1);
+                    KafkaLog_Puts(kafka, "(8192-16384]");
                 else if(p->pkth->len<=32768)
-                    KafkaLog_Write(kafka, "(16384-32768]",sizeof("(16384-32768]")-1);
+                    KafkaLog_Puts(kafka, "(16384-32768]");
                 else
-                    KafkaLog_Write(kafka, ">32768",sizeof(">32768")-1);
+                    KafkaLog_Puts(kafka, ">32768");
             }
 
         case VLAN_PRIORITY:

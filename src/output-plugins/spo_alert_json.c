@@ -852,7 +852,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                     if(jsonData->gi_org)
                     {
                         if(ip.family == AF_INET)
-                            as_name = GeoIP_name_by_ipnum(jsonData->gi_org,ip.ip32[0]);
+                            as_name = GeoIP_name_by_ipnum(jsonData->gi_org,ntohl(ip.ip32[0]));
                         else
                             as_name = GeoIP_name_by_ipnum_v6(jsonData->gi_org,ipv6);
                     }
@@ -1172,10 +1172,12 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             if(jsonData->gi){
                 const char * country_name = NULL;
                 if(ip.family == AF_INET)
-                    country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ip.ip32[0]);
+                    country_name = GeoIP_country_name_by_ipnum(jsonData->gi,ntohl(ip.ip32[0]));
                 else
                     country_name = GeoIP_country_name_by_ipnum_v6(jsonData->gi,ipv6);
-                KafkaLog_Puts(kafka,country_name?country_name:templateElement->defaultValue);
+
+                if(country_name)
+                    KafkaLog_Puts(kafka,country_name);
             }
             break;
 
@@ -1184,10 +1186,12 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             if(jsonData->gi){
                 const char * country_name = NULL;
                 if(ip.family == AF_INET)
-                    country_name = GeoIP_country_code_by_ipnum(jsonData->gi,ip.ip32[0]);
+                    country_name = GeoIP_country_code_by_ipnum(jsonData->gi,ntohl(ip.ip32[0]));
                 else
                     country_name = GeoIP_country_code_by_ipnum_v6(jsonData->gi,ipv6);
-                KafkaLog_Puts(kafka,country_name?country_name:templateElement->defaultValue);
+
+                if(country_name)
+                    KafkaLog_Puts(kafka,country_name);
             }
             break;
 

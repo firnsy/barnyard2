@@ -57,12 +57,6 @@
 #define unlikely(x)     (x)
 #endif
 
-/* some reasonable minimums */
-#define MIN_BUF  (1*K_BYTES)
-#define MIN_FILE (MIN_BUF)
-
-#define KAFKA_MESSAGES_QUEUE_MAXLEN (25*1024*1024)
-
 
 #ifdef HAVE_LIBRDKAFKA
 
@@ -70,6 +64,7 @@
  * msg_delivered: just a debug function. See rdkafka library example
  *-------------------------------------------------------------------
  */
+ /*
 static inline void msg_delivered (rd_kafka_t *rk,
                void *payload, size_t len,
                int error_code,
@@ -81,6 +76,7 @@ static inline void msg_delivered (rd_kafka_t *rk,
     else
         fprintf(stderr,"%% Message delivered (%zd bytes)\n", len);
 }
+*/
 
 #endif
 

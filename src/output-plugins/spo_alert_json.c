@@ -84,13 +84,22 @@
 #include "math.h"
 
 
-// Not including: sensor_id_snort.
-// @TODO find a more elegant way
-#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,priority_name,classification,action,msg,payload,l4_proto,l4_proto_name,src,src_name,src_net,src_net_name,src_as,src_as_name,dst,dst_name,dst_net,dst_net_name,dst_as,dst_as_name,l4_srcport,l4_srcport_name,l4_dstport,l4_dstport_name,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_name,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
+// Send object_name or not.
+// Note: Always including ,sensor_name,domain_name,group_name,src_net_name,src_as_name,dst_net_name,dst_as_name
+//#define SEND_NAMES
+
+#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,l4_proto,src,src_net,src_net_name,src_as,src_as_name,dst,dst_net,dst_net_name,dst_as,dst_as_name,l4_srcport,l4_dstport,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
+
 #ifdef HAVE_GEOIP
-#define DEFAULT_JSON DEFAULT_JSON_0 ",src_country,dst_country,src_country_code,dst_country_code" /* link with previous string */
+#define DEFAULT_JSON_1 DEFAULT_JSON_0 ",src_country,dst_country,src_country_code,dst_country_code" /* link with previous string */
 #else
-#define DEFAULT_JSON DEFAULT_JSON_0
+#define DEFAULT_JSON_1 DEFAULT_JSON_0
+#endif
+
+#ifdef SEND_NAMES
+#define DEFAULT_JSON DEFAULT_JSON_1 ",l4_proto_name,src_name,dst_name,l4_srcport_name,l4_dstport_name,vlan_name"
+#else
+#define DEFAULT_JSON DEFAULT_JSON_1
 #endif
 
 #define DEFAULT_FILE  "alert.json"
@@ -780,7 +789,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
 #endif
 
     /* Avoid repeated code */
-    if(IPH_IS_VALID(p)){
+    if(p && IPH_IS_VALID(p)){
         switch(templateElement->id){
             case SRC_TEMPLATE_ID:
             case SRC_STR:
@@ -824,11 +833,12 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
 #endif
                 break;
             default:
+                sfip_clear(&ip);
                 break;
         };
 
 #ifdef HAVE_GEOIP
-        if(IPH_IS_VALID(p) && ip.family == AF_INET6){
+        if(ip.family == AF_INET6){
             switch(templateElement->id){
                 case SRC_COUNTRY:
                 case SRC_COUNTRY_CODE:
@@ -841,26 +851,23 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             };
         }
 
-        if(IPH_IS_VALID(p))
+        switch(templateElement->id)
         {
-            switch(templateElement->id)
-            {
-                case SRC_AS:
-                case SRC_AS_NAME:
-                case DST_AS:
-                case DST_AS_NAME:
-                    if(jsonData->gi_org)
-                    {
-                        if(ip.family == AF_INET)
-                            as_name = GeoIP_name_by_ipnum(jsonData->gi_org,ntohl(ip.ip32[0]));
-                        else
-                            as_name = GeoIP_name_by_ipnum_v6(jsonData->gi_org,ipv6);
-                    }
-                    break;
-                default:
-                    break;
-            };
-        }
+            case SRC_AS:
+            case SRC_AS_NAME:
+            case DST_AS:
+            case DST_AS_NAME:
+                if(jsonData->gi_org)
+                {
+                    if(ip.family == AF_INET)
+                        as_name = GeoIP_name_by_ipnum(jsonData->gi_org,ntohl(ip.ip32[0]));
+                    else
+                        as_name = GeoIP_name_by_ipnum_v6(jsonData->gi_org,ipv6);
+                }
+                break;
+            default:
+                break;
+        };
 #endif
     }
 

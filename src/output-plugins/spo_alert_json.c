@@ -73,6 +73,10 @@
 #include "signal.h"
 #include "log_text.h"
 
+#ifdef HAVE_RB_MAC_VENDORS
+#include "rb_mac_vendors.h"
+#endif
+
 #ifdef HAVE_GEOIP
 #include "GeoIP.h"
 #endif // HAVE_GEOIP
@@ -96,10 +100,16 @@
 #define DEFAULT_JSON_1 DEFAULT_JSON_0
 #endif
 
-#ifdef SEND_NAMES
-#define DEFAULT_JSON DEFAULT_JSON_1 ",l4_proto_name,src_name,dst_name,l4_srcport_name,l4_dstport_name,vlan_name"
+#ifdef HAVE_RB_MAC_VENDORS
+#define DEFAULT_JSON_2 DEFAULT_JSON_1 ",ethsrc_vendor,ethdst_vendor"
 #else
-#define DEFAULT_JSON DEFAULT_JSON_1
+#define DEFAULT_JSON_2 DEFAULT_JSON_1
+#endif
+
+#ifdef SEND_NAMES
+#define DEFAULT_JSON DEFAULT_JSON_2 ",l4_proto_name,src_name,dst_name,l4_srcport_name,l4_dstport_name,vlan_name"
+#else
+#define DEFAULT_JSON DEFAULT_JSON_2
 #endif
 
 #define DEFAULT_FILE  "alert.json"
@@ -141,6 +151,10 @@ typedef enum{
     PROTO_ID,
     ETHSRC,
     ETHDST,
+#ifdef HAVE_RB_MAC_VENDORS
+    ETHSRC_VENDOR,
+    ETHDST_VENDOR,
+#endif
     ETHTYPE,
     VLAN, /* See vlan header */
     VLAN_NAME,
@@ -232,6 +246,9 @@ typedef struct _AlertJSONData
 #ifdef HAVE_GEOIP
     GeoIP *gi,*gi_org;
 #endif
+#ifdef HAVE_RB_MAC_VENDORS
+    struct mac_vendor_database *eth_vendors_db;
+#endif
 } AlertJSONData;
 
 /* Remember update printElementWithTemplate if some element modified here */
@@ -259,6 +276,10 @@ static AlertJSONTemplateElement template[] = {
     {PROTO_ID,"l4_proto","l4_proto",numericFormat,"0"},
     {ETHSRC,"ethsrc","ethsrc",stringFormat,"-"},
     {ETHDST,"ethdst","ethdst",stringFormat,"-"},
+#ifdef HAVE_RB_MAC_VENDORS
+    {ETHSRC_VENDOR,"ethsrc_vendor","ethsrc_vendor",stringFormat,"-"},
+    {ETHDST_VENDOR,"ethdst_vendor","ethdst_vendor",stringFormat,"-"},
+#endif
     {ETHTYPE,"ethtype","ethtype",numericFormat,"0"},
     {ARP_HW_SADDR,"arp_hw_saddr","arp_hw_saddr",stringFormat,"-"},
     {ARP_HW_SPROT,"arp_hw_sprot","arp_hw_sprot",stringFormat,"-"},
@@ -400,6 +421,9 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     char * geoIP_path = NULL;
     char * geoIP_org_path = NULL;
     #endif
+    #ifdef HAVE_RB_MAC_VENDORS
+    char * eth_vendors_path = NULL;
+    #endif
     int start_partition=KAFKA_PARTITION,end_partition=KAFKA_PARTITION;
 
     DEBUG_WRAP(DebugMessage(DEBUG_INIT, "ParseJSONArgs: %s\n", args););
@@ -528,6 +552,12 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
             RB_IF_CLEAN(geoIP_org_path,geoIP_org_path = SnortStrdup(tok+strlen("geoip_org=")),"%s(%i) param setted twice.\n",tok,i);
         }
         #endif // HAVE_GEOIP
+        #ifdef HAVE_RB_MAC_VENDORS
+        else if(!strncasecmp(tok,"eth_vendors=",strlen("eth_vendors=")))
+        {
+            RB_IF_CLEAN(eth_vendors_path,eth_vendors_path = SnortStrdup(tok+strlen("eth_vendors=")),"%s(%i) param setted twice.\n",tok,i);
+        }
+        #endif
         else
         {
 			FatalError("alert_json: Cannot parse %s(%i): %s\n",
@@ -593,8 +623,18 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     }else{
         DEBUG_WRAP(DebugMessage(DEBUG_INIT, "alert_json: No geoip organization database specified.\n"););
     }
-
 #endif // HAVE_GEOIP
+
+#ifdef HAVE_RB_MAC_VENDORS
+    if(eth_vendors_path)
+    {
+        data->eth_vendors_db = rb_new_mac_vendor_db(eth_vendors_path);
+        if(NULL==data->eth_vendors_db)
+        {
+            FatalError("alert_json: No valid rb_mac_vendors_database given.\n");
+        }
+    }
+#endif // HAVE_RB_MAC_VENDORS
 
     DEBUG_WRAP(DebugMessage(
         DEBUG_INIT, "alert_json: '%s' '%s'\n", filename, data->jsonargs
@@ -734,6 +774,20 @@ static inline void printHWaddr(KafkaLog *kafka,const uint8_t *addr,char * buf,co
             KafkaLog_Putc(kafka,'0');
         KafkaLog_Puts(kafka, itoa16(addr[i],buf,bufLen));
     }
+}
+
+/* convert a HW vector-form given into a uint64_t */
+static inline uint64_t HWADDR_vectoi(const uint8_t *vaddr)
+{
+    int i;
+    uint64_t addr = 0;
+    for(i=0;i<5;++i)
+    {
+        addr+=vaddr[i];
+        addr<<=8;
+    }
+    addr+=vaddr[5];
+    return addr;
 }
 
 static const char * actionOfEvent(void * voidevent,uint32_t event_type){
@@ -992,6 +1046,24 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             if(p->eh)
                 printHWaddr(kafka,p->eh->ether_dst,buf,bufLen);
             break;
+
+#ifdef HAVE_RB_MAC_VENDORS
+        case ETHSRC_VENDOR:
+            if(p->eh && jsonData->eth_vendors_db)
+            {
+                const char * vendor = rb_find_mac_vendor(HWADDR_vectoi(p->eh->ether_src),jsonData->eth_vendors_db);
+                if(vendor)
+                    KafkaLog_Puts(kafka,vendor);
+            }
+        case ETHDST_VENDOR:
+            if(p->eh && jsonData->eth_vendors_db)
+            {
+                const char * vendor = rb_find_mac_vendor(HWADDR_vectoi(p->eh->ether_dst),jsonData->eth_vendors_db);
+                if(vendor)
+                    KafkaLog_Puts(kafka,vendor);
+            }
+
+#endif
 
         case ARP_HW_SADDR:
             if(p->ah)

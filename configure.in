@@ -161,6 +161,43 @@ else
     AC_MSG_RESULT(no)
 fi
 
+AC_ARG_WITH(macs-vendors-includes,
+        [  --with-macs-vendors-include=DIR    librb_macs_vendors include directory],
+        [with_macsvendors_includes="$withval"],[with_macsvendors_includes="no"])
+
+AC_ARG_WITH(macs-vendors-libraries,
+        [  --with-macs-vendors-libraries=DIR   librb_macs_vendors library directory],
+        [with_macsvendors_libraries="$withval"],[with_macsvendors_libraries="no"])
+
+if test "x$with_macsvendors_includes" != "xno"; then
+  CFLAGS="${CFLAGS} -I${with_macsvendors_includes}"
+fi
+
+if test "x$with_macsvendors_libraries" != "xno"; then
+  LDFLAGS="${LDFLAGS}  -L${with_macsvendors_libraries} -lrt -lz -lrd"
+fi
+
+AC_ARG_ENABLE(rb-macs-vendors,
+[  --enable-macs-vendors    Enable geo-ip localization.],
+       enable_macs_vendors="$enableval", enable_macs_vendors="no")
+if test "x$enable_macs_vendors" = "xyes"; then
+    AC_MSG_RESULT(yes)
+    AC_CHECK_HEADERS([rb_mac_vendors.h],[],
+      [
+        echo "Error: librb_mac_vendors headers not found."
+        exit 1
+      ])
+    AC_CHECK_LIB(rb_mac_vendors,rb_new_mac_vendor_db,[],
+      [
+        echo "Error: librb_mac_vendors library not found."
+        exit 1
+      ])
+    AC_DEFINE_UNQUOTED([HAVE_RB_MAC_VENDORS],[],[Have redborder mac vendors library])
+    LDFLAGS="$LDFLAGS -lrb_mac_vendors"
+else
+    AC_MSG_RESULT(no)
+fi
+
 AC_ARG_WITH(rdkafka_includes,
         [  --with-rdkafka-includes=DIR    rdkafka include directory],
         [with_rdkafka_includes="$withval"],[with_rdkafka_includes="no"])

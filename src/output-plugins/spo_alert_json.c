@@ -1055,6 +1055,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 if(vendor)
                     KafkaLog_Puts(kafka,vendor);
             }
+            break;
         case ETHDST_VENDOR:
             if(p->eh && jsonData->eth_vendors_db)
             {
@@ -1062,7 +1063,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 if(vendor)
                     KafkaLog_Puts(kafka,vendor);
             }
-
+            break;
 #endif
 
         case ARP_HW_SADDR:

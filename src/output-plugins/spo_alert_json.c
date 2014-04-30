@@ -1390,8 +1390,10 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             break;
     };
 
+#ifdef HAVE_GEOIP
     if(as_name)
         free(as_name);
+#endif /* HAVE_GEOIP */
 
     return KafkaLog_Tell(kafka)-initial_buffer_pos; /* if we have write something */
 }

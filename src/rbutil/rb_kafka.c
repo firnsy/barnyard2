@@ -78,8 +78,6 @@ static inline void msg_delivered (rd_kafka_t *rk,
 }
 */
 
-#endif
-
 /*-------------------------------------------------------------------
  * TextLog_Open/Close: open/close associated log file
  *-------------------------------------------------------------------
@@ -124,6 +122,8 @@ static void KafkaLog_Close (rd_kafka_t* handle)
     /* Destroy the handle */
     rd_kafka_destroy(handle);
 }
+
+#endif /* HAVE_LIBRDKAFKA */
 
 /*-------------------------------------------------------------------
  * KafkaLog_Init: constructor

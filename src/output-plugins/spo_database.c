@@ -1628,7 +1628,7 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 		       "\t To prevent this warning, make sure that your sid-msg.map and gen-msg.map file are up to date with the snort process logging to the spool file.\n"
 		       "\t The new inserted signature will not have its information present in the sig_reference table. \n"
 		       "\t Note that the message inserted in the signature table will be snort default message \"Snort Alert [gid:sid:revision]\" \n"
-		       "\t You can allways update the message via a SQL query if you want it to be displayed correctly by your favorite interface\n\n",
+		       "\t You can always update the message via a SQL query if you want it to be displayed correctly by your favorite interface\n\n",
 		       __FUNCTION__,
 		       ntohl(((Unified2EventCommon *)event)->event_id),
 		       gid,

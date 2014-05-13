@@ -1070,7 +1070,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 		}
 	    }
 	}
-	else
+	else if (IPH_IS_VALID(p))
 	{
 	    if(BcAlertInterface())
 	    {

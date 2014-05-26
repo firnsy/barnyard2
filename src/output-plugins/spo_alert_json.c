@@ -1146,6 +1146,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 else
                     KafkaLog_Puts(kafka, ">32768");
             }
+            break;
 
         case VLAN_PRIORITY:
             if(p->vh)

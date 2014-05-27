@@ -1499,7 +1499,9 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSO
             #ifdef HAVE_LIBRDKAFKA
             kafka->pos = initial_pos; // Revert the insertion of empty element */
             #endif
-            if(kafka->textLog) kafka->textLog->pos = initial_pos;
+            
+            if(kafka->textLog) 
+                kafka->textLog->pos = initial_pos;
         }
     }
 

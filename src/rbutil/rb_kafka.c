@@ -57,46 +57,54 @@
 #define unlikely(x)     (x)
 #endif
 
+#define RB_UNUSED __attribute__((unused))
+
 
 #ifdef HAVE_LIBRDKAFKA
 
 /*-------------------------------------------------------------------
- * msg_delivered: just a debug function. See rdkafka library example
+ * msg_delivered: callback function for every message.
  *-------------------------------------------------------------------
  */
- /*
-static inline void msg_delivered (rd_kafka_t *rk,
-               void *payload, size_t len,
+ 
+static inline void msg_delivered (rd_kafka_t *rk RB_UNUSED,
+               void *payload RB_UNUSED, size_t len,
                int error_code,
-               void *opaque, void *msg_opaque) {
+               void *opaque RB_UNUSED, void *msg_opaque RB_UNUSED) {
 
-    if (error_code)
-        fprintf(stderr,"%% Message delivery failed: %s\n",
-               rd_kafka_err2str(error_code));
-    else
-        fprintf(stderr,"%% Message delivered (%zd bytes)\n", len);
+    if (unlikely(error_code))
+        ErrorMessage("rdkafka Message delivery failed: %s\n",rd_kafka_err2str(error_code));
+    else if (unlikely(BcLogVerbose()))
+        LogMessage("rdkafka Message delivered (%zd bytes)\n", len);
 }
-*/
 
 /*-------------------------------------------------------------------
  * TextLog_Open/Close: open/close associated log file
  *-------------------------------------------------------------------
  */
-static rd_kafka_t* KafkaLog_Open (const char* brokers)
+static void KafkaLog_Open (KafkaLog *this)
 {
     char errstr[256];
-    rd_kafka_conf_t * conf = rd_kafka_conf_new();
     
-    //conf.producer.dr_cb = msg_delivered; /* debug */
-    rd_kafka_t * kafka_handle = rd_kafka_new(RD_KAFKA_PRODUCER, conf, errstr, sizeof(errstr));
-    /*rd_kafka_set_log_level (kafka_handle, LOG_DEBUG);*/
-    if(NULL==kafka_handle)
-    {
-        perror("kafka_new producer");
-        FatalError("Failed to create new producer: %s\n",errstr);
-    }
+    if(!this->rk_conf)
+        FatalError("KafkaLog_Open called with NULL==this->rk_conf\n");
 
-    return kafka_handle;
+    if(!this->rkt_conf)
+        FatalError("KafkaLog_Open called with NULL==this->rkt_conf\n");
+    
+    rd_kafka_conf_set_dr_cb(this->rk_conf,msg_delivered);
+    this->handler = rd_kafka_new(RD_KAFKA_PRODUCER, this->rk_conf, errstr, sizeof(errstr));
+
+    if(NULL==this->handler)
+        FatalError("Failed to create new producer: %s\n",errstr);
+
+    if (rd_kafka_brokers_add(this->handler, this->broker) == 0) 
+        FatalError("Kafka: No valid brokers specified in %s\n",this->broker);
+
+    this->rkt = rd_kafka_topic_new(this->handler, this->topic, this->rkt_conf);
+
+    if(NULL==this->rkt)
+        FatalError("It was not possible create a kafka topic %s\n",this->topic);
 }
 
 static void KafkaLog_Close (rd_kafka_t* handle)
@@ -155,7 +163,10 @@ KafkaLog* KafkaLog_Init (
         FatalError("Unable to allocate KafkaLog!\n");
     }
     this->broker = broker ? SnortStrdup(broker) : NULL;
-    this->topic = topic ? SnortStrdup(topic) : NULL;
+    this->topic  = topic ? SnortStrdup(topic) : NULL;
+
+    this->rk_conf  = rk_conf;
+    this->rkt_conf = rkt_conf;
 
     this->bufLen = this->start_bufLen = bufLen;
     #endif /* HAVE_LIBRDKAFKA */
@@ -200,15 +211,9 @@ bool KafkaLog_Flush(KafkaLog* this)
     // In daemon mode, we must start the handler here
     if(unlikely(this->handler==NULL && this->broker && this->topic))
     {
-        this->handler = KafkaLog_Open(this->broker);
+        KafkaLog_Open(this);
         if(!this->handler)
             FatalError("It was not possible create a kafka handler\n",this->broker);
-        rd_kafka_topic_conf_t * topic_conf = rd_kafka_topic_conf_new();
-        this->rkt = rd_kafka_topic_new(this->handler, this->topic, topic_conf);
-        if(NULL==this->rkt)
-            FatalError("It was not possible create a kafka topic %s\n",this->topic);
-        if (rd_kafka_brokers_add(this->handler, this->broker) == 0) 
-            FatalError("Kafka: No valid brokers specified in %s\n",this->broker);
     }
 
     /* rd_kafka_dump(stdout,this->handler); */

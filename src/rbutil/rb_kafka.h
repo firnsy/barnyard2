@@ -75,8 +75,8 @@ typedef struct _KafkaLog
     char * topic;
     rd_kafka_topic_t *rkt;
 
-
-
+    rd_kafka_conf_t *rk_conf;
+    rd_kafka_topic_conf_t *rkt_conf;
 
 /* buffer attributes: */
     unsigned int pos;

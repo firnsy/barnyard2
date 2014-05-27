@@ -76,6 +76,8 @@ typedef struct _KafkaLog
     rd_kafka_topic_t *rkt;
 
 
+
+
 /* buffer attributes: */
     unsigned int pos;
     unsigned int bufLen;
@@ -87,7 +89,10 @@ typedef struct _KafkaLog
 } KafkaLog;
 
 KafkaLog* KafkaLog_Init (
-    const char* broker, unsigned int bufLen, const char * topic, const int start_partition, const int end_partition, bool open, const char *filename
+    const char* broker, unsigned int bufLen, const char *topic, const char *filename
+    #ifdef HAVE_LIBRDKAFKA
+    ,rd_kafka_conf_t *rk_conf,rd_kafka_topic_conf_t *rkt_conf
+    #endif
 );
 void KafkaLog_Term (KafkaLog* this);
 

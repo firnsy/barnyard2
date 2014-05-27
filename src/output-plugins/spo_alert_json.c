@@ -119,7 +119,6 @@
 
 #define KAFKA_PROT "kafka://"
 //#define KAFKA_TOPIC "rb_ips"
-#define KAFKA_PARTITION 0
 #define FILENAME_KAFKA_SEPARATOR '+'
 #define BROKER_TOPIC_SEPARATOR   '@'
 
@@ -395,6 +394,59 @@ static void AlertJSONInit(char *args)
     AddFuncToRestartList(AlertRestart, data);
 }
 
+#ifdef HAVE_LIBRDKAFKA
+
+/* Extracted from Magnus Edenhill's kafkacat */
+static rd_kafka_conf_res_t 
+rdkafka_add_attr_to_config(rd_kafka_conf_t *rk_conf,rd_kafka_topic_conf_t *topic_conf,
+                    const char *name,const char *val,char *errstr,size_t errstr_size){
+    if (!strcmp(name, "list") ||
+        !strcmp(name, "help")) {
+        rd_kafka_conf_properties_show(stdout);
+        exit(0);
+    }
+
+    rd_kafka_conf_res_t res = RD_KAFKA_CONF_UNKNOWN;
+    /* Try "topic." prefixed properties on topic
+     * conf first, and then fall through to global if
+     * it didnt match a topic configuration property. */
+    if (!strncmp(name, "topic.", strlen("topic.")))
+        res = rd_kafka_topic_conf_set(topic_conf,
+                          name+strlen("topic."),
+                          val,errstr,errstr_size);
+
+    if (res == RD_KAFKA_CONF_UNKNOWN)
+        res = rd_kafka_conf_set(rk_conf, name, val,
+                    errstr, errstr_size);
+
+    return res;
+}
+
+static rd_kafka_conf_res_t 
+rdkafka_add_str_to_config(rd_kafka_conf_t *rk_conf, rd_kafka_topic_conf_t *rkt_conf,
+            const char *_keyval, char *errstr,size_t errstr_size){
+
+    char *keyval = strdup(_keyval);
+
+    const char *key = keyval;
+    char *val = strchr(keyval,'=');
+
+    if(!val){
+        FatalError("alert_json: Cannot parse %s(%i): %s: "
+            "rdkafka configuration does not have format rdkafka.key=value",
+            file_name, file_line, _keyval);
+    }
+
+    *val = '\0';
+    val++;
+
+    const rd_kafka_conf_res_t rc = rdkafka_add_attr_to_config(rk_conf,rkt_conf,key,val,errstr,errstr_size);
+    free(keyval);
+    return rc;
+}
+
+#endif
+
 /*
  * Function: ParseJSONArgs(char *)
  *
@@ -424,7 +476,10 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     #ifdef HAVE_RB_MAC_VENDORS
     char * eth_vendors_path = NULL;
     #endif
-    int start_partition=KAFKA_PARTITION,end_partition=KAFKA_PARTITION;
+    #ifdef HAVE_LIBRDKAFKA
+    rd_kafka_conf_t       *rk_conf  = rd_kafka_conf_new();
+    rd_kafka_topic_conf_t *rkt_conf = rd_kafka_topic_conf_new();
+    #endif
 
     DEBUG_WRAP(DebugMessage(DEBUG_INIT, "ParseJSONArgs: %s\n", args););
     data = (AlertJSONData *)SnortAlloc(sizeof(AlertJSONData));
@@ -503,19 +558,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         {
             RB_IF_CLEAN(vlansPath, vlansPath = SnortStrdup(tok+strlen("vlans=")),"%s(%i) param setted twice.\n",tok,i);
         }
-        else if(!strncasecmp(tok,"start_partition=",strlen("start_partition=")))
-        {
-            start_partition = end_partition = atol(tok+strlen("start_partition="));
-        }
         #if 0
-        else if(!strncasecmp(tok,"object_files=",strlen("object_files=")))
-        {
-            #ifdef HAVE_LIBRD
-            RB_IF_CLEAN(data->objects_path,data->objects_path = SnortStrdup(tok+strlen("objects_files=")),"%s(%i) param setted twice.\n",tok,i);
-            #else
-            FatalError("objects_files can only be setted if --enable-librd has been setted in configuration.\n")
-            #endif
-        }
         else if(!strncasecmp(tok,"ethlength_ranges=",strlen("ethlength_ranges=")))
         {
             unsigned num_intervals_limits,i=0;
@@ -528,9 +571,23 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
             data->eth_range_lengths[num_intervals_limits]=0;
         }
         #endif
-        else if(!strncasecmp(tok,"end_partition=",strlen("end_partition=")))
+        else if(!strncasecmp(tok,"rdkafka.",strlen("rdkafka."))){
+            #if HAVE_LIBRDKAFKA
+            char errstr[512];
+
+            const rd_kafka_conf_res_t rc = rdkafka_add_str_to_config(rk_conf,rkt_conf,tok+strlen("rdkafka."),errstr,sizeof(errstr));
+            if(rc != RD_KAFKA_CONF_OK){
+                FatalError("alert_json: Cannot parse %s(%i): %s: %s\n",
+                    file_name, file_line, tok,errstr);
+            }
+            #else
+            FatalError("alert_json: Cannot parse %s(%i): %s: Does not have librdkafka\n",
+                file_name, file_line, tok);
+            #endif
+        }
+        else if(!strncasecmp(tok,"eth_vendors=",strlen("eth_vendors=")))
         {
-            end_partition = atol(tok+strlen("end_partition="));
+            RB_IF_CLEAN(eth_vendors_path,eth_vendors_path = SnortStrdup(tok+strlen("eth_vendors=")),"%s(%i) param setted twice.\n",tok,i);
         }
         else if(!strncasecmp(tok,"domain_name=",strlen("domain_name=")))
         {
@@ -653,10 +710,11 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
          * In DaemonMode(), kafka must start in another function, because, in daemon mode, Barnyard2Main will execute this 
          * function, will do a fork() and then, in the child process, will call RealAlertJSON, that will not be able to 
          * send kafka data*/
-
-        data->kafka = KafkaLog_Init(kafka_server,LOG_BUFFER, at_char+1,
-            start_partition,end_partition,BcDaemonMode()?0:1,filename==kafka_str?NULL:filename);
-        free(kafka_server);
+        data->kafka = KafkaLog_Init (kafka_server, LOG_BUFFER, at_char+1, kafka_str?NULL:filename
+            #ifdef HAVE_LIBRDKAFKA
+            ,rk_conf,rkt_conf
+            #endif
+        );
     }
     if ( filename ) free(filename);
     if( kafka_str ) free (kafka_str);

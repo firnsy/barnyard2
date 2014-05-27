@@ -22,9 +22,9 @@
  ****************************************************************************/
  
 /**
- * @file   sf_kafka.c
+ * @file   rb_kafka.c
  * @author Eugenio Perez <eupm90@gmail.com>
- * based on the Russ Combs's sf_kafka.c <rcombs@sourcefire.com>
+ * based on the Russ Combs's sf_textlog.c <rcombs@sourcefire.com>
  * @date   
  * 
  * @brief  implements buffered text stream for logging
@@ -82,7 +82,7 @@ static inline void msg_delivered (rd_kafka_t *rk,
  * TextLog_Open/Close: open/close associated log file
  *-------------------------------------------------------------------
  */
-rd_kafka_t* KafkaLog_Open (const char* brokers)
+static rd_kafka_t* KafkaLog_Open (const char* brokers)
 {
     char errstr[256];
     rd_kafka_conf_t * conf = rd_kafka_conf_new();
@@ -135,8 +135,10 @@ static void KafkaLog_Close (rd_kafka_t* handle)
  *-------------------------------------------------------------------
  */
 KafkaLog* KafkaLog_Init (
-    const char* broker, unsigned int bufLen, const char * topic, const int start_partition, 
-    const int end_partition, bool open,  const char*filename
+    const char* broker, unsigned int bufLen, const char * topic, const char*filename
+    #ifdef HAVE_LIBRDKAFKA
+    ,rd_kafka_conf_t *rk_conf,rd_kafka_topic_conf_t *rkt_conf
+    #endif
 ) {
     KafkaLog* this;
 

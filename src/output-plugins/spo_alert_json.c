@@ -141,7 +141,6 @@ typedef enum{
     SIG_ID,
     SIG_REV,
     PRIORITY,
-    PRIORITY_NAME,
     ACTION,
     CLASSIFICATION,
     MSG,
@@ -240,8 +239,6 @@ typedef struct _AlertJSONData
     Number_str_assoc * hosts, *nets, *services, *protocols, *vlans;
     uint32_t sensor_id,domain_id,group_id;
     char * sensor_name, *sensor_type,*domain,*sensor_ip,*group_name;
-    #define MAX_PRIORITIES 16
-    char * priority_name[MAX_PRIORITIES];
 #ifdef HAVE_GEOIP
     GeoIP *gi,*gi_org;
 #endif
@@ -249,6 +246,8 @@ typedef struct _AlertJSONData
     struct mac_vendor_database *eth_vendors_db;
 #endif
 } AlertJSONData;
+
+static const char *priority_name[] = {NULL, "high", "medium", "low", "very low"};
 
 /* Remember update printElementWithTemplate if some element modified here */
 static AlertJSONTemplateElement template[] = {
@@ -266,8 +265,7 @@ static AlertJSONTemplateElement template[] = {
     {SIG_GENERATOR,"sig_generator","sig_generator",numericFormat,"0"},
     {SIG_ID,"sig_id","sig_id",numericFormat,"0"},
     {SIG_REV,"sig_rev","rev",numericFormat,"0"},
-    {PRIORITY,"priority","priority",numericFormat,"0"},
-    {PRIORITY_NAME,"priority_name","priority_name",stringFormat,"0"},
+    {PRIORITY,"priority","priority",stringFormat,"unknown"},
     {CLASSIFICATION,"classification","classification",stringFormat,"-"},
     {MSG,"msg","msg",stringFormat,"-"},
     {PAYLOAD,"payload","payload",stringFormat,"-"},
@@ -634,7 +632,6 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     if(servicesPath) FillHostsList(servicesPath,&data->services,SERVICES);
     if(protocolsPath) FillHostsList(protocolsPath,&data->protocols,PROTOCOLS);
     if(vlansPath) FillHostsList(vlansPath,&data->vlans,VLANS);
-    if(prioritiesPath) FillFixLengthList(prioritiesPath,data->priority_name,MAX_PRIORITIES);
 
     mSplitFree(&toks, num_toks);
     toks = mSplit(data->jsonargs, ",", 128, &num_toks, 0);
@@ -755,7 +752,6 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
         freeNumberStrAssocList(data->services);
         freeNumberStrAssocList(data->protocols);
         freeNumberStrAssocList(data->vlans);
-        freeFixLengthList(data->priority_name,MAX_PRIORITIES);
         for(iter=data->outputTemplate;iter;iter=aux){
             aux = iter->next;
             free(iter);
@@ -1033,18 +1029,13 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             if(event != NULL)
                 KafkaLog_Puts(kafka,itoa10(ntohl(((Unified2EventCommon *)event)->signature_revision),buf,bufLen));
             break;
-        case PRIORITY_NAME:
-            {
-                const uint32_t prio = event?ntohl(((Unified2EventCommon *)event)->priority_id):MAX_PRIORITIES;
-                if( event && prio<MAX_PRIORITIES && jsonData->priority_name[prio])
-                {
-                    KafkaLog_Puts(kafka,jsonData->priority_name[prio]);
-                    break;
-                }
-            }
-            /* don't break*/;
         case PRIORITY:
-            KafkaLog_Puts(kafka,event? itoa10(ntohl(((Unified2EventCommon *)event)->priority_id),buf,bufLen): templateElement->defaultValue);
+            {
+                const int priority_id = event ? ntohl(((Unified2EventCommon *)event)->priority_id) : 0;
+                const char *prio_name = priority_id < sizeof(priority_name) ? priority_name[priority_id] : NULL;
+                KafkaLog_Puts(kafka,prio_name ? prio_name : templateElement->defaultValue);
+                
+            }
             break;
         case CLASSIFICATION:
             if(event != NULL)

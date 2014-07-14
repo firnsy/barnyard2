@@ -1032,9 +1032,10 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
         case PRIORITY:
             {
                 const int priority_id = event ? ntohl(((Unified2EventCommon *)event)->priority_id) : 0;
-                const char *prio_name = priority_id < sizeof(priority_name) ? priority_name[priority_id] : NULL;
+                const char *prio_name = NULL;
+                if(priority_id < sizeof(priority_name)/sizeof(priority_name[0])) 
+                    prio_name = priority_name;
                 KafkaLog_Puts(kafka,prio_name ? prio_name : templateElement->defaultValue);
-                
             }
             break;
         case CLASSIFICATION:

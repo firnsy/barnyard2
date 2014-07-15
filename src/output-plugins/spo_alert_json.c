@@ -1030,8 +1030,8 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
                 KafkaLog_Puts(kafka,itoa10(ntohl(((Unified2EventCommon *)event)->signature_revision),buf,bufLen));
             break;
         case PRIORITY:
-            {
-                const int priority_id = event ? ntohl(((Unified2EventCommon *)event)->priority_id) : 0;
+            if(event != NULL){
+                const int priority_id = ntohl(((Unified2EventCommon *)event)->priority_id);
                 const char *prio_name = NULL;
                 if(priority_id < sizeof(priority_name)/sizeof(priority_name[0])) 
                     prio_name = priority_name[priority_id];

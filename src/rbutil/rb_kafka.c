@@ -39,6 +39,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 #include "rb_kafka.h"
 #include "log.h"
@@ -113,7 +114,7 @@ static void KafkaLog_Close (rd_kafka_t* handle)
 
     /* Wait for messaging to finish. */
     unsigned throw_msg_count = 10;
-    unsigned msg_left,prev_msg_left;
+    unsigned msg_left,prev_msg_left = 0;
     while((msg_left = rd_kafka_outq_len (handle) > 0) && throw_msg_count)
     {
         if(prev_msg_left == msg_left) /* Send no messages in a second? probably, the broker has fall down */
@@ -123,8 +124,7 @@ static void KafkaLog_Close (rd_kafka_t* handle)
         DEBUG_WRAP(DebugMessage(DEBUG_OUTPUT_PLUGIN, 
             "[Thread %u] Waiting for messages to send. Still %u messages to be exported. %u retries left.\n"););
         prev_msg_left = msg_left;
-        sleep(1);
-        //rd_kafka_poll();
+        rd_kafka_poll(handle,100);
     }
 
     /* Destroy the handle */
@@ -217,23 +217,36 @@ bool KafkaLog_Flush(KafkaLog* this)
     }
 
     /* rd_kafka_dump(stdout,this->handler); */
-
-
-    if(unlikely(0 != rd_kafka_produce(this->rkt, RD_KAFKA_PARTITION_UA,
-                     RD_KAFKA_MSG_F_FREE,
-                     /* Payload and length */
-                     this->buf, this->pos,
-                     /* Optional key and its length */
-                     NULL, 0,
-                     /* Message opaque, provided in
-                      * delivery report callback as
-                      * msg_opaque. */
-                     NULL)))
-    {
-      free(this->buf);
-    }
+    int retried = 0;
+    do{
+        const int produce_rc = rd_kafka_produce(this->rkt, RD_KAFKA_PARTITION_UA,
+                         RD_KAFKA_MSG_F_FREE,
+                         /* Payload and length */
+                         this->buf, this->pos,
+                         /* Optional key and its length */
+                         NULL, 0,
+                         /* Message opaque, provided in
+                          * delivery report callback as
+                          * msg_opaque. */
+                         NULL);
+        
+        if(likely(produce_rc) != -1){
+            break;
+        }else{
+            rd_kafka_resp_err_t err = rd_kafka_errno2err(errno);
+            if(err != RD_KAFKA_RESP_ERR__QUEUE_FULL || retried){
+                ErrorMessage("Failed to produce message: %s",rd_kafka_err2str(err));
+                free(this->buf);
+                this->buf = NULL;
+                break;
+            }else{
+                // Queue full. Backpressure.
+                rd_kafka_poll(this->handler,5);
+            }
+        }
+    }while(1);
     /* Poll to handle delivery reports */
-    //rd_kafka_poll(this->handler, 10);
+    rd_kafka_poll(this->handler, 0);
 
     this->buf = SnortAlloc(sizeof(char)*this->start_bufLen);
     this->bufLen = this->start_bufLen;

@@ -46,26 +46,22 @@
 /*
 ** PRIVATE FUNCTIONS
 */
-Spooler *spoolerOpen(const char *, const char *, uint32_t);
+static Spooler *spoolerOpen(const char *, const char *, uint32_t);
 int spoolerClose(Spooler *);
-int spoolerReadRecordHeader(Spooler *);
-int spoolerReadRecord(Spooler *);
-void spoolerProcessRecord(Spooler *, int);
-void spoolerFreeRecord(Record *record);
+static int spoolerReadRecordHeader(Spooler *);
+static int spoolerReadRecord(Spooler *);
+static void spoolerProcessRecord(Spooler *, int);
+static void spoolerFreeRecord(Record *record);
 
-int spoolerWriteWaldo(Waldo *, Spooler *);
-int spoolerOpenWaldo(Waldo *, uint8_t);
+static int spoolerWriteWaldo(Waldo *, Spooler *);
+static int spoolerOpenWaldo(Waldo *, uint8_t);
 int spoolerCloseWaldo(Waldo *);
 
-
-int spoolerPacketCacheAdd(Spooler *, Packet *);
-int spoolerPacketCacheClear(Spooler *);
-
-int spoolerEventCachePush(Spooler *, uint32_t, void *);
-EventRecordNode * spoolerEventCacheGetByEventID(Spooler *, uint32_t);
-EventRecordNode * spoolerEventCacheGetHead(Spooler *);
-uint8_t spoolerEventCacheHeadUsed(Spooler *);
-int spoolerEventCacheClean(Spooler *);
+static int spoolerEventCachePush(Spooler *, uint32_t, void *);
+static EventRecordNode * spoolerEventCacheGetByEventID(Spooler *, uint32_t);
+static EventRecordNode * spoolerEventCacheGetHead(Spooler *);
+static uint8_t spoolerEventCacheHeadUsed(Spooler *);
+static int spoolerEventCacheClean(Spooler *);
 
 /* Find the next spool file timestamp extension with a value equal to or 
  * greater than timet.  If extension != NULL, the extension will be 
@@ -150,7 +146,7 @@ static int FindNextExtension(const char *dirpath, const char *filebase,
     return SPOOLER_EXTENSION_FOUND;
 }
 
-Spooler *spoolerOpen(const char *dirpath, const char *filename, uint32_t extension)
+static Spooler *spoolerOpen(const char *dirpath, const char *filename, uint32_t extension)
 {
     Spooler             *spooler = NULL;
     int                 ret;
@@ -286,7 +282,7 @@ void UnRegisterSpooler(Spooler *spooler)
 
 
 
-int spoolerReadRecordHeader(Spooler *spooler)
+static int spoolerReadRecordHeader(Spooler *spooler)
 {
     int                 ret;
 
@@ -319,7 +315,7 @@ int spoolerReadRecordHeader(Spooler *spooler)
     return 0;
 }
 
-int spoolerReadRecord(Spooler *spooler)
+static int spoolerReadRecord(Spooler *spooler)
 {
     int                 ret;
 
@@ -687,7 +683,7 @@ int ProcessContinuousWithWaldo(Waldo *waldo)
 ** RECORD PROCESSING EVENTS
 */
 
-void spoolerProcessRecord(Spooler *spooler, int fire_output)
+static void spoolerProcessRecord(Spooler *spooler, int fire_output)
 {
     struct pcap_pkthdr      pkth;
     uint32_t                type;
@@ -867,7 +863,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
     spoolerEventCacheClean(spooler);
 }
 
-int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)
+static int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)
 {
     EventRecordNode     *ernNode;
 
@@ -890,7 +886,7 @@ int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)
     return 0;
 }
 
-EventRecordNode *spoolerEventCacheGetByEventID(Spooler *spooler, uint32_t event_id)
+static EventRecordNode *spoolerEventCacheGetByEventID(Spooler *spooler, uint32_t event_id)
 {
     EventRecordNode     *ernCurrent = NULL;
 
@@ -905,7 +901,7 @@ EventRecordNode *spoolerEventCacheGetByEventID(Spooler *spooler, uint32_t event_
     return NULL;
 }
 
-EventRecordNode *spoolerEventCacheGetHead(Spooler *spooler)
+static EventRecordNode *spoolerEventCacheGetHead(Spooler *spooler)
 {
     if ( spooler == NULL )
         return NULL;
@@ -913,7 +909,7 @@ EventRecordNode *spoolerEventCacheGetHead(Spooler *spooler)
     return TAILQ_FIRST(&spooler->event_cache);
 }
 
-uint8_t spoolerEventCacheHeadUsed(Spooler *spooler)
+static uint8_t spoolerEventCacheHeadUsed(Spooler *spooler)
 {
     if ( spooler == NULL || TAILQ_EMPTY(&spooler->event_cache) )
         return 255;
@@ -929,7 +925,7 @@ uint8_t spoolerEventCacheHeadUsed(Spooler *spooler)
         (elm) = (tmpelm))
 #endif
 
-int spoolerEventCacheClean(Spooler *spooler)
+static int spoolerEventCacheClean(Spooler *spooler)
 {
     EventRecordNode     *ernCurrent = NULL;
     EventRecordNode     *ernPrev = NULL;
@@ -991,7 +987,7 @@ void spoolerEventCacheFlush(Spooler *spooler)
 }
 
 
-void spoolerFreeRecord(Record *record)
+static void spoolerFreeRecord(Record *record)
 {
     if (record->data)
     {
@@ -1012,7 +1008,7 @@ void spoolerFreeRecord(Record *record)
 ** Description:
 **   Open the waldo file, non-blocking, defined in the Waldo structure
 */
-int spoolerOpenWaldo(Waldo *waldo, uint8_t mode)
+static int spoolerOpenWaldo(Waldo *waldo, uint8_t mode)
 {
     struct stat         waldo_info;
     int                 waldo_file_flags = 0;
@@ -1153,7 +1149,7 @@ int spoolerReadWaldo(Waldo *waldo)
 **   Write to the waldo file
 **
 */
-int spoolerWriteWaldo(Waldo *waldo, Spooler *spooler)
+static int spoolerWriteWaldo(Waldo *waldo, Spooler *spooler)
 {
     int                 ret;
 

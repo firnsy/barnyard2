@@ -215,6 +215,8 @@ Spooler *spoolerOpen(const char *dirpath, const char *filename, uint32_t extensi
         FatalError("ERROR: No suitable input plugin found!\n");
     }
 
+    TAILQ_INIT(&spooler->event_cache);
+
     return spooler;
 }
 
@@ -869,7 +871,7 @@ int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)
 {
     EventRecordNode     *ernNode;
 
-    DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Caching event...\n"););
+    DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Caching event %lu\n",ntohl(((Unified2EventCommon *)data)->event_id)););
 
     /* allocate memory */
     ernNode = (EventRecordNode *)SnortAlloc(sizeof(EventRecordNode));
@@ -880,9 +882,7 @@ int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)
     ernNode->data = data;
 
     /* add new events to the front of the cache */
-    ernNode->next = spooler->event_cache;
-
-    spooler->event_cache = ernNode;
+    TAILQ_INSERT_HEAD(&spooler->event_cache, ernNode, entry);
     spooler->events_cached++;
 
     DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Cached event: %d\n", spooler->events_cached););
@@ -892,16 +892,14 @@ int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)
 
 EventRecordNode *spoolerEventCacheGetByEventID(Spooler *spooler, uint32_t event_id)
 {
-    EventRecordNode     *ernCurrent = spooler->event_cache;
+    EventRecordNode     *ernCurrent = NULL;
 
-    while (ernCurrent != NULL)
+    TAILQ_FOREACH(ernCurrent, &spooler->event_cache, entry)
     {
         if ( ntohl(((Unified2EventCommon *)ernCurrent->data)->event_id) == event_id )
         {
             return ernCurrent;
         }
-
-        ernCurrent = ernCurrent->next;
     }
 
     return NULL;
@@ -912,44 +910,41 @@ EventRecordNode *spoolerEventCacheGetHead(Spooler *spooler)
     if ( spooler == NULL )
         return NULL;
 
-    return spooler->event_cache;
+    return TAILQ_FIRST(&spooler->event_cache);
 }
 
 uint8_t spoolerEventCacheHeadUsed(Spooler *spooler)
 {
-    if ( spooler == NULL || spooler->event_cache == NULL )
+    if ( spooler == NULL || TAILQ_EMPTY(&spooler->event_cache) )
         return 255;
 
-    return spooler->event_cache->used;
+    return spoolerEventCacheGetHead(spooler)->used;
 }
+
+/* Extracted from Magnus Edenhill's librd */
+#ifndef TAILQ_FOREACH_SAFE
+#define TAILQ_FOREACH_SAFE(elm,tmpelm,head,field) \
+        for ((elm) = TAILQ_FIRST(head) ; \
+        (elm) && ((tmpelm) = TAILQ_NEXT((elm), field), 1) ; \
+        (elm) = (tmpelm))
+#endif
 
 int spoolerEventCacheClean(Spooler *spooler)
 {
     EventRecordNode     *ernCurrent = NULL;
     EventRecordNode     *ernPrev = NULL;
-    EventRecordNode     *ernNext = NULL;
     
-    if (spooler == NULL || spooler->event_cache == NULL )
+    if (spooler == NULL || TAILQ_EMPTY(&spooler->event_cache) )
         return 1;
     
-    ernPrev = spooler->event_cache;
-    ernCurrent = spooler->event_cache;
-    
+    ernCurrent = TAILQ_LAST(&spooler->event_cache,_EventRecordList);
     while (ernCurrent != NULL && spooler->events_cached > barnyard2_conf->event_cache_size )
     {
-	ernNext = ernCurrent->next;
-	
+	ernPrev = TAILQ_PREV(ernCurrent, _EventRecordList, entry);
 	if ( ernCurrent->used == 1 )
         {
 	    /* Delete from list */
-	    if (ernCurrent == spooler->event_cache)
-	    {
-                spooler->event_cache = ernNext;
-	    }
-            else
-	    {
-                ernPrev->next = ernNext;
-	    }
+	    TAILQ_REMOVE(&spooler->event_cache, ernCurrent, entry);
 	    
             spooler->events_cached--;
 
@@ -964,12 +959,7 @@ int spoolerEventCacheClean(Spooler *spooler)
 	    }
         }
 	
-	if(ernCurrent != NULL)
-	{
-	    ernPrev = ernCurrent;
-	}
-	
-	ernCurrent = ernNext;
+	ernCurrent = ernPrev;
 
     }
 
@@ -981,15 +971,13 @@ void spoolerEventCacheFlush(Spooler *spooler)
     EventRecordNode *next_ptr = NULL;
     EventRecordNode *evt_ptr = NULL;
     
-    if (spooler == NULL || spooler->event_cache == NULL )
+    if (spooler == NULL || TAILQ_EMPTY(&spooler->event_cache))
         return;
     
-    evt_ptr = spooler->event_cache;
-    
-    while(evt_ptr != NULL)
+    TAILQ_FOREACH_SAFE(evt_ptr,next_ptr,&spooler->event_cache,entry)
     {
-	next_ptr = evt_ptr->next;
-	
+        TAILQ_REMOVE(&spooler->event_cache,evt_ptr,entry);
+
 	if(evt_ptr->data)
 	{
 	    free(evt_ptr->data);
@@ -997,11 +985,7 @@ void spoolerEventCacheFlush(Spooler *spooler)
 	}
 	
 	free(evt_ptr);
-
-	evt_ptr = next_ptr;
     }
-    
-    spooler->event_cache = NULL;
     
     return;
 }

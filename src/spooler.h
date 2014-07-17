@@ -28,6 +28,7 @@
 #endif
 
 #include <sys/types.h>
+#include <sys/queue.h>
 
 #include "plugbase.h"
 
@@ -73,8 +74,10 @@ typedef struct _EventRecordNode
     void                    *data;  /* unified2 event (eg IPv4, IPV6, MPLS, etc) */
     uint8_t                 used;   /* has the event be retrieved */
     
-    struct _EventRecordNode *next;  /* reference to next event record */
+    TAILQ_ENTRY(_EventRecordNode) entry;  /* reference to next/prev event record */
 } EventRecordNode;
+
+typedef TAILQ_HEAD(_EventRecordList, _EventRecordNode) EventRecordCache;
 
 typedef struct _PacketRecordNode
 {
@@ -99,7 +102,7 @@ typedef struct _Spooler
 
     Record                  record;     // data of current Record
     
-    EventRecordNode         *event_cache; // linked list of cached events
+    EventRecordCache        event_cache; // linked list of cached events
     uint32_t                events_cached;
 
     PacketRecordNode        *packet_cache; // linked list of concurrent packets

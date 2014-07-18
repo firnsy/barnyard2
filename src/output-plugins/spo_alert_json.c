@@ -958,8 +958,29 @@ static int extract_ip(sfip_t *ip,const void *_event, uint32_t event_type, Packet
             return rc;
         }
     default:
-        ErrorMessage("extract_ip called with an unknown event type.");
-        return SFIP_FAILURE;
+        return extract_ip_from_packet(ip,p,srcdst_req);
+    }
+}
+
+static uint8_t extract_proto(const void *_event, uint32_t event_type, Packet *p)
+{
+    switch(event_type)
+    {
+    case UNIFIED2_IDS_EVENT:
+    case UNIFIED2_IDS_EVENT_VLAN:
+        // Share the same structure until protocol ip included
+        return ((Unified2IDSEvent *)_event)->protocol;
+
+    case UNIFIED2_IDS_EVENT_IPV6:
+    case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+        return ((Unified2IDSEventIPv6 *)_event)->protocol;
+
+    default: // Try to extract from the packet
+        if(p && IPH_IS_VALID(p))
+        {
+            return GET_IPH_PROTO(p);
+        }
+        return 0;
     }
 }
 
@@ -1160,18 +1181,19 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             break;
 
         case PROTO:
-            if(p && IPH_IS_VALID(p)){
-                Number_str_assoc * service_name_asoc = SearchNumberStr(GET_IPH_PROTO(p),jsonData->protocols);
+            {
+                const uint16_t proto = extract_proto(event,event_type,p);
+                Number_str_assoc * service_name_asoc = SearchNumberStr(proto,jsonData->protocols);
                 if(service_name_asoc){
                     KafkaLog_Puts(kafka,service_name_asoc->human_readable_str);
                     break;
-                } // Else: print PROTO_ID
+                }
             }
-            /* don't break! */
+            /* don't break! Print, at least, proto_id*/
         case PROTO_ID:
-            if(p && IPH_IS_VALID(p))
             {
-                KafkaLog_Puts(kafka,itoa10(GET_IPH_PROTO(p),buf,bufLen));
+                const uint16_t proto = extract_proto(event,event_type,p);
+                KafkaLog_Puts(kafka,itoa10(proto,buf,bufLen));
             }
 
             break;

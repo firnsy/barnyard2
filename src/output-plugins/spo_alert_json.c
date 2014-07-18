@@ -844,7 +844,8 @@ static inline uint64_t HWADDR_vectoi(const uint8_t *vaddr)
     return addr;
 }
 
-static const char * actionOfEvent(void * voidevent,uint32_t event_type){
+static const char * actionOfEvent(void * voidevent,uint32_t event_type)
+{
     #define EVENT_IMPACT_FLAG(e) e->impact_flag
     #define EVENT_BLOCKED(e)     e->blocked
     #define ACTION_OF_EVENT(e) \
@@ -868,6 +869,100 @@ static const char * actionOfEvent(void * voidevent,uint32_t event_type){
     return NULL;
 }
 
+#define SRC_REQ 0
+#define DST_REQ 1
+
+static int extract_ip_from_packet(sfip_t *ip,Packet *p,int srcdst_req)
+{
+    if(!(srcdst_req == SRC_REQ || srcdst_req == DST_REQ))
+    {
+        ErrorMessage("extract_ip_from_packet called with no valid direction.");
+        return SFIP_FAILURE;
+    }
+
+    #ifdef SUP_IP6
+
+        if(srcdst_req == SRC_REQ)
+        {
+            return SFIP_SUCCESS == sfip_set_ip(ip,GET_SRC_ADDR(p));
+        }
+        else /* srcdst_req == DST_REQ)*/
+        {
+            return SFIP_SUCCESS == sfip_set_ip(ip,GET_DST_ADDR(p));
+        }
+
+    #else
+        ipv4 = 0;
+        if(srcdst_req == SRC_REQ)
+        {
+            ipv4 = GET_SRC_ADDR(p).s_addr;
+        }
+        else
+        {
+            ipv4 = GET_DST_ADDR(p).s_addr
+        }
+        return sfip_set_raw(ip,&ipv4,AF_INET);
+    #endif
+}
+
+static int extract_ip(sfip_t *ip,const void *_event, uint32_t event_type, Packet *p,int srcdst_req)
+{
+    if(!(srcdst_req == SRC_REQ || srcdst_req == DST_REQ))
+    {
+        ErrorMessage("extract_ip_from_packet called with no valid direction.");
+        return SFIP_FAILURE;
+    }
+
+    switch(event_type)
+    {
+    case UNIFIED2_PACKET:
+        // Does not have information in the event -> trying to get it from the packet
+        return extract_ip_from_packet(ip,p,srcdst_req);
+        
+
+    case UNIFIED2_IDS_EVENT:
+    case UNIFIED2_IDS_EVENT_VLAN:
+        // Share the same structure until src/dst ip included
+        {
+            uint32_t ipv4 = 0;
+            if(srcdst_req == SRC_REQ)
+            {
+                ipv4 = ((Unified2IDSEvent *)_event)->ip_source;
+            }
+            else
+            {
+                ipv4 = ((Unified2IDSEvent *)_event)->ip_destination;
+            }
+            
+            const int rc = sfip_set_raw(ip,&ipv4,AF_INET);
+            if(p && rc != SFIP_SUCCESS)
+                return extract_ip_from_packet(ip,p,srcdst_req);
+            return rc;
+        }
+
+    case UNIFIED2_IDS_EVENT_IPV6:
+    case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+        // Share the same structure until src/dst ip included
+        {
+            int rc;
+            if(srcdst_req == SRC_REQ)
+            {
+                rc = sfip_set_raw(ip,((Unified2IDSEventIPv6 *)_event)->ip_source.s6_addr,AF_INET6);
+            }
+            else
+            {
+                rc = sfip_set_raw(ip,((Unified2IDSEventIPv6 *)_event)->ip_destination.s6_addr,AF_INET6);
+            }
+            if(p && rc != SFIP_SUCCESS)
+                return extract_ip_from_packet(ip,p,srcdst_req);
+            return rc;
+        }
+    default:
+        ErrorMessage("extract_ip called with an unknown event type.");
+        return SFIP_FAILURE;
+    }
+}
+
 /*
  * Function: PrintElementWithTemplate(Packet *, char *, FILE *, char *, numargs const int)
  *
@@ -881,7 +976,7 @@ static const char * actionOfEvent(void * voidevent,uint32_t event_type){
  * Returns: 0 if nothing writed to jsonData. !=0 otherwise.
  *
  */
-static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type, AlertJSONData *jsonData, AlertJSONTemplateElement *templateElement){
+static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type, AlertJSONData *jsonData, AlertJSONTemplateElement *templateElement){
     SigNode *sn;
     char tcpFlags[9];
   /*char buf[sizeof "ff:ff:ff:ff:ff:ff:255.255.255.255"];*/
@@ -889,7 +984,9 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
     const size_t bufLen = sizeof buf;
     const char * str_aux=NULL;
     KafkaLog * kafka = jsonData->kafka;
+
     sfip_t ip;
+    sfip_clear(&ip);
     const int initial_buffer_pos = KafkaLog_Tell(jsonData->kafka);
 #ifdef HAVE_GEOIP
     geoipv6_t ipv6;
@@ -897,94 +994,82 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
 #endif
 
     /* Avoid repeated code */
-    if(p && IPH_IS_VALID(p)){
-        switch(templateElement->id){
-            case SRC_TEMPLATE_ID:
-            case SRC_STR:
-            case SRC_NAME:
-            case SRC_NET:
-            case SRC_NET_NAME:
+    switch(templateElement->id){
+        case SRC_TEMPLATE_ID:
+        case SRC_STR:
+        case SRC_NAME:
+        case SRC_NET:
+        case SRC_NET_NAME:
 #ifdef HAVE_GEOIP
+        case SRC_COUNTRY:
+        case SRC_COUNTRY_CODE:
+        case SRC_AS:
+        case SRC_AS_NAME:
+#endif
+            extract_ip(&ip,event,event_type,p,SRC_REQ);
+            break;
+
+        case DST_TEMPLATE_ID:
+        case DST_STR:
+        case DST_NAME:
+        case DST_NET:
+        case DST_NET_NAME:
+#ifdef HAVE_GEOIP
+        case DST_COUNTRY:
+        case DST_COUNTRY_CODE:
+        case DST_AS:
+        case DST_AS_NAME:
+#endif
+            extract_ip(&ip,event,event_type,p,DST_REQ);
+            break;
+
+        case SRCPORT:
+        case SRCPORT_NAME:
+
+
+        default:
+            break;
+    };
+
+#ifdef HAVE_GEOIP
+    if(ip.family == AF_INET6){
+        switch(templateElement->id){
             case SRC_COUNTRY:
             case SRC_COUNTRY_CODE:
-            case SRC_AS:
-            case SRC_AS_NAME:
-#endif
-#ifdef SUP_IP6
-                sfip_set_ip(&ip,GET_SRC_ADDR(p));
-#else
-                {
-                    int ipv4 = GET_SRC_ADDR(p).s_addr;
-                    sfip_set_raw(&ip,&ipv4,AF_INET);
-                }
-#endif
-                break;
-
-            case DST_TEMPLATE_ID:
-            case DST_STR:
-            case DST_NAME:
-            case DST_NET:
-            case DST_NET_NAME:
-#ifdef HAVE_GEOIP
             case DST_COUNTRY:
             case DST_COUNTRY_CODE:
-            case DST_AS:
-            case DST_AS_NAME:
-#endif
-#ifdef SUP_IP6
-                sfip_set_ip(&ip,GET_DST_ADDR(p));
-#else
-                {
-                    int ipv4 = GET_DST_ADDR(p).s_addr;
-                    sfip_set_raw(&ip,&ipv4,AF_INET);
-                }
-#endif
-                break;
-            default:
-                sfip_clear(&ip);
-                break;
-        };
-
-#ifdef HAVE_GEOIP
-        if(ip.family == AF_INET6){
-            switch(templateElement->id){
-                case SRC_COUNTRY:
-                case SRC_COUNTRY_CODE:
-                case DST_COUNTRY:
-                case DST_COUNTRY_CODE:
-                    memcpy(ipv6.s6_addr, ip.ip8, sizeof(ipv6.s6_addr));
-                    break;
-                default:
-                    break;
-            };
-        }
-
-        switch(templateElement->id)
-        {
-            case SRC_AS:
-            case SRC_AS_NAME:
-            case DST_AS:
-            case DST_AS_NAME:
-                if(jsonData->gi_org)
-                {
-                    if(ip.family == AF_INET)
-                        as_name = GeoIP_name_by_ipnum(jsonData->gi_org,ntohl(ip.ip32[0]));
-                    else
-                        as_name = GeoIP_name_by_ipnum_v6(jsonData->gi_org,ipv6);
-                }
+                memcpy(ipv6.s6_addr, ip.ip8, sizeof(ipv6.s6_addr));
                 break;
             default:
                 break;
         };
-#endif
     }
+
+    switch(templateElement->id)
+    {
+        case SRC_AS:
+        case SRC_AS_NAME:
+        case DST_AS:
+        case DST_AS_NAME:
+            if(jsonData->gi_org)
+            {
+                if(ip.family == AF_INET)
+                    as_name = GeoIP_name_by_ipnum(jsonData->gi_org,ntohl(ip.ip32[0]));
+                else
+                    as_name = GeoIP_name_by_ipnum_v6(jsonData->gi_org,ipv6);
+            }
+            break;
+        default:
+            break;
+    };
+#endif
 
     #ifdef DEBUG
     if(NULL==templateElement) FatalError("TemplateElement was not setted (File %s line %d)\n.",__FILE__,__LINE__);
     #endif
     switch(templateElement->id){
         case TIMESTAMP:
-            KafkaLog_Puts(kafka,itoa10(p->pkth->ts.tv_sec, buf, bufLen));
+            KafkaLog_Puts(kafka,itoa10(ntohl(((Unified2EventCommon *)event)->event_second), buf, bufLen));
             break;
         case SENSOR_ID_SNORT:
             KafkaLog_Puts(kafka,event?itoa10(ntohl(((Unified2EventCommon *)event)->sensor_id),buf, bufLen):templateElement->defaultValue);
@@ -1075,7 +1160,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             break;
 
         case PROTO:
-            if(IPH_IS_VALID(p)){
+            if(p && IPH_IS_VALID(p)){
                 Number_str_assoc * service_name_asoc = SearchNumberStr(GET_IPH_PROTO(p),jsonData->protocols);
                 if(service_name_asoc){
                     KafkaLog_Puts(kafka,service_name_asoc->human_readable_str);
@@ -1084,22 +1169,26 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             }
             /* don't break! */
         case PROTO_ID:
-            KafkaLog_Puts(kafka,itoa10(IPH_IS_VALID(p)?GET_IPH_PROTO(p):0,buf,bufLen));
+            if(p && IPH_IS_VALID(p))
+            {
+                KafkaLog_Puts(kafka,itoa10(GET_IPH_PROTO(p),buf,bufLen));
+            }
+
             break;
 
         case ETHSRC:
-            if(p->eh)
+            if(p && p->eh)
                 printHWaddr(kafka, p->eh->ether_src, buf,bufLen);
             break;
 
         case ETHDST:
-            if(p->eh)
+            if(p && p->eh)
                 printHWaddr(kafka,p->eh->ether_dst,buf,bufLen);
             break;
 
 #ifdef HAVE_RB_MAC_VENDORS
         case ETHSRC_VENDOR:
-            if(p->eh && jsonData->eth_vendors_db)
+            if(p && p->eh && jsonData->eth_vendors_db)
             {
                 const char * vendor = rb_find_mac_vendor(HWADDR_vectoi(p->eh->ether_src),jsonData->eth_vendors_db);
                 if(vendor)
@@ -1107,7 +1196,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             }
             break;
         case ETHDST_VENDOR:
-            if(p->eh && jsonData->eth_vendors_db)
+            if(p && p->eh && jsonData->eth_vendors_db)
             {
                 const char * vendor = rb_find_mac_vendor(HWADDR_vectoi(p->eh->ether_dst),jsonData->eth_vendors_db);
                 if(vendor)
@@ -1117,11 +1206,11 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
 #endif
 
         case ARP_HW_SADDR:
-            if(p->ah)
+            if(p && p->ah)
                 printHWaddr(kafka,p->ah->arp_sha,buf,bufLen);
             break;
         case ARP_HW_SPROT:
-            if(p->ah)
+            if(p && p->ah)
             {
                 KafkaLog_Puts(kafka, "0x");
                 KafkaLog_Puts(kafka, itoa16(p->ah->arp_spa[0],buf,bufLen));
@@ -1131,11 +1220,11 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             }
             break;
         case ARP_HW_TADDR:
-            if(p->ah)
+            if(p && p->ah)
                 printHWaddr(kafka,p->ah->arp_tha,buf,bufLen);
             break;
         case ARP_HW_TPROT:
-            if(p->ah)
+            if(p && p->ah)
             {
                 KafkaLog_Puts(kafka, "0x");
                 KafkaLog_Puts(kafka, itoa16(p->ah->arp_tpa[0],buf,bufLen));
@@ -1146,25 +1235,25 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             break;
 
         case ETHTYPE:
-            if(p->eh)
+            if(p && p->eh)
             {
                 KafkaLog_Puts(kafka, itoa10(ntohs(p->eh->ether_type),buf,bufLen));
             }
             break;
 
         case UDPLENGTH:
-            if(p->udph){
+            if(p && p->udph){
                 KafkaLog_Puts(kafka, itoa10(ntohs(p->udph->uh_len),buf,bufLen));
             }
             break;
         case ETHLENGTH:
-            if(p->eh){
+            if(p && p->eh){
                 KafkaLog_Puts(kafka, itoa10(p->pkth->len,buf,bufLen));
             }
             break;
 
         case ETHLENGTH_RANGE:
-            if(p->eh){
+            if(p && p->eh){
                 if(p->pkth->len==0)
                     KafkaLog_Puts(kafka, "0");
                 if(p->pkth->len<=64)
@@ -1199,19 +1288,19 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             break;
 
         case VLAN_PRIORITY:
-            if(p->vh)
+            if(p && p->vh)
                 KafkaLog_Puts(kafka,itoa10(VTH_PRIORITY(p->vh),buf,bufLen));
             break;
         case VLAN_DROP:
-            if(p->vh)
+            if(p && p->vh)
                 KafkaLog_Puts(kafka,itoa10(VTH_CFI(p->vh),buf,bufLen));
             break;
         case VLAN:
-            if(p->vh)
+            if(p && p->vh)
                 KafkaLog_Puts(kafka,itoa10(VTH_VLAN(p->vh),buf,bufLen));
             break;
         case VLAN_NAME:
-            if(p->vh){
+            if(p && p->vh){
                 Number_str_assoc * service_name_asoc = SearchNumberStr(VTH_VLAN(p->vh),jsonData->vlans);
                 if(service_name_asoc)
                     KafkaLog_Puts(kafka,service_name_asoc->human_readable_str);
@@ -1222,7 +1311,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
 
         case SRCPORT_NAME:
         case DSTPORT_NAME:
-            if(IPH_IS_VALID(p))
+            if(p && IPH_IS_VALID(p))
             {
                 switch(GET_IPH_PROTO(p))
                 {
@@ -1242,7 +1331,7 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             break;
         case SRCPORT:
         case DSTPORT:
-            if(IPH_IS_VALID(p))
+            if(p && IPH_IS_VALID(p))
             {
                 switch(GET_IPH_PROTO(p))
                 {
@@ -1349,19 +1438,19 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
 #endif /* HAVE_GEOIP */
 
         case ICMPTYPE:
-            if(p->icmph)
+            if(p && p->icmph)
                 KafkaLog_Puts(kafka, itoa10(p->icmph->type,buf,bufLen));
             break;
         case ICMPCODE:
-            if(p->icmph)
+            if(p && p->icmph)
                 KafkaLog_Puts(kafka, itoa10(p->icmph->code,buf,bufLen));
             break;
         case ICMPID:
-            if(p->icmph)
+            if(p && p->icmph)
                 KafkaLog_Puts(kafka, itoa10(ntohs(p->icmph->s_icmp_id),buf,bufLen));
             break;
         case ICMPSEQ:
-            if(p->icmph){
+            if(p && p->icmph){
                 /* Doesn't work because "%d" arbitrary
                     PrintJSONFieldName(kafka,JSON_ICMPSEQ_NAME);
                     KafkaLog_Print(kafka, "%d",ntohs(p->icmph->s_icmp_seq));
@@ -1370,24 +1459,24 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             }
             break;
         case TTL:
-            if(IPH_IS_VALID(p))
+            if(p && IPH_IS_VALID(p))
                 KafkaLog_Puts(kafka,itoa10(GET_IPH_TTL(p),buf,bufLen));
             break;
 
         case TOS: 
-            if(IPH_IS_VALID(p))
+            if(p && IPH_IS_VALID(p))
                 KafkaLog_Puts(kafka,itoa10(GET_IPH_TOS(p),buf,bufLen));
             break;
         case ID:
-            if(IPH_IS_VALID(p))
+            if(p && IPH_IS_VALID(p))
                 KafkaLog_Puts(kafka,itoa10(IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)),buf,bufLen));
             break;
         case IPLEN:
-            if(IPH_IS_VALID(p))
+            if(p && IPH_IS_VALID(p))
                 KafkaLog_Puts(kafka,itoa10(GET_IPH_LEN(p) << 2,buf,bufLen));
             break;
         case IPLEN_RANGE:
-            if(IPH_IS_VALID(p))
+            if(p && IPH_IS_VALID(p))
             {
                 const double log2_len = log2(GET_IPH_LEN(p) << 2);
                 const unsigned int lower_limit = pow(2.0,floor(log2_len));
@@ -1399,37 +1488,37 @@ static int printElementWithTemplate(Packet * p, void *event, uint32_t event_type
             }
             break;
         case DGMLEN:
-            if(IPH_IS_VALID(p)){
+            if(p && IPH_IS_VALID(p)){
                 // XXX might cause a bug when IPv6 is printed?
                 KafkaLog_Puts(kafka, itoa10(ntohs(GET_IPH_LEN(p)),buf,bufLen));
             }
             break;
 
         case TCPSEQ:
-            if(p->tcph){
+            if(p && p->tcph){
                 // KafkaLog_Print(kafka, "lX%0x",(u_long) ntohl(p->tcph->th_ack)); // hex format
                 KafkaLog_Puts(kafka,itoa10(ntohl(p->tcph->th_seq),buf,bufLen));
             }
             break;
         case TCPACK:
-            if(p->tcph){
+            if(p && p->tcph){
                 // KafkaLog_Print(kafka, "0x%lX",(u_long) ntohl(p->tcph->th_ack));
                 KafkaLog_Puts(kafka,itoa10(ntohl(p->tcph->th_ack),buf,bufLen));
             }
             break;
         case TCPLEN:
-            if(p->tcph){
+            if(p && p->tcph){
                 KafkaLog_Puts(kafka, itoa10(TCP_OFFSET(p->tcph) << 2,buf,bufLen));
             }
             break;
         case TCPWINDOW:
-            if(p->tcph){
+            if(p && p->tcph){
                 //KafkaLog_Print(kafka, "0x%X",ntohs(p->tcph->th_win));  // hex format
                 KafkaLog_Puts(kafka,itoa10(ntohs(p->tcph->th_win),buf,bufLen));
             }
             break;
         case TCPFLAGS:
-            if(p->tcph)
+            if(p && p->tcph)
             {
                 CreateTCPFlagString(p, tcpFlags);
                 KafkaLog_Puts(kafka, tcpFlags);
@@ -1467,8 +1556,14 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSO
 
     KafkaLog * kafka = jsonData->kafka;
 
-    if(p == NULL)
+    // if(p == NULL)
+    //     return;
+
+    if(event == NULL)
+    {
+        ErrorMessage("Lonely packet detected. Please consider increase the cache size.");
         return;
+    }
 
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Logging JSON Alert data\n"););
     KafkaLog_Putc(kafka,'{');

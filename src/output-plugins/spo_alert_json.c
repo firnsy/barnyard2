@@ -1036,14 +1036,18 @@ static uint8_t extract_port(const void *_event, uint32_t event_type, Packet *p,i
     }
 }
 
-static uint16_t extract_icmp_type(const void *_event, uint32_t event_type, Packet *p)
+static uint16_t extract_icmp_type(const void *_event, uint32_t event_type, Packet *p, int *okp)
 {
     const uint8_t proto = extract_proto(_event,event_type,p);
     if(!(proto == IPPROTO_ICMP))
     {
+        if(okp)
+            *okp = 0;
         return 0;
     }
 
+    if(okp)
+        *okp = 1;
     switch(event_type)
     {
     case UNIFIED2_IDS_EVENT:
@@ -1059,6 +1063,37 @@ static uint16_t extract_icmp_type(const void *_event, uint32_t event_type, Packe
     default: // Try to extract from the packet
         if(p && IPH_IS_VALID(p) && p->icmph)
             return p->icmph->type;
+        return 0;
+    }
+}
+
+static uint16_t extract_icmp_code(const void *_event, uint32_t event_type, Packet *p, int *okp)
+{
+    const uint8_t proto = extract_proto(_event,event_type,p);
+    if(!(proto == IPPROTO_ICMP))
+    {
+        if(okp)
+            *okp = 0;
+        return 0;
+    }
+
+    if(okp)
+        *okp = 1;
+    switch(event_type)
+    {
+    case UNIFIED2_IDS_EVENT:
+    case UNIFIED2_IDS_EVENT_VLAN:
+        // Share the same structure until ports included
+        return ntohs(((Unified2IDSEvent *)_event)->dport_icode);
+
+    case UNIFIED2_IDS_EVENT_IPV6:
+    case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+        // Share the same structure until ports included
+        return ntohs(((Unified2IDSEventIPv6 *)_event)->dport_icode);
+
+    default: // Try to extract from the packet
+        if(p && IPH_IS_VALID(p) && p->icmph)
+            return p->icmph->code;
         return 0;
     }
 }
@@ -1531,14 +1566,19 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
 
         case ICMPTYPE:
             {
-                const uint16_t itype = extract_icmp_type(event,event_type,p);
-                if(itype)
+                int ok;
+                const uint16_t itype = extract_icmp_type(event,event_type,p,&ok);
+                if(ok)
                     KafkaLog_Puts(kafka, itoa10(itype,buf,bufLen));
             }
             break;
         case ICMPCODE:
-            if(p && p->icmph)
-                KafkaLog_Puts(kafka, itoa10(p->icmph->code,buf,bufLen));
+            {
+                int ok;
+                const uint16_t icode = extract_icmp_code(event,event_type,p,&ok);
+                if(ok)
+                    KafkaLog_Puts(kafka, itoa10(icode,buf,bufLen));
+            }
             break;
         case ICMPID:
             if(p && p->icmph)

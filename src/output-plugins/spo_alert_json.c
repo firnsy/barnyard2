@@ -929,7 +929,7 @@ static int extract_ip_from_packet(sfip_t *ip,Packet *p,int srcdst_req)
     #endif
 }
 
-static int extract_ip(sfip_t *ip,const void *_event, uint32_t event_type, Packet *p,int srcdst_req)
+static int extract_ip0(sfip_t *ip,const void *_event, uint32_t event_type, Packet *p,int srcdst_req)
 {
     if(!(srcdst_req == SRC_REQ || srcdst_req == DST_REQ))
     {
@@ -986,6 +986,11 @@ static int extract_ip(sfip_t *ip,const void *_event, uint32_t event_type, Packet
     }
 }
 
+#define extract_src_ip(ip,event,event_type,p) \
+    extract_ip0(ip,event, event_type, p,SRC_REQ)
+#define extract_dst_ip(ip,event,event_type,p) \
+    extract_ip0(ip,event, event_type, p,DST_REQ)
+
 static uint8_t extract_proto(const void *_event, uint32_t event_type, Packet *p)
 {
     switch(event_type)
@@ -1013,7 +1018,7 @@ static uint8_t extract_port_from_packet(Packet *p,int srcdst_req)
     return ntohs(srcdst_req == SRC_REQ ? p->sp : p->dp);
 }
 
-static uint8_t extract_port(const void *_event, uint32_t event_type, Packet *p,int srcdst_req)
+static uint8_t extract_port0(const void *_event, uint32_t event_type, Packet *p,int srcdst_req)
 {
     if(!(srcdst_req == SRC_REQ || srcdst_req == DST_REQ))
     {
@@ -1059,6 +1064,11 @@ static uint8_t extract_port(const void *_event, uint32_t event_type, Packet *p,i
         return 0;
     }
 }
+
+#define extract_src_port(event,event_type,packet) \
+    extract_port0(event,event_type,packet,SRC_REQ)
+#define extract_dst_port(event,event_type,packet) \
+    extract_port0(event,event_type,packet,DST_REQ)
 
 static uint16_t extract_icmp_type(const void *_event, uint32_t event_type, Packet *p, int *okp)
 {
@@ -1263,7 +1273,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case SRC_AS:
         case SRC_AS_NAME:
 #endif
-            extract_ip(&ip,event,event_type,p,SRC_REQ);
+            extract_src_ip(&ip,event,event_type,p);
             break;
 
         case DST_TEMPLATE_ID:
@@ -1277,7 +1287,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case DST_AS:
         case DST_AS_NAME:
 #endif
-            extract_ip(&ip,event,event_type,p,DST_REQ);
+            extract_dst_ip(&ip,event,event_type,p);
             break;
 
         default:
@@ -1543,8 +1553,8 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case DSTPORT_NAME:
             {
                 const uint16_t port = templateElement->id==SRCPORT_NAME? 
-                    extract_port(event, event_type, p,SRC_REQ)
-                    :extract_port(event, event_type, p,DST_REQ);
+                    extract_src_port(event, event_type, p)
+                    :extract_dst_port(event, event_type, p);
                 Number_str_assoc * service_name_asoc = SearchNumberStr(port,jsonData->services);
 
                 if(port!=0)
@@ -1561,8 +1571,8 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case DSTPORT:
             {
                 const uint16_t port = templateElement->id==SRCPORT? 
-                    extract_port(event, event_type, p,SRC_REQ)
-                    :extract_port(event, event_type, p,DST_REQ);
+                    extract_src_port(event, event_type, p)
+                    :extract_dst_port(event, event_type, p);
 
                 if(port!=0)
                     KafkaLog_Puts(kafka,itoa10(port,buf,bufLen));

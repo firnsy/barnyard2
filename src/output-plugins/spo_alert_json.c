@@ -687,6 +687,18 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     }else{
         DEBUG_WRAP(DebugMessage(DEBUG_INIT, "alert_json: No geoip database specified.\n"););
     }
+
+    if(geoIP6_org_path)
+    {
+        data->gi6_org = GeoIP_open(geoIP6_org_path, GEOIP_MEMORY_CACHE);
+
+        if (data->gi6_org == NULL)
+            ErrorMessage("alert_json: Error opening database %s\n",geoIP6_org_path);
+        else
+            DEBUG_WRAP(DebugMessage(DEBUG_INIT, "alert_json: Success opening geoip database: %s\n", geoIP6_org_path););
+    }else{
+        DEBUG_WRAP(DebugMessage(DEBUG_INIT, "alert_json: No geoip organization database specified.\n"););
+    }
 #endif
 
 #endif // HAVE_GEOIP
@@ -1184,6 +1196,32 @@ static const char *extract_country0(AlertJSONData *jsonData,const sfip_t *ip, in
 #define extract_country(jsonData,ip)      extract_country0(jsonData,ip,RETURN_COUNTRY_LONG)
 #define extract_country_code(jsonData,ip) extract_country0(jsonData,ip,RETURN_COUNTRY_CODE)
 
+static char *extract_AS(AlertJSONData *jsonData,const sfip_t *ip)
+{
+    char *as = NULL;
+
+    if(NULL == ip)
+    {
+        ErrorMessage("extract_AS called with ip==NULL");
+        return NULL;
+    }
+
+    if(sfip_family(ip) == AF_INET && jsonData->gi_org)
+    {
+        as = GeoIP_name_by_ipnum(jsonData->gi_org,ntohl(ip->ip32[0]));
+    }
+#ifdef SUP_IP6
+    else if(sfip_family(ip) == AF_INET6 && jsonData->gi6_org)
+    {
+        geoipv6_t ipv6;
+        memcpy(ipv6.s6_addr, ip->ip8, sizeof(ipv6.s6_addr));
+        as = GeoIP_name_by_ipnum_v6(jsonData->gi6_org,ipv6);
+    }
+#endif
+
+    return as;
+}
+
 #endif
 
 
@@ -1211,10 +1249,6 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
     sfip_t ip;
     sfip_clear(&ip);
     const int initial_buffer_pos = KafkaLog_Tell(jsonData->kafka);
-#ifdef HAVE_GEOIP
-    char * as_name=NULL;
-    geoipv6_t ipv6;
-#endif
 
     /* Avoid repeated code */
     switch(templateElement->id){
@@ -1249,28 +1283,6 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         default:
             break;
     };
-
-#ifdef HAVE_GEOIP
-    switch(templateElement->id)
-    {
-        case SRC_AS:
-        case SRC_AS_NAME:
-        case DST_AS:
-        case DST_AS_NAME:
-            if(jsonData->gi_org)
-            {
-                if(ip.family == AF_INET)
-                    as_name = GeoIP_name_by_ipnum(jsonData->gi_org,ntohl(ip.ip32[0]));
-                #ifdef SUP_IP6
-                else
-                    as_name = GeoIP_name_by_ipnum_v6(jsonData->gi_org,ipv6);
-                #endif
-            }
-            break;
-        default:
-            break;
-    };
-#endif
 
     #ifdef DEBUG
     if(NULL==templateElement) FatalError("TemplateElement was not setted (File %s line %d)\n.",__FILE__,__LINE__);
@@ -1616,21 +1628,29 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
 
         case SRC_AS:
         case DST_AS:
-            if(as_name)
             {
-                const char * space = strchr(as_name,' ');
-                if(space)
-                    KafkaLog_Write(kafka,as_name+2,space - &as_name[2]);
+                char *as_name = extract_AS(jsonData,&ip);
+                if(as_name)
+                {
+                    const char *space = strchr(as_name,' ');
+                    if(space)
+                        KafkaLog_Write(kafka,as_name+2,space - &as_name[2]);
+                    free(as_name);
+                }
             }
             break;
 
         case SRC_AS_NAME:
         case DST_AS_NAME:
-            if(as_name)
             {
-                const char * space = strchr(as_name,' ');
-                if(space)
-                    KafkaLog_Puts(kafka,space+1);
+                char *as_name = extract_AS(jsonData,&ip);
+                if(as_name)
+                {
+                    const char * space = strchr(as_name,' ');
+                    if(space)
+                        KafkaLog_Puts(kafka,space+1);
+                    free(as_name);
+                }
             }
             break;
 
@@ -1736,11 +1756,6 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             FatalError("Template %s(%d) not found\n",templateElement->templateName,templateElement->id);
             break;
     };
-
-#ifdef HAVE_GEOIP
-    if(as_name)
-        free(as_name);
-#endif /* HAVE_GEOIP */
 
     return KafkaLog_Tell(kafka)-initial_buffer_pos; /* if we have write something */
 }

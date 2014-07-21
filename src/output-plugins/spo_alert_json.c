@@ -984,6 +984,58 @@ static uint8_t extract_proto(const void *_event, uint32_t event_type, Packet *p)
     }
 }
 
+static uint8_t extract_port_from_packet(Packet *p,int srcdst_req)
+{
+    return ntohs(srcdst_req == SRC_REQ ? p->sp : p->dp);
+}
+
+static uint8_t extract_port(const void *_event, uint32_t event_type, Packet *p,int srcdst_req)
+{
+    if(!(srcdst_req == SRC_REQ || srcdst_req == DST_REQ))
+    {
+        ErrorMessage("extract_port called with no valid direction.");
+        return 0;
+    }
+
+    const uint8_t proto = extract_proto(_event,event_type,p);
+    if(!(proto == IPPROTO_TCP || proto == IPPROTO_UDP))
+    {
+        return 0;
+    }
+
+    switch(event_type)
+    {
+    case UNIFIED2_IDS_EVENT:
+    case UNIFIED2_IDS_EVENT_VLAN:
+        // Share the same structure until ports included
+        if(srcdst_req == SRC_REQ)
+        {
+            return ntohs(((Unified2IDSEvent *)_event)->sport_itype);
+        }
+        else
+        {
+            return ntohs(((Unified2IDSEvent *)_event)->dport_icode);
+        }
+
+    case UNIFIED2_IDS_EVENT_IPV6:
+    case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+        // Share the same structure until ports included
+        if(srcdst_req == SRC_REQ)
+        {
+            return ntohs(((Unified2IDSEventIPv6 *)_event)->sport_itype);
+        }
+        else
+        {
+            return ntohs(((Unified2IDSEventIPv6 *)_event)->dport_icode);
+        }
+
+    default: // Try to extract from the packet
+        if(p && IPH_IS_VALID(p))
+            return extract_port_from_packet(p,srcdst_req);
+        return 0;
+    }
+}
+
 /*
  * Function: PrintElementWithTemplate(Packet *, char *, FILE *, char *, numargs const int)
  *
@@ -1333,40 +1385,31 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
 
         case SRCPORT_NAME:
         case DSTPORT_NAME:
-            if(p && IPH_IS_VALID(p))
             {
-                switch(GET_IPH_PROTO(p))
+                const uint16_t port = templateElement->id==SRCPORT_NAME? 
+                    extract_port(event, event_type, p,SRC_REQ)
+                    :extract_port(event, event_type, p,DST_REQ);
+                Number_str_assoc * service_name_asoc = SearchNumberStr(port,jsonData->services);
+
+                if(port!=0)
                 {
-                    case IPPROTO_UDP:
-                    case IPPROTO_TCP:
-                    {
-                        const uint16_t port = templateElement->id==SRCPORT_NAME? p->sp:p->dp;
-                        Number_str_assoc * service_name_asoc = SearchNumberStr(port,jsonData->services);
-                        if(service_name_asoc)
-                            KafkaLog_Puts(kafka,service_name_asoc->human_readable_str);
-                        else /* Log port number */
-                            KafkaLog_Puts(kafka,itoa10(templateElement->id==SRCPORT_NAME? p->sp:p->dp,buf,bufLen));
-                    }
-                    break;
-                };
+                    if(service_name_asoc)
+                        KafkaLog_Puts(kafka,service_name_asoc->human_readable_str);
+                    else /* Log port number */
+                        KafkaLog_Puts(kafka,itoa10(port,buf,bufLen));
+                }
             }
             break;
+
         case SRCPORT:
         case DSTPORT:
-            if(p && IPH_IS_VALID(p))
             {
-                switch(GET_IPH_PROTO(p))
-                {
-                    case IPPROTO_UDP:
-                    case IPPROTO_TCP:
-                        KafkaLog_Puts(kafka,itoa10(templateElement->id==SRCPORT? p->sp:p->dp,buf,bufLen));
-                        break;
-                    default: /* Always log something */
-                        KafkaLog_Puts(kafka,templateElement->defaultValue);
-                        break;
-                }
-            }else{ /* Always Log something */
-                KafkaLog_Puts(kafka,templateElement->defaultValue);
+                const uint16_t port = templateElement->id==SRCPORT? 
+                    extract_port(event, event_type, p,SRC_REQ)
+                    :extract_port(event, event_type, p,DST_REQ);
+
+                if(port!=0)
+                    KafkaLog_Puts(kafka,itoa10(port,buf,bufLen));
             }
             break;
 

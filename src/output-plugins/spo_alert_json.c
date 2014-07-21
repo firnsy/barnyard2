@@ -1098,6 +1098,36 @@ static uint16_t extract_icmp_code(const void *_event, uint32_t event_type, Packe
     }
 }
 
+static uint16_t extract_vlan_id(const void *_event, uint32_t event_type, Packet *p, int *okp)
+{
+    switch(event_type)
+    {
+    case UNIFIED2_IDS_EVENT_VLAN:
+        // Share the same structure until ports included
+        if(okp)
+            *okp = 1;
+        return ntohs(((Unified2IDSEvent *)_event)->vlanId);
+    case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+        // Share the same structure until ports included
+        if(okp)
+            *okp = 1;
+        return ntohs(((Unified2IDSEventIPv6 *)_event)->vlanId);
+
+    case UNIFIED2_IDS_EVENT:
+    case UNIFIED2_IDS_EVENT_IPV6:
+    default: // Try to extract from the packet
+        if(p && IPH_IS_VALID(p) && p->vh)
+        {
+            if(okp)
+                *okp = 1;
+            return VTH_VLAN(p->vh);
+        }
+        if(okp)
+            okp = 0;
+        return 0;
+    }
+}
+
 /*
  * Function: PrintElementWithTemplate(Packet *, char *, FILE *, char *, numargs const int)
  *
@@ -1432,16 +1462,25 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
                 KafkaLog_Puts(kafka,itoa10(VTH_CFI(p->vh),buf,bufLen));
             break;
         case VLAN:
-            if(p && p->vh)
-                KafkaLog_Puts(kafka,itoa10(VTH_VLAN(p->vh),buf,bufLen));
+            {
+                int ok;
+                const uint16_t vlan = extract_vlan_id(event, event_type, p, &ok);
+                if(ok)
+                    KafkaLog_Puts(kafka,itoa10(vlan,buf,bufLen));
+            }
             break;
         case VLAN_NAME:
-            if(p && p->vh){
-                Number_str_assoc * service_name_asoc = SearchNumberStr(VTH_VLAN(p->vh),jsonData->vlans);
-                if(service_name_asoc)
-                    KafkaLog_Puts(kafka,service_name_asoc->human_readable_str);
-                else
-                    KafkaLog_Puts(kafka,itoa10(VTH_VLAN(p->vh),buf,bufLen));
+            {
+                int ok;
+                const uint16_t vlan = extract_vlan_id(event, event_type, p, &ok);
+                if(ok)
+                {
+                    const Number_str_assoc * vlan_str = SearchNumberStr(vlan,jsonData->vlans);
+                    if(vlan_str)
+                        KafkaLog_Puts(kafka,vlan_str->human_readable_str);
+                    else
+                        KafkaLog_Puts(kafka,itoa10(vlan,buf,bufLen));
+                }
             }
             break;
 

@@ -1036,6 +1036,33 @@ static uint8_t extract_port(const void *_event, uint32_t event_type, Packet *p,i
     }
 }
 
+static uint16_t extract_icmp_type(const void *_event, uint32_t event_type, Packet *p)
+{
+    const uint8_t proto = extract_proto(_event,event_type,p);
+    if(!(proto == IPPROTO_ICMP))
+    {
+        return 0;
+    }
+
+    switch(event_type)
+    {
+    case UNIFIED2_IDS_EVENT:
+    case UNIFIED2_IDS_EVENT_VLAN:
+        // Share the same structure until ports included
+        return ntohs(((Unified2IDSEvent *)_event)->sport_itype);
+
+    case UNIFIED2_IDS_EVENT_IPV6:
+    case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+        // Share the same structure until ports included
+        return ntohs(((Unified2IDSEventIPv6 *)_event)->sport_itype);
+
+    default: // Try to extract from the packet
+        if(p && IPH_IS_VALID(p) && p->icmph)
+            return p->icmph->type;
+        return 0;
+    }
+}
+
 /*
  * Function: PrintElementWithTemplate(Packet *, char *, FILE *, char *, numargs const int)
  *
@@ -1503,8 +1530,11 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
 #endif /* HAVE_GEOIP */
 
         case ICMPTYPE:
-            if(p && p->icmph)
-                KafkaLog_Puts(kafka, itoa10(p->icmph->type,buf,bufLen));
+            {
+                const uint16_t itype = extract_icmp_type(event,event_type,p);
+                if(itype)
+                    KafkaLog_Puts(kafka, itoa10(itype,buf,bufLen));
+            }
             break;
         case ICMPCODE:
             if(p && p->icmph)

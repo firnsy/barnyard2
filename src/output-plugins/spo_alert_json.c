@@ -916,14 +916,14 @@ static int extract_ip_from_packet(sfip_t *ip,Packet *p,int srcdst_req)
         }
 
     #else
-        ipv4 = 0;
+        uint32_t ipv4 = 0;
         if(srcdst_req == SRC_REQ)
         {
             ipv4 = GET_SRC_ADDR(p).s_addr;
         }
         else
         {
-            ipv4 = GET_DST_ADDR(p).s_addr
+            ipv4 = GET_DST_ADDR(p).s_addr;
         }
         return sfip_set_raw(ip,&ipv4,AF_INET);
     #endif

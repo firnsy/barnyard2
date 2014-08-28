@@ -70,6 +70,8 @@
 #include "util.h"
 #include "ipv6_port.h"
 
+#include "rb_unified2.h"
+
 
 typedef struct _SyslogData
 {
@@ -504,6 +506,7 @@ void AlertSyslog(Packet *p, void *event, uint32_t event_type, void *arg)
     char pri_data[STD_BUF];
     char ip_data[STD_BUF];
     char event_data[STD_BUF];
+    char action_data[STD_BUF];
 #define SYSLOG_BUF  1024
     char event_string[SYSLOG_BUF];
     SyslogData		 	*data;
@@ -583,6 +586,21 @@ void AlertSyslog(Packet *p, void *event, uint32_t event_type, void *arg)
 
             if( strlcat(event_string, pri_data, SYSLOG_BUF) >= SYSLOG_BUF)
                 return;
+        }
+
+        if(event)
+        {
+            const char *action_taken = actionOfEvent(event,event_type);
+            if(action_taken)
+            {
+                const int snprintf_rc = SnortSnprintf(action_data, STD_BUF, "[Action: %s]:",
+                    action_taken ? action_taken : "Unknown");
+                if( snprintf_rc != SNORT_SNPRINTF_SUCCESS )
+                    return;
+                const int strlcat_rc = strlcat(event_string, action_taken, SYSLOG_BUF);
+                if( strlcat_rc >= SYSLOG_BUF )
+                    return;
+            }
         }
 
         if((GET_IPH_PROTO(p) != IPPROTO_TCP &&

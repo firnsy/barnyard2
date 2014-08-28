@@ -69,6 +69,7 @@
 #include "rbutil/rb_kafka.h"
 #include "rbutil/rb_numstrpair_list.h"
 #include "rbutil/rb_pointers.h"
+#include "rbutil/rb_unified2.h"
 #include "errno.h"
 #include "signal.h"
 #include "log_text.h"
@@ -866,31 +867,6 @@ static inline uint64_t HWADDR_vectoi(const uint8_t *vaddr)
     }
     addr+=vaddr[5];
     return addr;
-}
-
-static const char * actionOfEvent(void * voidevent,uint32_t event_type)
-{
-    #define EVENT_IMPACT_FLAG(e) e->impact_flag
-    #define EVENT_BLOCKED(e)     e->blocked
-    #define ACTION_OF_EVENT(e) \
-        if(EVENT_IMPACT_FLAG(event)==0 && EVENT_BLOCKED(event)==0) return "alert";\
-        if(EVENT_IMPACT_FLAG(event)==32 && EVENT_BLOCKED(event)==1) return "drop";\
-        if(event==NULL && event_type ==0) return "log"
-
-    switch(event_type){
-        case 7:
-        {
-            Unified2IDSEvent_legacy *event = (Unified2IDSEvent_legacy *)voidevent;
-            ACTION_OF_EVENT(e);
-        }
-        case 104:
-        {
-            Unified2IDSEvent *event = (Unified2IDSEvent *)voidevent;
-            ACTION_OF_EVENT(e);
-        }
-        /* IPV6 pending */
-    };
-    return NULL;
 }
 
 #define SRC_REQ 0

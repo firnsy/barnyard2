@@ -970,6 +970,25 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	cn = ClassTypeLookupById(barnyard2_conf,
 				 ntohl(iEvent->classification_id));
 	
+	if( syslogContext->sensor_name ){
+	    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
+							   "[Sensor name:%s] ",
+							   syslogContext->sensor_name)) >=  SYSLOG_MAX_QUERY_SIZE)
+    	    {
+    	        /* XXX */
+    	        FatalError("[%s()], failed call to snprintf \n",
+    	    	       __FUNCTION__);
+    	    }
+	    
+            if( OpSyslog_Concat(syslogContext))
+            {
+                /* XXX */
+                FatalError("OpSyslog_Concat(): Failed \n");
+            }
+
+	}
+	
+
 	if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
 							   "[%u:%u:%u] ",
 							   ntohl(iEvent->generator_id),

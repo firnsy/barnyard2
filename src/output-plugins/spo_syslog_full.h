@@ -59,6 +59,7 @@ typedef struct _OpSyslog_Data
 {
     char *server;
     char *sensor_name;
+    char *sensor_group;
 
     u_int8_t log_context;
     u_int8_t payload_encoding;

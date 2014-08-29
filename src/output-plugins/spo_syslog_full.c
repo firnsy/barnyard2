@@ -224,6 +224,12 @@ void OpSyslog_Exit(int signal,void *pSyslogContext)
 	free(iSyslogContext->sensor_name);
 	iSyslogContext->sensor_name = NULL;
     }
+
+    if(iSyslogContext->sensor_group)
+    {
+	free(iSyslogContext->sensor_group);
+	iSyslogContext->sensor_group = NULL;
+    }
     
     NetClose(iSyslogContext);
 
@@ -972,8 +978,26 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	
 	if( syslogContext->sensor_name ){
 	    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
-							   "[Sensor name:%s] ",
+							   "[Sensor name: %s] ",
 							   syslogContext->sensor_name)) >=  SYSLOG_MAX_QUERY_SIZE)
+    	    {
+    	        /* XXX */
+    	        FatalError("[%s()], failed call to snprintf \n",
+    	    	       __FUNCTION__);
+    	    }
+	    
+            if( OpSyslog_Concat(syslogContext))
+            {
+                /* XXX */
+                FatalError("OpSyslog_Concat(): Failed \n");
+            }
+
+	}
+
+	if( syslogContext->sensor_group ){
+	    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
+							   "[Sensor group: %s] ",
+							   syslogContext->sensor_group)) >=  SYSLOG_MAX_QUERY_SIZE)
     	    {
     	        /* XXX */
     	        FatalError("[%s()], failed call to snprintf \n",
@@ -1369,6 +1393,14 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
 	    {
 		if(num_stoks > 1 && !op_data->sensor_name )
 		    op_data->sensor_name = strdup(stoks[1]);
+		else
+		    LogMessage("Argument Error in %s(%i): %s\n", file_name,
+			       file_line, index);
+	    }
+	    else if(strcasecmp("sensor_group", stoks[0]) == 0)
+	    {
+		if(num_stoks > 1 && !op_data->sensor_group )
+		    op_data->sensor_group = strdup(stoks[1]);
 		else
 		    LogMessage("Argument Error in %s(%i): %s\n", file_name,
 			       file_line, index);

@@ -30,4 +30,4 @@
 
 #include <stdint.h>
 
-const char * actionOfEvent(const void * event,uint32_t event_type);
+const char *actionOfEvent(const void *event,uint32_t event_type);

@@ -50,7 +50,9 @@
 */
 
 #include "output-plugins/spo_syslog_full.h"
+#undef SUP_IP6 // HACK
 #include "ipv6_port.h"
+#include "rb_unified2.h"
 
 /* Output plugin API functions */
 static void OpSyslog_Exit(int signal,void *outputPlugin);
@@ -346,7 +348,7 @@ return 0;
 }*/
 
 
-static int Syslog_FormatTrigger(OpSyslog_Data *syslogData, Unified2EventCommon *pEvent,int opType) 
+static int Syslog_FormatTrigger(OpSyslog_Data *syslogData, Unified2EventCommon *pEvent,uint32_t event_type,int opType) 
 {
     
     char tSigBuf[256] = {0};
@@ -470,6 +472,20 @@ static int Syslog_FormatTrigger(OpSyslog_Data *syslogData, Unified2EventCommon *
 	}
     }
     
+    if( OpSyslog_Concat(syslogData))
+    {
+	/* XXX */
+	FatalError("OpSyslog_Concat(): Failed \n");
+    }
+
+    if( ( syslogData->format_current_pos += snprintf(syslogData->formatBuffer,SYSLOG_MAX_QUERY_SIZE,"[Action:%s]",
+    						     actionOfEvent(pEvent,event_type)) >= SYSLOG_MAX_QUERY_SIZE))
+    {
+        /* XXX */
+        free(timestamp_string);
+        return 1;
+    }
+
     if( OpSyslog_Concat(syslogData))
     {
 	/* XXX */
@@ -875,6 +891,13 @@ int Syslog_FormatPayload(OpSyslog_Data *data, Packet *p) {
     return OpSyslog_Concat(data);
 }
 
+/* The event can be converted to Unified2EventCommon * */
+static int IsCommonEvent(const uint32_t event_type){
+	return event_type == UNIFIED2_IDS_EVENT || 
+		event_type == UNIFIED2_IDS_EVENT_IPV6 || 
+		event_type == UNIFIED2_IDS_EVENT_VLAN || 
+		event_type == UNIFIED2_IDS_EVENT_IPV6_VLAN;
+}
 
 void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 {
@@ -900,7 +923,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	return;
     }
     
-    if(event_type != UNIFIED2_IDS_EVENT)
+    if(!IsCommonEvent(event_type))
     {
         LogMessage("OpSyslog_Alert(): Is currently unable to handle Event Type [%u] \n",
                    event_type);
@@ -1000,7 +1023,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
             if( cn->name )
             {
                 if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
-								"[Classification: %s] [Priority: %d]:",
+								"[Classification: %s] [Priority: %d] ",
 								cn->name,
 								ntohl(((Unified2EventCommon *)event)->priority_id))) >= SYSLOG_MAX_QUERY_SIZE)
 		{
@@ -1014,13 +1037,28 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
         else if( ntohl(((Unified2EventCommon *)event)->priority_id) != 0 )
         {
 	    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
-							    "[Priority: %d]:",
+							    "[Priority: %d] ",
 							    ntohl(((Unified2EventCommon *)event)->priority_id))) >= SYSLOG_MAX_QUERY_SIZE)
 	    {
 		/* XXX */
 		FatalError("[%s()], failed call to snprintf \n",
 			   __FUNCTION__);
 	    }
+        }
+
+        if( OpSyslog_Concat(syslogContext))
+        {
+    	/* XXX */
+	    FatalError("OpSyslog_Concat(): Failed \n");
+        }
+
+        if( ( syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
+        					      "[Action: %s]:",
+    						      actionOfEvent(event,event_type)) >= SYSLOG_MAX_QUERY_SIZE))
+        {
+        	/* XXX */
+		FatalError("[%s()], failed call to snprintf \n",
+			   __FUNCTION__);
         }
 	
 	if( OpSyslog_Concat(syslogContext))
@@ -1116,7 +1154,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	
     case OUT_MODE_FULL: /* Ze verbose */
 	
-	if(Syslog_FormatTrigger(syslogContext, iEvent,0) ) 
+	if(Syslog_FormatTrigger(syslogContext, iEvent,event_type,0) ) 
 	{
 	    LogMessage("WARNING: Unable to append Trigger header.\n");
 	    return;
@@ -1216,7 +1254,7 @@ void OpSyslog_Log(Packet *p, void *event, uint32_t event_type, void *arg)
     syslogContext->payload_current_pos = 0;
     syslogContext->format_current_pos = 0;
     
-    if(Syslog_FormatTrigger(syslogContext, iEvent,1) ) 
+    if(Syslog_FormatTrigger(syslogContext, iEvent,event_type,1) ) 
     {
 	FatalError("WARNING: Unable to append Trigger header.\n");
     }

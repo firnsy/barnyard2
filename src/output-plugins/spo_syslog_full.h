@@ -71,6 +71,7 @@ typedef struct _OpSyslog_Data
     char syslog_tx_facility[16];
     char syslog_tx_priority[16];
     
+    u_int8_t log_action;
 
     u_int32_t port;
     u_int16_t detail;

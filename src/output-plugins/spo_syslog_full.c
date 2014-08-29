@@ -978,7 +978,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	
 	if( syslogContext->sensor_name ){
 	    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
-							   "[Sensor name: %s] ",
+							   "[Sensor: %s] ",
 							   syslogContext->sensor_name)) >=  SYSLOG_MAX_QUERY_SIZE)
     	    {
     	        /* XXX */
@@ -996,7 +996,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 
 	if( syslogContext->sensor_group ){
 	    if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
-							   "[Sensor group: %s] ",
+							   "[Group: %s] ",
 							   syslogContext->sensor_group)) >=  SYSLOG_MAX_QUERY_SIZE)
     	    {
     	        /* XXX */

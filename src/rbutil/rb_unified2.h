@@ -28,6 +28,11 @@
  * @brief  Declares redBorder utilities to work with unified2 events
  */
 
+#ifndef RB_UNIFIED_H
+#define RB_UNIFIED_H
+
 #include <stdint.h>
 
 const char *actionOfEvent(const void *event,uint32_t event_type);
+
+#endif

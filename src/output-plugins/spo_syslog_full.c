@@ -914,8 +914,8 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
     ClassType                       *cn = NULL;
 
     
-    char sip[16] = {0};
-    char dip[16] = {0};
+    char sip[INET6_ADDRSTRLEN] = {0};
+    char dip[INET6_ADDRSTRLEN] = {0};
     
     if( (p == NULL) ||
 	(event == NULL) ||

@@ -989,12 +989,12 @@ static uint8_t extract_proto(const void *_event, uint32_t event_type, Packet *p)
     }
 }
 
-static uint8_t extract_port_from_packet(Packet *p,int srcdst_req)
+static uint16_t extract_port_from_packet(Packet *p,int srcdst_req)
 {
     return ntohs(srcdst_req == SRC_REQ ? p->sp : p->dp);
 }
 
-static uint8_t extract_port0(const void *_event, uint32_t event_type, Packet *p,int srcdst_req)
+static uint16_t extract_port0(const void *_event, uint32_t event_type, Packet *p,int srcdst_req)
 {
     if(!(srcdst_req == SRC_REQ || srcdst_req == DST_REQ))
     {

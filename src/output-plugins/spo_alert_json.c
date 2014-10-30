@@ -1686,12 +1686,12 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             break;
         case IPLEN:
             if(p && IPH_IS_VALID(p))
-                KafkaLog_Puts(kafka,itoa10(GET_IPH_LEN(p) << 2,buf,bufLen));
+                KafkaLog_Puts(kafka,itoa10(ntohs(GET_IPH_LEN(p)),buf,bufLen));
             break;
         case IPLEN_RANGE:
             if(p && IPH_IS_VALID(p))
             {
-                const double log2_len = log2(GET_IPH_LEN(p) << 2);
+                const double log2_len = log2(ntohs(GET_IPH_LEN(p)));
                 const unsigned int lower_limit = pow(2.0,floor(log2_len));
                 const unsigned int upper_limit = pow(2.0,ceil(log2_len));
                 //printf("log2_len: %0lf; floor: %0lf; ceil: %0lf; low_limit: %0lf; upper_limit:%0lf\n",

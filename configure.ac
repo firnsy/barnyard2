@@ -2,9 +2,10 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.50)
-AC_INIT(src/barnyard2.c)
+AC_INIT([barnyard2], [1.14])
+AC_CONFIG_SRCDIR([src/barnyard2.c])
 AM_CONFIG_HEADER(config.h)
-AM_INIT_AUTOMAKE(barnyard2,1.13)
+AM_INIT_AUTOMAKE
 AC_CONFIG_MACRO_DIR([m4])
 
 LT_INIT
@@ -1114,9 +1115,9 @@ fi
 echo $CFLAGS > cflags.out
 echo $CPPFLAGS > cppflags.out
 
-INCLUDES='-I$(top_srcdir) -I$(top_srcdir)/src -I$(top_srcdir)/src/sfutil $(extra_incl) -I$(top_srcdir)/src/output-plugins -I$(top_srcdir)/src/input-plugins'
+AM_CPPFLAGS='-I$(top_srcdir) -I$(top_srcdir)/src -I$(top_srcdir)/src/sfutil $(extra_incl) -I$(top_srcdir)/src/output-plugins -I$(top_srcdir)/src/input-plugins'
 
-AC_SUBST(INCLUDES)
+AC_SUBST(AM_CPPFLAGS)
 
 AC_PROG_INSTALL
 AC_CONFIG_FILES([ \

@@ -34,4 +34,4 @@ sfutil/libsfutil.a
 
 SUBDIRS = sfutil output-plugins input-plugins
 
-INCLUDES = -Isfutil
+AM_CPPFLAGS = -Isfutil

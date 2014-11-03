@@ -1706,7 +1706,7 @@ void ConfigClassificationFile(Barnyard2Config *bc, char *args)
     if ((args == NULL) || (bc == NULL) )
         return;
 
-    bc->class_file = strndup(args,strlen(args));
+    bc->class_file = SnortStrndup(args,strlen(args));
 
     ReadClassificationFile(bc);
 }
@@ -1776,8 +1776,8 @@ void ConfigGenFile(Barnyard2Config *bc, char *args)
 {
     if ((args == NULL) || (bc == NULL) )
         return;
-    
-    bc->gen_msg_file = strndup(args,PATH_MAX);
+
+    bc->gen_msg_file = SnortStrndup(args,PATH_MAX);
     return;
 }
 
@@ -2143,7 +2143,7 @@ void ConfigSidFile(Barnyard2Config *bc, char *args)
     if ((args == NULL) || (bc == NULL) )
         return;
 
-    bc->sid_msg_file = strndup(args,PATH_MAX);
+    bc->sid_msg_file = SnortStrndup(args,PATH_MAX);
 }
 
 void ConfigUmask(Barnyard2Config *bc, char *args)

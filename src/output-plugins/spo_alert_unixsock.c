@@ -34,6 +34,7 @@
 #include "config.h"
 #endif
 
+#include <stdlib.h>
 #include <sys/types.h>
 #include <string.h>
 #ifdef HAVE_STRINGS_H

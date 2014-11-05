@@ -66,6 +66,13 @@ static int NetSend(OpSyslog_Data *data);
 static int NetConnect(OpSyslog_Data *data);
 static int NetTestSocket(OpSyslog_Data *op_data);
 
+#if !defined(LOG_AUTHPRIV)
+#  define LOG_AUTHPRIV LOG_AUTH
+#endif
+#if !defined(LOG_FTP)
+#  define LOG_FTP LOG_DAEMON
+#endif
+
 //CHECKME: -elz Need to investigate
 //static int Syslog_FormatReference(OpSyslog_Data *data, ReferenceNode *refer);
 

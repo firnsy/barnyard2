@@ -136,19 +136,19 @@ typedef enum _VarType
 
 typedef struct _KeywordFunc
 {
-    char *name;
-    KeywordType type;
-    int expand_vars;
-    ParseFunc parse_func;
+    char *name              __attribute__((aligned(8)));
+    KeywordType type        __attribute__((aligned(8)));
+    int expand_vars         __attribute__((aligned(8)));
+    ParseFunc parse_func    __attribute__((aligned(8)));
 
 } KeywordFunc;
 
 typedef struct _ConfigFunc
 {
-    char *name;
-    int args_required;
-    int only_once;
-    ParseConfigFunc parse_func;
+    char *name                    __attribute__((aligned(8)));
+    int args_required             __attribute__((aligned(8)));
+    int only_once                 __attribute__((aligned(8)));
+    ParseConfigFunc parse_func    __attribute__((aligned(8)));
 
 } ConfigFunc;
 

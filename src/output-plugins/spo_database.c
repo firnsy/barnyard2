@@ -1181,7 +1181,7 @@ void ParseDatabaseArgs(DatabaseData *data)
         }
         else if(!strncasecmp(dbarg, KEYWORD_SSL_CIPHER, strlen(KEYWORD_SSL_CIPHER)))
         {
-            data->dbRH[DB_MYSQL].ssl_key = a1;
+            data->dbRH[DB_MYSQL].ssl_cipher = a1;
             data->use_ssl = 1;
         }
 	else if(!strncasecmp(dbarg, KEYWORD_MYSQL_RECONNECT, strlen(KEYWORD_MYSQL_RECONNECT)))

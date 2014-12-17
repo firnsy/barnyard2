@@ -172,7 +172,7 @@ static void LogEthHeader(TextLog* log, Packet* p)
             p->eh->ether_dst[4], p->eh->ether_dst[5]);
 
     /* protocol and pkt size */
-    TextLog_Print(log, "type:0x%X len:0x%X\n", ntohs(p->eh->ether_type), p->pkth->len);   
+    TextLog_Print(log, "type:0x%X len:0x%X\n", ntohs(p->eh->ether_type), p->pkth->caplen);
 }
 
 #ifdef MPLS
@@ -195,7 +195,7 @@ static void LogMPLSHeader(TextLog* log, Packet* p)
  * Returns: void function
  *--------------------------------------------------------------------
  */
-#ifdef DLT_LINUX_SLL        
+#ifdef DLT_LINUX_SLL
 static void LogSLLHeader(TextLog* log, Packet* p)
 {
     switch (ntohs(p->sllh->sll_pkttype)) {
@@ -220,7 +220,7 @@ static void LogSLLHeader(TextLog* log, Packet* p)
         }
 
     /* mac addr */
-    TextLog_Print(log, "l/l len: %i l/l type: 0x%X %X:%X:%X:%X:%X:%X\n", 
+    TextLog_Print(log, "l/l len: %i l/l type: 0x%X %X:%X:%X:%X:%X:%X\n",
             htons(p->sllh->sll_halen), ntohs(p->sllh->sll_hatype),
             p->sllh->sll_addr[0], p->sllh->sll_addr[1], p->sllh->sll_addr[2],
             p->sllh->sll_addr[3], p->sllh->sll_addr[4], p->sllh->sll_addr[5]);
@@ -228,7 +228,7 @@ static void LogSLLHeader(TextLog* log, Packet* p)
     /* protocol and pkt size */
     TextLog_Print(log, "pkt type:0x%X proto: 0x%X len:0x%X\n",
                  ntohs(p->sllh->sll_pkttype),
-                 ntohs(p->sllh->sll_protocol), p->pkth->len);
+                 ntohs(p->sllh->sll_protocol), p->pkth->caplen);
 }
 #endif
 
@@ -471,7 +471,7 @@ static void LogIpOptions(TextLog*  log, Packet * p)
 
             case IPOPT_RTRALT:
                 TextLog_Puts(log, "RTRALT ");
-                break;    
+                break;
 
             default:
                 TextLog_Print(log, "Opt %d: ", p->ip_options[i].code);
@@ -484,7 +484,7 @@ static void LogIpOptions(TextLog*  log, Packet * p)
                             TextLog_Print(log, "%02X", p->ip_options[i].data[j]);
                         else
                             TextLog_Print(log, "%02X", 0);
-                        
+
                         if((j % 2) == 0)
                             TextLog_Putc(log, ' ');
                     }
@@ -1262,7 +1262,7 @@ static void LogReference(TextLog* log, ReferenceNode *refNode)
  *
  * Returns: void function
  */ 
-void LogXrefs(TextLog* log, SigNode *sn, int doNewLine)
+void LogXrefs(TextLog* log, SigNode *sn, bool doNewLine)
 {
     ReferenceNode *refNode = NULL;
 

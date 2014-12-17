@@ -248,7 +248,7 @@ void AlertUnixSock(Packet *p, void *event, uint32_t event_type, void *arg)
 	/* bcopy() deprecated, replaced by memmove() */
 	memmove((void *) &alertpkt.pkth, (const void *)p->pkth, sizeof(struct pcap_pkthdr));
 	memmove(alertpkt.pkt, (const void *)p->pkt,
-		 alertpkt.pkth.caplen > SNAPLEN ? SNAPLEN : alertpkt.pkth.caplen);
+		 alertpkt.pkth.caplen > PKT_SNAPLEN ? PKT_SNAPLEN : alertpkt.pkth.caplen);
     }
     else
         alertpkt.val|=NOPACKET_STRUCT;

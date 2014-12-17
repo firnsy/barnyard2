@@ -3,7 +3,8 @@
 ** Copyright (C) 2000,2001 Christopher Cramer <cec@ee.duke.edu>
 ** Snort is Copyright (C) 1998-2002 Martin Roesch <roesch@sourcefire.com>
 **
-** Copyright (C) 2002-2009 Sourcefire, Inc.
+** Copyright (C) 2014 Cisco and/or its affiliates. All rights reserved.
+** Copyright (C) 2002-2013 Sourcefire, Inc.
 ** Marc Norton <mnorton@sourcefire.com>
 **
 ** This program is free software; you can redistribute it and/or modify
@@ -19,7 +20,7 @@
 **
 ** You should have received a copy of the GNU General Public License
 ** along with this program; if not, write to the Free Software
-** Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+** Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 **
 **
 ** 7/2002 Marc Norton - added inline/optimized checksum routines
@@ -38,22 +39,30 @@
 #include "debug.h"
 #include <sys/types.h>
 
+typedef struct
+{
+    uint32_t sip[4], dip[4];
+    uint8_t  zero;
+    uint8_t  protocol;
+    uint16_t len;
+} pseudoheader6;
 
-/* define checksum error flags */
-#define CSE_IP    0x01
-#define CSE_TCP   0x02
-#define CSE_UDP   0x04
-#define CSE_ICMP  0x08
-#define CSE_IGMP  0x10
+typedef struct
+{
+    uint32_t sip, dip;
+    uint8_t  zero;
+    uint8_t  protocol;
+    uint16_t len;
+} pseudoheader;
 
 /*
 *  checksum IP  - header=20+ bytes
 *
 *  w - short words of data
 *  blen - byte length
-* 
+*
 */
-static INLINE unsigned short in_chksum_ip(  unsigned short * w, int blen )
+static inline unsigned short in_chksum_ip( unsigned short * w, int blen )
 {
    unsigned int cksum;
 
@@ -82,7 +91,7 @@ static INLINE unsigned short in_chksum_ip(  unsigned short * w, int blen )
 
    cksum  = (cksum >> 16) + (cksum & 0x0000ffff);
    cksum += (cksum >> 16);
- 
+
    return (unsigned short) (~cksum);
 }
 
@@ -94,8 +103,10 @@ static INLINE unsigned short in_chksum_ip(  unsigned short * w, int blen )
 *  dlen - length of tcp hdr + payload in bytes
 *
 */
-static INLINE unsigned short in_chksum_tcp(  unsigned short *h, unsigned short * d, int dlen )
+static inline unsigned short in_chksum_tcp(pseudoheader *ph,
+    unsigned short * d, int dlen )
 {
+   uint16_t *h = (uint16_t *)ph;
    unsigned int cksum;
    unsigned short answer=0;
 
@@ -120,7 +131,7 @@ static INLINE unsigned short in_chksum_tcp(  unsigned short *h, unsigned short *
    cksum += d[9];
 
    dlen  -= 20; /* bytes   */
-   d     += 10; /* short's */ 
+   d     += 10; /* short's */
 
    while(dlen >=32)
    {
@@ -144,13 +155,13 @@ static INLINE unsigned short in_chksum_tcp(  unsigned short *h, unsigned short *
      dlen  -= 32;
    }
 
-   while(dlen >=8)  
+   while(dlen >=8)
    {
      cksum += d[0];
      cksum += d[1];
      cksum += d[2];
      cksum += d[3];
-     d     += 4;   
+     d     += 4;
      dlen  -= 8;
    }
 
@@ -160,19 +171,19 @@ static INLINE unsigned short in_chksum_tcp(  unsigned short *h, unsigned short *
      dlen  -= 2;
    }
 
-   if( dlen == 1 ) 
-   { 
+   if( dlen == 1 )
+   {
     /* printf("new checksum odd byte-packet\n"); */
     *(unsigned char*)(&answer) = (*(unsigned char*)d);
 
     /* cksum += (uint16_t) (*(uint8_t*)d); */
-     
+
      cksum += answer;
    }
-   
+
    cksum  = (cksum >> 16) + (cksum & 0x0000ffff);
    cksum += (cksum >> 16);
- 
+
    return (unsigned short)(~cksum);
 }
 /*
@@ -183,8 +194,10 @@ static INLINE unsigned short in_chksum_tcp(  unsigned short *h, unsigned short *
 *  dlen - length of tcp hdr + payload in bytes
 *
 */
-static INLINE unsigned short in_chksum_tcp6(  unsigned short *h, unsigned short * d, int dlen )
+static inline unsigned short in_chksum_tcp6(pseudoheader6 *ph,
+    unsigned short * d, int dlen )
 {
+   uint16_t *h = (uint16_t *)ph;
    unsigned int cksum;
    unsigned short answer=0;
 
@@ -221,7 +234,7 @@ static INLINE unsigned short in_chksum_tcp6(  unsigned short *h, unsigned short 
    cksum += d[9];
 
    dlen  -= 20; /* bytes   */
-   d     += 10; /* short's */ 
+   d     += 10; /* short's */
 
    while(dlen >=32)
    {
@@ -245,13 +258,13 @@ static INLINE unsigned short in_chksum_tcp6(  unsigned short *h, unsigned short 
      dlen  -= 32;
    }
 
-   while(dlen >=8)  
+   while(dlen >=8)
    {
      cksum += d[0];
      cksum += d[1];
      cksum += d[2];
      cksum += d[3];
-     d     += 4;   
+     d     += 4;
      dlen  -= 8;
    }
 
@@ -261,19 +274,19 @@ static INLINE unsigned short in_chksum_tcp6(  unsigned short *h, unsigned short 
      dlen  -= 2;
    }
 
-   if( dlen == 1 ) 
-   { 
+   if( dlen == 1 )
+   {
     /* printf("new checksum odd byte-packet\n"); */
     *(unsigned char*)(&answer) = (*(unsigned char*)d);
 
     /* cksum += (uint16_t) (*(uint8_t*)d); */
-     
+
      cksum += answer;
    }
-   
+
    cksum  = (cksum >> 16) + (cksum & 0x0000ffff);
    cksum += (cksum >> 16);
- 
+
    return (unsigned short)(~cksum);
 }
 
@@ -285,8 +298,10 @@ static INLINE unsigned short in_chksum_tcp6(  unsigned short *h, unsigned short 
 *  dlen - length of payload in bytes
 *
 */
-static INLINE unsigned short in_chksum_udp6(  unsigned short *h, unsigned short * d, int dlen )
+static inline unsigned short in_chksum_udp6(pseudoheader6 *ph,
+    unsigned short * d, int dlen )
 {
+   uint16_t *h = (uint16_t *)ph;
    unsigned int cksum;
    unsigned short answer=0;
 
@@ -317,9 +332,9 @@ static INLINE unsigned short in_chksum_udp6(  unsigned short *h, unsigned short 
    cksum += d[3];
 
    dlen  -= 8; /* bytes   */
-   d     += 4; /* short's */ 
+   d     += 4; /* short's */
 
-   while(dlen >=32) 
+   while(dlen >=32)
    {
      cksum += d[0];
      cksum += d[1];
@@ -347,32 +362,34 @@ static INLINE unsigned short in_chksum_udp6(  unsigned short *h, unsigned short 
      cksum += d[1];
      cksum += d[2];
      cksum += d[3];
-     d     += 4;   
+     d     += 4;
      dlen  -= 8;
    }
 
-   while(dlen > 1) 
+   while(dlen > 1)
    {
      cksum += *d++;
      dlen  -= 2;
    }
 
-   if( dlen == 1 ) 
-   { 
+   if( dlen == 1 )
+   {
      *(unsigned char*)(&answer) = (*(unsigned char*)d);
      cksum += answer;
    }
-   
+
    cksum  = (cksum >> 16) + (cksum & 0x0000ffff);
    cksum += (cksum >> 16);
- 
+
    return (unsigned short)(~cksum);
 }
 
 
 
-static INLINE unsigned short in_chksum_udp(  unsigned short *h, unsigned short * d, int dlen )
+static inline unsigned short in_chksum_udp(pseudoheader *ph,
+     unsigned short * d, int dlen )
 {
+   uint16_t *h = (uint16_t *)ph;
    unsigned int cksum;
    unsigned short answer=0;
 
@@ -391,9 +408,9 @@ static INLINE unsigned short in_chksum_udp(  unsigned short *h, unsigned short *
    cksum += d[3];
 
    dlen  -= 8; /* bytes   */
-   d     += 4; /* short's */ 
+   d     += 4; /* short's */
 
-   while(dlen >=32) 
+   while(dlen >=32)
    {
      cksum += d[0];
      cksum += d[1];
@@ -421,37 +438,37 @@ static INLINE unsigned short in_chksum_udp(  unsigned short *h, unsigned short *
      cksum += d[1];
      cksum += d[2];
      cksum += d[3];
-     d     += 4;   
+     d     += 4;
      dlen  -= 8;
    }
 
-   while(dlen > 1) 
+   while(dlen > 1)
    {
      cksum += *d++;
      dlen  -= 2;
    }
 
-   if( dlen == 1 ) 
-   { 
+   if( dlen == 1 )
+   {
      *(unsigned char*)(&answer) = (*(unsigned char*)d);
      cksum += answer;
    }
-   
+
    cksum  = (cksum >> 16) + (cksum & 0x0000ffff);
    cksum += (cksum >> 16);
- 
+
    return (unsigned short)(~cksum);
 }
 
 /*
 *  checksum icmp
 */
-static INLINE unsigned short in_chksum_icmp( unsigned short * w, int blen )
+static inline unsigned short in_chksum_icmp( unsigned short * w, int blen )
 {
   unsigned  short answer=0;
   unsigned int cksum = 0;
 
-  while(blen >=32) 
+  while(blen >=32)
   {
      cksum += w[0];
      cksum += w[1];
@@ -473,7 +490,7 @@ static INLINE unsigned short in_chksum_icmp( unsigned short * w, int blen )
      blen  -= 32;
   }
 
-  while(blen >=8) 
+  while(blen >=8)
   {
      cksum += w[0];
      cksum += w[1];
@@ -483,13 +500,13 @@ static INLINE unsigned short in_chksum_icmp( unsigned short * w, int blen )
      blen  -= 8;
   }
 
-  while(blen > 1) 
+  while(blen > 1)
   {
      cksum += *w++;
      blen  -= 2;
   }
 
-  if( blen == 1 ) 
+  if( blen == 1 )
   {
     *(unsigned char*)(&answer) = (*(unsigned char*)w);
     cksum += answer;
@@ -505,15 +522,34 @@ static INLINE unsigned short in_chksum_icmp( unsigned short * w, int blen )
 /*
 *  checksum icmp6
 */
-static INLINE unsigned short in_chksum_icmp6( unsigned short * w, int blen )
+static inline unsigned short in_chksum_icmp6(pseudoheader6 *ph,
+     unsigned short *w, int blen )
 {
-// XXX ICMP6 CHECKSUM NOT YET IMPLEMENTED
-  return 0;
-#if 0
+  uint16_t *h = (uint16_t *)ph;
   unsigned  short answer=0;
   unsigned int cksum = 0;
 
-  while(blen >=32) 
+  /* PseudoHeader must have 36 bytes */
+  cksum  = h[0];
+  cksum += h[1];
+  cksum += h[2];
+  cksum += h[3];
+  cksum += h[4];
+  cksum += h[5];
+  cksum += h[6];
+  cksum += h[7];
+  cksum += h[8];
+  cksum += h[9];
+  cksum += h[10];
+  cksum += h[11];
+  cksum += h[12];
+  cksum += h[13];
+  cksum += h[14];
+  cksum += h[15];
+  cksum += h[16];
+  cksum += h[17];
+
+  while(blen >=32)
   {
      cksum += w[0];
      cksum += w[1];
@@ -535,7 +571,7 @@ static INLINE unsigned short in_chksum_icmp6( unsigned short * w, int blen )
      blen  -= 32;
   }
 
-  while(blen >=8) 
+  while(blen >=8)
   {
      cksum += w[0];
      cksum += w[1];
@@ -545,13 +581,13 @@ static INLINE unsigned short in_chksum_icmp6( unsigned short * w, int blen )
      blen  -= 8;
   }
 
-  while(blen > 1) 
+  while(blen > 1)
   {
      cksum += *w++;
      blen  -= 2;
   }
 
-  if( blen == 1 ) 
+  if( blen == 1 )
   {
     *(unsigned char*)(&answer) = (*(unsigned char*)w);
     cksum += answer;
@@ -562,7 +598,6 @@ static INLINE unsigned short in_chksum_icmp6( unsigned short * w, int blen )
 
 
   return (unsigned short)(~cksum);
-#endif
 }
 
 

@@ -827,7 +827,7 @@ int Syslog_FormatPayload(OpSyslog_Data *data, Packet *p) {
         return 1;
     }
     
-    if(p->pkth->len > 0) 
+    if(p->pkth->caplen > 0)
     {
 	memset(data->payload_escape_buffer,'\0',MAX_QUERY_LENGTH);
 
@@ -835,7 +835,7 @@ int Syslog_FormatPayload(OpSyslog_Data *data, Packet *p) {
 	{
 	    
 	case ENCODE_HEX:
-	    if( (fasthex_STATIC(p->pkt, p->pkth->len,
+	    if( (fasthex_STATIC(p->pkt, p->pkth->caplen,
 				data->payload_escape_buffer)))
 	    {
 		/* XXX */
@@ -844,7 +844,7 @@ int Syslog_FormatPayload(OpSyslog_Data *data, Packet *p) {
 	    break;
 	    
 	case ENCODE_ASCII:
-	    if( (ascii_STATIC(p->pkt,p->pkth->len,
+	    if( (ascii_STATIC(p->pkt,p->pkth->caplen,
 			      data->payload_escape_buffer)))
 	    {
 		/* XXX */
@@ -853,7 +853,7 @@ int Syslog_FormatPayload(OpSyslog_Data *data, Packet *p) {
 	    break;
 
 	case ENCODE_BASE64:
-	    if( (base64_STATIC(p->pkt,p->pkth->len,
+	    if( (base64_STATIC(p->pkt,p->pkth->caplen,
 			      data->payload_escape_buffer)))
 	    {
 		/* XXX */
@@ -870,7 +870,7 @@ int Syslog_FormatPayload(OpSyslog_Data *data, Packet *p) {
 	
 	if( (data->format_current_pos +=  snprintf(data->formatBuffer, SYSLOG_MAX_QUERY_SIZE,
 						   "%u%c%s",
-						   p->pkth->len,data->field_separators, 
+						   p->pkth->caplen,data->field_separators, 
 						   data->payload_escape_buffer)) >= SYSLOG_MAX_QUERY_SIZE)
 	{
 	    /* XXX */

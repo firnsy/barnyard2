@@ -147,7 +147,7 @@ OutputFuncNode *AlertList = NULL;   /* Alert function list */
 OutputFuncNode *LogList = NULL;     /* Log function list */
 
 int datalink;   /* the datalink value */
-uint32_t pcap_snaplen = SNAPLEN;
+uint32_t pcap_snaplen = PKT_SNAPLEN;
 
 static int exit_logged = 0;
 

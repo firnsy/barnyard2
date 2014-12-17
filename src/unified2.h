@@ -32,17 +32,25 @@
 
 //SNORT DEFINES
 //Long time ago...
-#define UNIFIED2_EVENT               1
+#define UNIFIED2_EVENT                  1
 
 //CURRENT
-#define UNIFIED2_PACKET              2
-#define UNIFIED2_IDS_EVENT           7
-#define UNIFIED2_IDS_EVENT_IPV6      72
-#define UNIFIED2_IDS_EVENT_MPLS      99
-#define UNIFIED2_IDS_EVENT_IPV6_MPLS 100
-#define UNIFIED2_IDS_EVENT_VLAN      104
-#define UNIFIED2_IDS_EVENT_IPV6_VLAN 105
-#define UNIFIED2_EXTRA_DATA          110
+#define UNIFIED2_PACKET                 2
+#define UNIFIED2_IDS_EVENT              7
+#define UNIFIED2_IDS_EVENT_IPV6         72
+#define UNIFIED2_IDS_EVENT_MPLS         99
+#define UNIFIED2_IDS_EVENT_IPV6_MPLS    100
+#define UNIFIED2_IDS_EVENT_VLAN         104
+#define UNIFIED2_IDS_EVENT_IPV6_VLAN    105
+#define UNIFIED2_EXTRA_DATA             110
+
+#if defined(FEAT_OPEN_APPID)
+#define UNIFIED2_IDS_EVENT_APPID        111
+#define UNIFIED2_IDS_EVENT_APPID_IPV6   112
+#define UNIFIED2_IDS_EVENT_APPSTAT      113
+
+#define MAX_EVENT_APPNAME_LEN        16
+#endif
 
 /* Each unified2 record will start out with one of these */
 typedef struct _Unified2RecordHeader
@@ -75,6 +83,9 @@ typedef struct _Unified2IDSEvent
     uint32_t mpls_label;
     uint16_t vlanId;
     uint16_t pad2;//Policy ID
+#if defined(FEAT_OPEN_APPID)
+    char     app_name[MAX_EVENT_APPNAME_LEN];
+#endif /* defined(FEAT_OPEN_APPID) */
 } Unified2IDSEvent;
 
 //UNIFIED2_IDS_EVENT_IPV6_VLAN = type 105
@@ -100,6 +111,9 @@ typedef struct _Unified2IDSEventIPv6
     uint32_t mpls_label;
     uint16_t vlanId;
     uint16_t pad2;/*could be IPS Policy local id to support local sensor alerts*/
+#if defined(FEAT_OPEN_APPID)
+    char     app_name[MAX_EVENT_APPNAME_LEN];
+#endif /* defined(FEAT_OPEN_APPID) */
 } Unified2IDSEventIPv6;
 
 //UNIFIED2_PACKET = type 2

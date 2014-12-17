@@ -163,14 +163,16 @@ static void AlertFast(Packet *p, void *event, uint32_t event_type, void *arg)
 
     LogTimeStamp(data->log, p);
 
+/* PKT_INLINE_DROP has been deprecated
     if( p != NULL && p->packet_flags & PKT_INLINE_DROP )
         TextLog_Puts(data->log, " [Drop]");
+*/
 
     if(sn != NULL)
     {
 #ifdef MARK_TAGGED
         char c=' ';
-        if ((p != NULL) && (p->packet_flags & PKT_REBUILT_STREAM))
+        if ((p != NULL) && (p->packet_flags & REASSEMBLED_PACKET_FLAGS))
             c = 'R';
         else if ((p != NULL) && (p->packet_flags & PKT_REBUILT_FRAG))
             c = 'F';
@@ -271,27 +273,16 @@ static void AlertFast(Packet *p, void *event, uint32_t event_type, void *arg)
          * if we're actually going to show any of the payload */
         if (BcOutputAppData() && (p->dsize > 0))
         {
-            if (p->packet_flags &
-                (PKT_DCE_RPKT | PKT_REBUILT_STREAM | PKT_REBUILT_FRAG |
-                 PKT_SMB_SEG | PKT_DCE_SEG | PKT_DCE_FRAG | PKT_SMB_TRANS))
+            if (p->packet_flags & REASSEMBLED_PACKET_FLAGS)
             {
                 TextLog_NewLine(data->log);
-            }
-
-            if (p->packet_flags & PKT_SMB_SEG)
-                TextLog_Print(data->log, "%s", "SMB desegmented packet");
-            else if (p->packet_flags & PKT_DCE_SEG)
-                TextLog_Print(data->log, "%s", "DCE/RPC desegmented packet");
-            else if (p->packet_flags & PKT_DCE_FRAG)
-                TextLog_Print(data->log, "%s", "DCE/RPC defragmented packet");
-            else if (p->packet_flags & PKT_SMB_TRANS)
-                TextLog_Print(data->log, "%s", "SMB Transact reassembled packet");
-            else if (p->packet_flags & PKT_DCE_RPKT)
-                TextLog_Print(data->log, "%s", "DCE/RPC reassembled packet");
-            else if (p->packet_flags & PKT_REBUILT_STREAM)
                 TextLog_Print(data->log, "%s", "Stream reassembled packet");
+            }
             else if (p->packet_flags & PKT_REBUILT_FRAG)
+            {
+                TextLog_NewLine(data->log);
                 TextLog_Print(data->log, "%s", "Frag reassembled packet");
+            }
         }
 
         TextLog_NewLine(data->log);

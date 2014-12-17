@@ -1,4 +1,4 @@
-/* 
+/*
 **
 ** Copyright (C) 2008-2013 Ian Firns (SecurixLive) <dev@securixlive.com>
 **
@@ -81,7 +81,7 @@ void Unified2PrintEvent6Record(Unified2IDSEventIPv6_legacy *);
 /*
  * Function: UnifiedLogSetup()
  *
- * Purpose: Registers the input plugin keyword and initialization function 
+ * Purpose: Registers the input plugin keyword and initialization function
  *          into the input plugin list.  This is the function that gets called
  *          InitInputPlugins() in plugbase.c.
  *
@@ -103,7 +103,7 @@ void Unified2Init(char *args)
     //data = ParseAlertTestArgs(args);
 
     DEBUG_WRAP(DebugMessage(DEBUG_INIT,"Linking UnifiedLog functions to call lists...\n"););
-    
+
     /* Link the input processor read/process functions to the function list */
     AddReadRecordHeaderFuncToInputList("unified2", Unified2ReadRecordHeader);
     AddReadRecordFuncToInputList("unified2", Unified2ReadRecord);
@@ -114,7 +114,7 @@ void Unified2Init(char *args)
 }
 
 /* Partial reads should rarely, if ever, happen.  Thus we should not actually
-   call lseek very often 
+   call lseek very often
  */
 int Unified2ReadRecordHeader(void *sph)
 {
@@ -134,7 +134,7 @@ int Unified2ReadRecordHeader(void *sph)
 #endif
 
     bytes_read = read( spooler->fd, spooler->record.header + spooler->offset, sizeof(Unified2RecordHeader) - spooler->offset);
-    
+
     if (bytes_read == -1)
     {
         LogMessage("ERROR: Read error: %s\n", strerror(errno));
@@ -171,7 +171,7 @@ int Unified2ReadRecord(void *sph)
     record_type = ntohl(((Unified2RecordHeader *)spooler->record.header)->type);
     record_length = ntohl(((Unified2RecordHeader *)spooler->record.header)->length);
 
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Reading record type=%u (%u bytes)\n", 
+    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Reading record type=%u (%u bytes)\n",
                 record_type, record_length););
 
     if(!spooler->record.data)
@@ -273,7 +273,7 @@ void Unified2PrintEventCommonRecord(Unified2EventCommon *evt)
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
         "  priority_id        = %d\n", ntohl(evt->priority_id)););
 }
-    
+
 void Unified2PrintEventRecord(Unified2IDSEvent_legacy *evt)
 {
     char                sip4[INET_ADDRSTRLEN];
@@ -285,9 +285,8 @@ void Unified2PrintEventRecord(Unified2IDSEvent_legacy *evt)
     Unified2PrintEventCommonRecord((Unified2EventCommon *)evt);
 
     inet_ntop(AF_INET, &(evt->ip_source), sip4, INET_ADDRSTRLEN);
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  ip_source          = %s\n", sip4););
-    
+    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"  %-18s = %s\n", "ip_source", sip4););
+
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
         "  sport_itype        = %d\n", ntohs(evt->sport_itype)););
     inet_ntop(AF_INET, &(evt->ip_destination), dip4, INET_ADDRSTRLEN);
@@ -311,11 +310,10 @@ void Unified2PrintEvent6Record(Unified2IDSEventIPv6_legacy *evt)
         return;
 
     Unified2PrintEventCommonRecord((Unified2EventCommon *)evt);
-    
+
     inet_ntop(AF_INET6, &(evt->ip_source), sip6, INET6_ADDRSTRLEN);
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  ip_source          = %s\n", sip6););
-    
+    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"  %-18s = %s\n", "ip_source", sip6););
+
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
         "  sport_itype        = %d\n", ntohs(evt->sport_itype)););
     inet_ntop(AF_INET6, &(evt->ip_destination), dip6, INET6_ADDRSTRLEN);
@@ -337,12 +335,9 @@ void Unified2PrintPacketRecord(Unified2Packet *pkt)
 
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
         "Type: Packet ------------------------------------------\n"););
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  sensor_id          = %d\n", ntohl(pkt->sensor_id)););
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  event_id           = %d\n", ntohl(pkt->event_id)););
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,
-        "  event_second       = %lu\n", ntohl(pkt->event_second)););
+    DEBUG_WRAP(DebugMessage(DEBUG_LOG, "  %-16s %-16s\n", "sensor id:",    ntohl(pkt->sensor_id)););
+    DEBUG_WRAP(DebugMessage(DEBUG_LOG, "  %-16s %-16lu\n", "event id:",     ntohl(pkt->event_id)););
+    DEBUG_WRAP(DebugMessage(DEBUG_LOG, "  %-16s %-16lu\n", "event second:", ntohl(pkt->event_second)););
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,
         "  linktype           = %d\n", ntohl(pkt->linktype)););
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,

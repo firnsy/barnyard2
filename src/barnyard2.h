@@ -459,6 +459,7 @@ typedef struct _PacketCount
     uint64_t udisc;
     uint64_t tcp6;
     uint64_t udp6;
+    uint64_t teredo;
     uint64_t ipdisc;
     uint64_t icmpdisc;
     uint64_t embdip;
@@ -467,6 +468,7 @@ typedef struct _PacketCount
     uint64_t ethloopback;
 
     uint64_t invalid_checksums;
+    uint64_t bad_ttl;
 
 #ifdef GRE
     uint64_t ip4ip4;
@@ -511,7 +513,7 @@ typedef struct _PacketCount
   /* wireless statistics */
     uint64_t wifi_mgmt;
     uint64_t wifi_data;
-    uint64_t wifi_control; 
+    uint64_t wifi_control;
     uint64_t assoc_req;
     uint64_t assoc_resp;
     uint64_t reassoc_req;
@@ -540,7 +542,7 @@ typedef struct _PacketCount
 #endif  // NO_NON_ETHER_DECODER
 
 #ifdef MPLS
-    uint64_t mpls;    
+    uint64_t mpls;
 #endif
 } PacketCount;
 

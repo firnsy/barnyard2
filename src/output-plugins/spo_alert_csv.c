@@ -410,7 +410,7 @@ static void RealAlertCSV(Packet * p, void *event, uint32_t event_type,
         else if(!strncasecmp("ethlen", type, 6))
         {
             if(p->eh)
-                TextLog_Print(log, "0x%X",p->pkth->len);
+                TextLog_Print(log, "0x%X",p->pkth->pktlen);
         }
 #ifndef NO_NON_ETHER_DECODER
         else if(!strncasecmp("trheader", type, 8))

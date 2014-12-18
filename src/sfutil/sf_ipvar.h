@@ -45,7 +45,7 @@ typedef enum _modes {
 /* Used by the "list" mode.  A doubly linked list of sfip_t objects. */
 typedef struct _ip_node {
     sfip_t *ip;
-#define ip_addr ip;   /* To ease porting Snort */
+#define ip_addr ip    /* To ease porting Snort */
     struct _ip_node *next;
     int flags;
                     // XXX

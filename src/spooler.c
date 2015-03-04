@@ -61,8 +61,8 @@ int spoolerCloseWaldo(Waldo *);
 int spoolerPacketCacheAdd(Spooler *, Packet *);
 int spoolerPacketCacheClear(Spooler *);
 
-int spoolerEventCachePush(Spooler *, uint32_t, void *);
-EventRecordNode * spoolerEventCacheGetByEventID(Spooler *, uint32_t);
+int spoolerEventCachePush(Spooler *, uint32_t, void *,uint32_t,uint32_t);
+EventRecordNode * spoolerEventCacheGetByEventID(Spooler *, uint32_t,uint32_t);
 EventRecordNode * spoolerEventCacheGetHead(Spooler *);
 uint8_t spoolerEventCacheHeadUsed(Spooler *);
 int spoolerEventCacheClean(Spooler *);
@@ -713,14 +713,17 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
             pc.total_unknown++;
     }
 
+    /* convert event id once */
+    uint32_t event_id = 0x0000ffff & ntohl(((Unified2CacheCommon *)spooler->record.data)->event_id);
+    uint32_t event_second = ntohl( ((Unified2CacheCommon *)spooler->record.data)->event_second);
+
+
     /* check if it's packet */
     if (type == UNIFIED2_PACKET)
     {
-        /* convert event id once */
-        uint32_t event_id = ntohl(((Unified2Packet *)spooler->record.data)->event_id);
 
         /* check if there is a previously cached event that matches this event id */
-        ernCache = spoolerEventCacheGetByEventID(spooler, event_id);
+        ernCache = spoolerEventCacheGetByEventID(spooler, event_id,event_second);
 
         /* allocate space for the packet and construct the packet header */
         spooler->record.pkt = SnortAlloc(sizeof(Packet));
@@ -826,7 +829,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
         }
 
         /* cache new data */
-        spoolerEventCachePush(spooler, type, spooler->record.data);
+        spoolerEventCachePush(spooler, type, spooler->record.data,event_id,event_second);
         spooler->record.data = NULL;
 
         /* waldo operations occur after the output plugins are called */
@@ -865,11 +868,13 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
     spoolerEventCacheClean(spooler);
 }
 
-int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)
+int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data,u_int32_t event_id,u_int32_t event_second)
 {
     EventRecordNode     *ernNode;
-
-    DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Caching event...\n"););
+    DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"[%s], Caching event id[%u] second[%u] \n",
+			    __FUNCTION__,
+			    event_id,
+			    event_second););
 
     /* allocate memory */
     ernNode = (EventRecordNode *)SnortAlloc(sizeof(EventRecordNode));
@@ -878,6 +883,9 @@ int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)
     ernNode->used = 0;
     ernNode->type = type;
     ernNode->data = data;
+    
+    ernNode->event_id = event_id;
+    ernNode->event_second = event_second;
 
     /* add new events to the front of the cache */
     ernNode->next = spooler->event_cache;
@@ -890,14 +898,18 @@ int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)
     return 0;
 }
 
-EventRecordNode *spoolerEventCacheGetByEventID(Spooler *spooler, uint32_t event_id)
+EventRecordNode *spoolerEventCacheGetByEventID(Spooler *spooler,uint32_t event_id,uint32_t event_second)
 {
     EventRecordNode     *ernCurrent = spooler->event_cache;
-
+    
     while (ernCurrent != NULL)
     {
-        if ( ntohl(((Unified2EventCommon *)ernCurrent->data)->event_id) == event_id )
+        if ( (ernCurrent->event_id == event_id) &&
+	     (ernCurrent->event_second == event_second))
         {
+	    ernCurrent->time_used++;
+	    DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"[%s], Using cached event[%d] event second [%d] \n",
+				    __FUNCTION__,event_id,event_second););
             return ernCurrent;
         }
 
@@ -928,6 +940,9 @@ int spoolerEventCacheClean(Spooler *spooler)
     EventRecordNode     *ernCurrent = NULL;
     EventRecordNode     *ernPrev = NULL;
     EventRecordNode     *ernNext = NULL;
+    EventRecordNode     *ernCandidate = NULL;
+    EventRecordNode     *ernCandidateNext = NULL;
+    EventRecordNode     *ernCandidatePrev = NULL;
     
     if (spooler == NULL || spooler->event_cache == NULL )
         return 1;
@@ -935,44 +950,64 @@ int spoolerEventCacheClean(Spooler *spooler)
     ernPrev = spooler->event_cache;
     ernCurrent = spooler->event_cache;
     
-    while (ernCurrent != NULL && spooler->events_cached > barnyard2_conf->event_cache_size )
+    if(spooler->events_cached > barnyard2_conf->event_cache_size)
     {
-	ernNext = ernCurrent->next;
-	
-	if ( ernCurrent->used == 1 )
-        {
-	    /* Delete from list */
-	    if (ernCurrent == spooler->event_cache)
+	while (ernCurrent != NULL)
+	{
+	    ernNext = ernCurrent->next;
+	    if(ernCurrent->used == 1 && ernCurrent->time_used >=1)
 	    {
-                spooler->event_cache = ernNext;
-	    }
-            else
-	    {
-                ernPrev->next = ernNext;
-	    }
-	    
-            spooler->events_cached--;
-
-	    if(ernCurrent->data != NULL)
-	    {
-		free(ernCurrent->data);
+		ernCandidateNext = ernNext;
+		ernCandidatePrev = ernPrev;
+		ernCandidate=ernCurrent;
 	    }
 	    
 	    if(ernCurrent != NULL)
 	    {
-		free(ernCurrent);
+		ernPrev = ernCurrent;
 	    }
-        }
-	
-	if(ernCurrent != NULL)
-	{
-	    ernPrev = ernCurrent;
+	    
+	    ernCurrent = ernNext;
 	}
 	
-	ernCurrent = ernNext;
-
-    }
-
+	if ( ernCandidate != NULL)
+	{
+	    /* Delete from list */
+	    if (ernCandidate == spooler->event_cache)
+	    {
+		spooler->event_cache = NULL;
+	    }
+	    else
+	    {
+		ernCandidatePrev->next = ernCandidateNext;
+	    }
+	    
+	    DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"[%s],Event currently cached [%d] Purging cached event[%d] event second [%d]\n",
+				    __FUNCTION__,
+				    spooler->events_cached,
+				    ernCandidate->event_id,
+				    ernCandidate->event_second););
+	    
+	    spooler->events_cached--;
+	    
+	    if(ernCandidate->data != NULL)
+	    {
+		free(ernCandidate->data);
+	    }
+	    
+	    if(ernCandidate != NULL)
+	    {
+		free(ernCandidate);
+	    }
+	}
+	else
+	{
+	    DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"[%s],Can't find a purge candidate in event cache, oddness cached event [%d]!! \n",
+				    __FUNCTION__,
+				    spooler->events_cached););
+	}
+	
+    }    
     return 0;
 }
 
@@ -1002,7 +1037,7 @@ void spoolerEventCacheFlush(Spooler *spooler)
     }
     
     spooler->event_cache = NULL;
-    
+    spooler->events_cached = 0;
     return;
 }
 

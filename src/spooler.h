@@ -72,7 +72,10 @@ typedef struct _EventRecordNode
     uint32_t                type;   /* type of event stored */
     void                    *data;  /* unified2 event (eg IPv4, IPV6, MPLS, etc) */
     uint8_t                 used;   /* has the event be retrieved */
-    
+    uint32_t                time_used; /* time it has fired */
+    uint32_t                event_id;  /* extracted from event original */
+    uint32_t                event_second; /* extracted from event originale */
+
     struct _EventRecordNode *next;  /* reference to next event record */
 } EventRecordNode;
 

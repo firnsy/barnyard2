@@ -214,6 +214,17 @@ typedef struct Unified2IDSEventIPv6_legacy
 
 ////////////////////-->LEGACY
 
+/*
+** Smaller subset of feature common across event,packet and extradata
+**
+**
+*/
+typedef struct _Unified2CacheCommon
+{
+    uint32_t sensor_id;
+    uint32_t event_id;
+    uint32_t event_second;
+} Unified2CacheCommon;
 
 /* 
 ** The Unified2EventCommon structure is the common structure that occurs

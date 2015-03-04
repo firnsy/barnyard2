@@ -2192,8 +2192,13 @@ void DecodeIPV6Options(int type, const uint8_t *pkt, uint32_t len, Packet *p)
 
     exthdr = (IP6Extension *)pkt;
 
-    p->ip6_extensions[p->ip6_extension_count].type = type;
-    p->ip6_extensions[p->ip6_extension_count].data = pkt;
+    /* BY2: we only track the first extension and don't do out of order
+    ** assessment as it's already been done by the engine that built it.
+    */
+    if (p->ip6_extension_count == 0) {
+      p->ip6_extensions[p->ip6_extension_count].type = type;
+      p->ip6_extensions[p->ip6_extension_count].data = pkt;
+    }
 
     // TBD add layers for other ip6 ext headers
     switch (type)

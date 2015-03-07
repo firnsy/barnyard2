@@ -861,6 +861,15 @@ int Syslog_FormatPayload(OpSyslog_Data *data, Packet *p) {
 	    }
 	    break;
 
+  case ENCODE_ASCHEX:
+      if( (aschex_STATIC(p->pkt,p->pkth->caplen,
+            data->payload_escape_buffer)))
+      {
+    /* XXX */
+    return 1;
+      }
+      break;
+
 	default:
 	    FatalError("[%s()]: Unknown encoding payload scheme [%d] \n",
 		       __FUNCTION__,
@@ -1437,6 +1446,10 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
                     else if(strcasecmp("base64",stoks[1]) == 0)
                     {
                         op_data->payload_encoding = ENCODE_BASE64;
+                    }
+                    else if(strcasecmp("aschex",stoks[1]) == 0)
+                    {
+                        op_data->payload_encoding = ENCODE_ASCHEX;
                     }
 		    else
                     {

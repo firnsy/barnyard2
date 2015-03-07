@@ -2595,6 +2595,54 @@ u_int32_t fasthex_STATIC(const u_char *xdata, int length,char *retbuf)
     return 0;
 }
 
+u_int32_t aschex_STATIC(const u_char *xdata, int length, char *retbuf) {
+    char conv[] = "0123456789ABCDEF";
+    char *asc_msg;
+    char *hex_msg;
+    const u_char *index;
+    char *ridx;
+
+    if (xdata == NULL ||
+        retbuf == NULL ||
+        (length *3) + 2 > MAX_QUERY_LENGTH ) {
+        return 1;
+    }
+
+    asc_msg = malloc(MAX_QUERY_LENGTH);
+    hex_msg = malloc(MAX_QUERY_LENGTH);
+    if (asc_msg == NULL || hex_msg == NULL) {
+        FatalError("aschex_STATIC(): Can't allocate memory\n");
+    }
+
+    /* Obtain ascii msg */
+    memset(asc_msg, '\0', MAX_QUERY_LENGTH);
+    index = xdata;
+    ridx = asc_msg;
+    while (index < xdata + length) {
+        if (*index > 0x20 && *index < 0x7F) *ridx++ = *index;
+        else *ridx++ = '.';
+        index++;
+    }
+
+    /* Obtain hex msg */
+    memset(hex_msg, '\0', MAX_QUERY_LENGTH);
+    index = xdata;
+    ridx = hex_msg;
+    while (index < xdata + length) {
+        *ridx++ = conv[((*index & 0xFF)>>4)];
+        *ridx++ = conv[((*index & 0xFF)&0x0F)];
+        index++;
+    }
+
+    /* Concat asc and hex msgs */
+    snprintf(retbuf, MAX_QUERY_LENGTH, "%s %s", asc_msg, hex_msg);
+
+    /* Free local resources */
+    free(asc_msg);
+    free(hex_msg);
+
+    return 0;
+}
 
 /*
  *   Fatal Integer Parser

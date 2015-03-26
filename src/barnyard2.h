@@ -428,6 +428,9 @@ typedef struct _PacketCount
     uint64_t total_records;
     uint64_t total_events;
     uint64_t total_packets;
+//rb:ini
+    uint64_t total_extra_data;
+//rb:fin
     uint64_t total_processed;
     uint64_t total_unknown;
     uint64_t total_suppressed;

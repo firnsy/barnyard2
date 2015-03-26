@@ -707,6 +707,11 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
         case UNIFIED2_IDS_EVENT_IPV6_VLAN:
             pc.total_events++;
             break;
+//rb:ini
+        case UNIFIED2_EXTRA_DATA:
+            pc.total_extra_data++;
+            break;
+//rb:fin
         default:
             pc.total_unknown++;
     }

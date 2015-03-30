@@ -93,7 +93,10 @@
 // Note: Always including ,sensor_name,domain_name,group_name,src_net_name,src_as_name,dst_net_name,dst_as_name
 //#define SEND_NAMES
 
-#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,l4_proto,src,src_net,src_net_name,src_as,src_as_name,dst,dst_net,dst_net_name,dst_as,dst_as_name,l4_srcport,l4_dstport,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
+//#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,l4_proto,src,src_net,src_net_name,src_as,src_as_name,dst,dst_net,dst_net_name,dst_as,dst_as_name,l4_srcport,l4_dstport,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
+//rb:ini
+#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,file_sha256,file_size,file_hostname,file_uri,payload,l4_proto,src,src_net,src_net_name,src_as,src_as_name,dst,dst_net,dst_net_name,dst_as,dst_as_name,l4_srcport,l4_dstport,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
+//rb:fin
 
 #ifdef HAVE_GEOIP
 #define DEFAULT_JSON_1 DEFAULT_JSON_0 ",src_country,dst_country,src_country_code,dst_country_code" /* link with previous string */
@@ -145,6 +148,12 @@ typedef enum{
     ACTION,
     CLASSIFICATION,
     MSG,
+//rb:ini
+    FILE_SHA256,
+    FILE_SIZE,
+    FILE_HOSTNAME,
+    FILE_URI,
+//rb:fin
     PAYLOAD,
     PROTO,
     PROTO_ID,
@@ -272,6 +281,12 @@ static AlertJSONTemplateElement template[] = {
     {PRIORITY,"priority","priority",stringFormat,"unknown"},
     {CLASSIFICATION,"classification","classification",stringFormat,"-"},
     {MSG,"msg","msg",stringFormat,"-"},
+//rb:ini
+    {FILE_SHA256,"file_sha256","file_sha256",stringFormat,"-"},
+    {FILE_SIZE,"file_size","file_size",stringFormat,"-"},
+    {FILE_HOSTNAME,"file_hostname","file_hostname",stringFormat,"-"},
+    {FILE_URI,"file_uri","file_uri",stringFormat,"-"},
+//rb:fin
     {PAYLOAD,"payload","payload",stringFormat,"-"},
     {PROTO,"l4_proto_name","l4_proto_name",stringFormat,"-"},
     {PROTO_ID,"l4_proto","l4_proto",numericFormat,"0"},
@@ -1353,6 +1368,16 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
                 }
             }
             break;
+//rb:ini
+        case FILE_SHA256:
+            break;
+        case FILE_SIZE:
+            break;
+        case FILE_URI:
+            break;
+        case FILE_HOSTNAME:
+            break;
+//rb:fin
         case PAYLOAD:
             {
                 uint16_t i;

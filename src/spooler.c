@@ -406,6 +406,7 @@ int ProcessBatch(const char *dirpath, const char *filename)
                 spoolerFreeRecord(&spooler->record);
                 break;
         }
+
     }
 
     /* we've finished with the spooler so destroy and cleanup */
@@ -455,6 +456,15 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
     /* Start the main process loop */
     while (exit_signal == 0)
     {
+//rb:ini
+        if (AlarmCheck())
+        {
+            //if(cache not empty)
+                //flush cache
+            AlarmClear();
+        }
+//rb:fin
+
 	/* for SIGUSR1 / dropstats */
 	SignalCheck();
 
@@ -866,6 +876,10 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
 
     /* clean the cache out */
     spoolerEventCacheClean(spooler);
+//rb:ini
+    /* If there is no more records in TIME_ALARM seconds flush the cached records */
+    AlarmStart(TIME_ALARM);
+//rb:fin
 }
 
 static int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)

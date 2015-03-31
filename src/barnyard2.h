@@ -146,6 +146,10 @@
 //# define PRINT_INTERFACE(i)  print_interface(i)
 #endif
 
+//rb:ini
+#define TIME_ALARM 2 // seconds to flush the last cached event
+//rb:fin
+
 /*  D A T A  S T R U C T U R E S  *********************************************/
 typedef struct _VarEntry
 {
@@ -578,6 +582,11 @@ Barnyard2Config * Barnyard2ConfNew(void);
 int Barnyard2Main(int argc, char *argv[]);
 int Barnyard2Sleep(unsigned int);
 int SignalCheck(void);
+//rb:ini
+int AlarmCheck(void);
+void AlarmStart(int time_alarm);
+void AlarmClear(void);
+//rb:fin
 
 void CleanExit(int);
 void SigCantHupHandler(int signal);

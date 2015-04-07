@@ -177,7 +177,20 @@ int Unified2ReadRecord(void *sph)
     if(!spooler->record.data)
     {
         /* SnortAlloc will FatalError if memory can't be assigned */
+//rb:ini
+#ifdef rbtest_spi_unified2
+        spooler->record.data = SnortAlloc(record_length+sizeof(void *)+sizeof(ExtraDataRecordCache)/*+sizeof(uint32_t)*/);
+
+        /* Habría que poner a NULL el puntero a paquete (...WithEDP->pkt) */
+        //(((char *)(spooler->record.data))+record_length) = NULL;
+        //((Unified2IDSEvent_WithPED *)ernNode->data)->packet = NULL;
+
+        TAILQ_INIT((ExtraDataRecordCache *)(((char *)(spooler->record.data))+record_length)+sizeof(void *));
+        //*(&(spooler->record.data)+record_length+sizeof(ExtraDataRecordCache)) = NULL;
+#else
         spooler->record.data = SnortAlloc(record_length);
+#endif
+//rb:fin
     }
 
     if (spooler->offset < record_length)

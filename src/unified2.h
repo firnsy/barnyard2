@@ -30,6 +30,10 @@
 #include "config.h"
 #endif
 
+//rb:ini
+#include <sys/queue.h>
+//rb:fin
+
 //SNORT DEFINES
 //Long time ago...
 #define UNIFIED2_EVENT               1
@@ -43,6 +47,19 @@
 #define UNIFIED2_IDS_EVENT_VLAN      104
 #define UNIFIED2_IDS_EVENT_IPV6_VLAN 105
 #define UNIFIED2_EXTRA_DATA          110
+
+//rb:ini
+typedef struct _ExtraDataRecordNode
+{
+    uint32_t    type;
+    void        *data;
+    uint8_t     used;
+
+    TAILQ_ENTRY(_ExtraDataRecordNode) entry;
+} ExtraDataRecordNode;
+
+typedef TAILQ_HEAD(_ExtraDataRecordList, _ExtraDataRecordNode) ExtraDataRecordCache;
+//rb:fin
 
 /* Each unified2 record will start out with one of these */
 typedef struct _Unified2RecordHeader
@@ -77,6 +94,16 @@ typedef struct _Unified2IDSEvent
     uint16_t pad2;//Policy ID
 } Unified2IDSEvent;
 
+//rb:ini
+typedef struct _Unified2IDSEvent_WithPED
+{
+    Unified2IDSEvent        event;
+    void                    *packet;
+    ExtraDataRecordCache    extra_data_cache;
+    //uint32_t                extra_data_cached;
+}Unified2IDSEvent_WithPED;
+//rb:fin
+
 //UNIFIED2_IDS_EVENT_IPV6_VLAN = type 105
 typedef struct _Unified2IDSEventIPv6
 {
@@ -101,6 +128,16 @@ typedef struct _Unified2IDSEventIPv6
     uint16_t vlanId;
     uint16_t pad2;/*could be IPS Policy local id to support local sensor alerts*/
 } Unified2IDSEventIPv6;
+
+//rb:ini
+typedef struct _Unified2IDSEventIPv6_WithPED
+{
+    Unified2IDSEventIPv6    event;
+    void                    *packet;
+    ExtraDataRecordCache    extra_data_cache; //linked list of concurrent extra data records
+    //uint32_t                extra_data_cached;
+}Unified2IDSEventIPv6_WithPED;
+//rb:fin
 
 //UNIFIED2_PACKET = type 2
 typedef struct _Unified2Packet
@@ -176,6 +213,16 @@ typedef struct Unified2IDSEvent_legacy
     uint8_t  blocked;
 } Unified2IDSEvent_legacy;
 
+//rb:ini
+typedef struct _Unified2IDSEvent_legacy_WithPED
+{
+    Unified2IDSEventIPv6    event;
+    void                    *packet;
+    ExtraDataRecordCache    extra_data_cache; //linked list of concurrent extra data records
+    //uint32_t                extra_data_cached;
+}Unified2IDSEvent_legacy_WithPED;
+//rb:fin
+
 //----------LEGACY, type '72'
 typedef struct Unified2IDSEventIPv6_legacy
 {
@@ -197,6 +244,16 @@ typedef struct Unified2IDSEventIPv6_legacy
     uint8_t  impact;
     uint8_t  blocked;
 } Unified2IDSEventIPv6_legacy;
+
+//rb:ini
+typedef struct _Unified2IDSEventIPv6_legacy_WithPED
+{
+    Unified2IDSEventIPv6    event;
+    void                    *packet;
+    ExtraDataRecordCache    extra_data_cache; //linked list of concurrent extra data records
+    //uint32_t                extra_data_cached;
+}Unified2IDSEventIPv6_legacy_WithPED;
+//rb:fin
 
 ////////////////////-->LEGACY
 

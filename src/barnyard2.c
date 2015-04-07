@@ -55,7 +55,7 @@
 #endif
 #include <getopt.h>
 
-//rb:ini (disable the unused time stats )
+//rb:ini (disable the unused time stats)
 //#ifdef TIMESTATS
 //# include <time.h>   /* added for new time stats function in util.c */
 //#endif

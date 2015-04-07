@@ -31,6 +31,9 @@
 #include <sys/queue.h>
 
 #include "plugbase.h"
+//rb:ini
+#include "unified2.h"
+//rb:fin
 
 #define SPOOLER_EXTENSION_FOUND     0
 #define SPOOLER_EXTENSION_NONE      1
@@ -58,6 +61,14 @@
 
 
 #define MAX_FILEPATH_BUF    1024
+
+//rb:ini (test)
+#define rbtest
+#ifdef rbtest
+    #define rbtest_spooler
+    #define rbtest_spi_unified2
+#endif
+//rb:fin (test)
 
 typedef struct _Record
 {

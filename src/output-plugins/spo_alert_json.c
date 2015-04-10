@@ -1581,15 +1581,17 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case SRC_NET:
         case DST_NET:
             {
-                Number_str_assoc * ip_net = SearchIpStr(ip,jsonData->nets,NETWORKS);
-                KafkaLog_Puts(kafka,ip_net?ip_net->number_as_str:templateElement->defaultValue);
+                Number_str_assoc *ip_net = SearchIpStr(ip,jsonData->nets,NETWORKS);
+                if(ip_net)
+                    KafkaLog_Puts(kafka,ip_net->number_as_str);
             }
             break;
         case SRC_NET_NAME:
         case DST_NET_NAME:
             {
-                Number_str_assoc * ip_net = SearchIpStr(ip,jsonData->nets,NETWORKS);
-                KafkaLog_Puts(kafka,ip_net?ip_net->human_readable_str:templateElement->defaultValue);
+                Number_str_assoc *ip_net = SearchIpStr(ip,jsonData->nets,NETWORKS);
+                if(ip_net)
+                    KafkaLog_Puts(kafka,ip_net->human_readable_str);
             }
             break;
 

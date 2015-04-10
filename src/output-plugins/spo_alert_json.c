@@ -93,8 +93,8 @@
 // Note: Always including ,sensor_name,domain_name,group_name,src_net_name,src_as_name,dst_net_name,dst_as_name
 //#define SEND_NAMES
 
-//#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,l4_proto,src,src_net,src_net_name,src_as,src_as_name,dst,dst_net,dst_net_name,dst_as,dst_as_name,l4_srcport,l4_dstport,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
 //rb:ini
+//#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,l4_proto,src,src_net,src_net_name,src_as,src_as_name,dst,dst_net,dst_net_name,dst_as,dst_as_name,l4_srcport,l4_dstport,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
 #define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,file_sha256,file_size,file_hostname,file_uri,payload,l4_proto,src,src_net,src_net_name,src_as,src_as_name,dst,dst_net,dst_net_name,dst_as,dst_as_name,l4_srcport,l4_dstport,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
 //rb:fin
 
@@ -858,7 +858,18 @@ char* _itoa(uint64_t value, char* result, int base, size_t bufsize) {
 
 /* shortcut to used bases */
 static inline char *itoa10(uint64_t value,char *result,const size_t bufsize){return _itoa(value,result,10,bufsize);}
+//rb:ini
 static inline char *itoa16(uint64_t value,char *result,const size_t bufsize){return _itoa(value,result,16,bufsize);}
+static inline char *itoa16(uint64_t value,char *result,const size_t bufsize){
+    char *ret = _itoa(value,result,16,bufsize);
+    if(value < 16 && ret > result){
+        ret--;
+        *ret='0';
+    }
+    return ret;
+}
+//rb:fin
+
 static inline void printHWaddr(KafkaLog *kafka,const uint8_t *addr,char * buf,const size_t bufLen){
     int i;
     for(i=0;i<6;++i){
@@ -1225,6 +1236,103 @@ static char *extract_AS(AlertJSONData *jsonData,const sfip_t *ip)
 
 #endif
 
+//rb:ini
+static int printElementExtraDataBlob(Packet *p, void *event, uint32_t event_type, AlertJSONData *jsonData, AlertJSONTemplateElement *templateElement, KafkaLog *kafka,
+    Unified2ExtraData *U2ExtraData)
+{
+    uint32_t    event_info;     /* type in Unified2 Event */
+    const char  *str;
+    int         len;
+
+    event_info = ntohl(U2ExtraData->type);
+
+    switch (templateElement->id)
+    {
+        case FILE_SHA256:
+            if (event_info == EVENT_INFO_FILE_SHA256)
+            {
+                const uint8_t *sha_str = (uint8_t *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+
+                uint16_t i;
+                char buf[sizeof "00"];
+                const size_t bufLen = sizeof buf;
+                if(sha_str && len>0)
+                    for(i=0; i<len; ++i)
+                        KafkaLog_Puts(kafka, itoa16(sha_str[i],buf,bufLen));
+                else
+                    KafkaLog_Puts(kafka, templateElement->defaultValue);
+            }
+            break;
+        case FILE_SIZE:
+            if (event_info == EVENT_INFO_FILE_SIZE)
+            {
+                str = (char *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                KafkaLog_Write(kafka, str, len);
+            }
+            break;
+        case FILE_URI:
+            if (event_info == EVENT_INFO_FILE_URI)
+            {
+
+            }
+            break;
+        case FILE_HOSTNAME:
+            if (event_info == EVENT_INFO_FILE_HOSTNAME)
+            {
+
+            }
+            break;
+        default:
+            LogMessage("WARNING: printElementExtraDataBlob(): JSON Element ID inconsistent (%d)\n", templateElement->id);
+            break;
+    }
+
+    return 0;
+}
+
+static int printElementExtraData(Packet *p, void *event, uint32_t event_type, AlertJSONData *jsonData, AlertJSONTemplateElement *templateElement, KafkaLog *kafka)
+{
+    uint32_t                event_data_type;        /* datatype in Unified2 Event*/
+    ExtraDataRecordNode     *edrnCurrent = NULL;
+    Unified2ExtraData       *U2ExtraData;
+    ExtraDataRecordCache    *extra_data_cache;
+
+    switch (event_type)
+    {
+        case UNIFIED2_IDS_EVENT:
+        case UNIFIED2_IDS_EVENT_MPLS:
+        case UNIFIED2_IDS_EVENT_VLAN:
+            extra_data_cache = &(((Unified2IDSEvent_WithPED *)(event))->extra_data_cache);
+            break;
+        case UNIFIED2_IDS_EVENT_IPV6:
+        case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+        case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+            extra_data_cache = &(((Unified2IDSEventIPv6_WithPED *)(event))->extra_data_cache);
+            break;
+        default:
+            extra_data_cache = NULL;
+            LogMessage("WARNING: printElementExtraData(): event_type inconsistent (%d)\n", event_type);
+            break;
+    }
+
+    if (extra_data_cache == NULL)
+        return 0;
+
+    TAILQ_FOREACH(edrnCurrent, extra_data_cache, entry)
+    {
+        U2ExtraData = (Unified2ExtraData *)(((Unified2ExtraDataHdr *)edrnCurrent->data)+1);
+        event_data_type = ntohl(U2ExtraData->data_type);
+
+        printf ("\n");
+        if (event_data_type == EVENT_DATA_TYPE_BLOB)
+            printElementExtraDataBlob(p, event, event_type, jsonData, templateElement, kafka, U2ExtraData);
+    }
+
+    return 0;
+}
+//rb:fin
 
 /*
  * Function: PrintElementWithTemplate(Packet *, char *, FILE *, char *, numargs const int)
@@ -1370,12 +1478,11 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             break;
 //rb:ini
         case FILE_SHA256:
-            break;
         case FILE_SIZE:
-            break;
         case FILE_URI:
-            break;
         case FILE_HOSTNAME:
+            if (event != NULL)
+                printElementExtraData(p, event, event_type, jsonData, templateElement, kafka);
             break;
 //rb:fin
         case PAYLOAD:

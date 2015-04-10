@@ -859,7 +859,7 @@ char* _itoa(uint64_t value, char* result, int base, size_t bufsize) {
 /* shortcut to used bases */
 static inline char *itoa10(uint64_t value,char *result,const size_t bufsize){return _itoa(value,result,10,bufsize);}
 //rb:ini
-static inline char *itoa16(uint64_t value,char *result,const size_t bufsize){return _itoa(value,result,16,bufsize);}
+//static inline char *itoa16(uint64_t value,char *result,const size_t bufsize){return _itoa(value,result,16,bufsize);}
 static inline char *itoa16(uint64_t value,char *result,const size_t bufsize){
     char *ret = _itoa(value,result,16,bufsize);
     if(value < 16 && ret > result){
@@ -1713,15 +1713,17 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case SRC_NET:
         case DST_NET:
             {
-                Number_str_assoc * ip_net = SearchIpStr(ip,jsonData->nets,NETWORKS);
-                KafkaLog_Puts(kafka,ip_net?ip_net->number_as_str:templateElement->defaultValue);
+                Number_str_assoc *ip_net = SearchIpStr(ip,jsonData->nets,NETWORKS);
+                if(ip_net)
+                    KafkaLog_Puts(kafka,ip_net->number_as_str);
             }
             break;
         case SRC_NET_NAME:
         case DST_NET_NAME:
             {
-                Number_str_assoc * ip_net = SearchIpStr(ip,jsonData->nets,NETWORKS);
-                KafkaLog_Puts(kafka,ip_net?ip_net->human_readable_str:templateElement->defaultValue);
+                Number_str_assoc *ip_net = SearchIpStr(ip,jsonData->nets,NETWORKS);
+                if(ip_net)
+                    KafkaLog_Puts(kafka,ip_net->human_readable_str);
             }
             break;
 

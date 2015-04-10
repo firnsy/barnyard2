@@ -51,8 +51,8 @@
         if(event==NULL && event_type ==0) return "log";\
         else if(EVENT_IMPACT_FLAG(event)==U2_FLAG_ALLOWED && EVENT_BLOCKED(event)==U2_BLOCKED_FLAG_ALLOW) return "alert";\
         else if(EVENT_IMPACT_FLAG(event)==U2_FLAG_BLOCKED && EVENT_BLOCKED(event)==U2_BLOCKED_FLAG_BLOCK) return "drop";\
-        else if(EVENT_IMPACT_FLAG(event)==U2_FLAG_ALLOWED && EVENT_BLOCKED(event)==U2_BLOCKED_FLAG_WOULD) return "not dropped";\
-        else if(EVENT_IMPACT_FLAG(event)==U2_FLAG_ALLOWED && EVENT_BLOCKED(event)==U2_BLOCKED_FLAG_CANT) return "cant drop";\
+        else if(EVENT_IMPACT_FLAG(event)==U2_FLAG_ALLOWED && EVENT_BLOCKED(event)==U2_BLOCKED_FLAG_WOULD) return "should_drop";\
+        else if(EVENT_IMPACT_FLAG(event)==U2_FLAG_ALLOWED && EVENT_BLOCKED(event)==U2_BLOCKED_FLAG_CANT) return "cant_drop";\
         else return NULL;\
     }while(0)
 

@@ -147,7 +147,7 @@
 #endif
 
 //rb:ini
-#define TIME_ALARM 2 // seconds to flush the last cached event
+#define TIME_ALARM 1 // seconds to flush the last cached event
 //rb:fin
 
 /*  D A T A  S T R U C T U R E S  *********************************************/

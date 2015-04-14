@@ -160,6 +160,80 @@ int Unified2ReadRecordHeader(void *sph)
     return 0;
 }
 
+//rb:ini
+unsigned long GetSizeofByType(uint32_t type, uint32_t length)
+{
+    unsigned long ret = 0;
+
+    switch (type)
+    {
+        case UNIFIED2_IDS_EVENT:
+            ret = sizeof(Unified2IDSEvent_legacy_WithPED);
+            break;
+        case UNIFIED2_IDS_EVENT_MPLS:
+        case UNIFIED2_IDS_EVENT_VLAN:
+            ret = sizeof(Unified2IDSEvent_WithPED);
+            break;
+        case UNIFIED2_IDS_EVENT_IPV6:
+            ret = sizeof(Unified2IDSEventIPv6_legacy_WithPED);
+            break;
+        case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+        case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+            ret = sizeof(Unified2IDSEventIPv6_WithPED);
+            break;
+        case UNIFIED2_PACKET:
+        case UNIFIED2_EXTRA_DATA:
+            ret = length;
+            break;
+        default:
+            LogMessage("WARNING: GetSizeofByType(): type inconsistent (%d)\n", type);
+            break;
+    }
+
+    if (ret == 0)
+        FatalError("GetSizeofByType(): sizeof = 0 bytes!\n");
+
+    return ret;
+}
+
+void InitPEDByType(void *data, uint32_t type)
+{
+    if (data == NULL)
+    {
+        LogMessage("WARNING: InitDataByType(): data is NULL\n");
+        return;
+    }
+
+    switch (type)
+    {
+        case UNIFIED2_IDS_EVENT:
+            ((Unified2IDSEvent_legacy_WithPED *)data)->packet = NULL;
+            TAILQ_INIT(&(((Unified2IDSEvent_legacy_WithPED *)data)->extra_data_cache));
+            break;
+        case UNIFIED2_IDS_EVENT_MPLS:
+        case UNIFIED2_IDS_EVENT_VLAN:
+            ((Unified2IDSEvent_WithPED *)data)->packet = NULL;
+            TAILQ_INIT(&(((Unified2IDSEvent_WithPED *)data)->extra_data_cache));
+            break;
+        case UNIFIED2_IDS_EVENT_IPV6:
+            ((Unified2IDSEventIPv6_legacy_WithPED *)data)->packet = NULL;
+            TAILQ_INIT(&(((Unified2IDSEventIPv6_legacy_WithPED *)data)->extra_data_cache));
+            break;
+        case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+        case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+            ((Unified2IDSEventIPv6_WithPED *)data)->packet = NULL;
+            TAILQ_INIT(&(((Unified2IDSEventIPv6_WithPED *)data)->extra_data_cache));
+            break;
+        case UNIFIED2_PACKET:
+        case UNIFIED2_EXTRA_DATA:
+            break;
+        default:
+            LogMessage("WARNING: InitDataByType(): type inconsistent (%d)\n", type);
+            break;
+    }
+}
+//rb:fin
+
 int Unified2ReadRecord(void *sph)
 {
     ssize_t             bytes_read;
@@ -179,14 +253,9 @@ int Unified2ReadRecord(void *sph)
         /* SnortAlloc will FatalError if memory can't be assigned */
 //rb:ini
 #ifdef rbtest_spi_unified2
-        spooler->record.data = SnortAlloc(record_length+sizeof(void *)+sizeof(ExtraDataRecordCache)/*+sizeof(uint32_t)*/);
+        spooler->record.data = SnortAlloc(GetSizeofByType(record_type, record_length));
 
-        /* Habría que poner a NULL el puntero a paquete (...WithEDP->pkt) */
-        //(((char *)(spooler->record.data))+record_length) = NULL;
-        //((Unified2IDSEvent_WithPED *)ernNode->data)->packet = NULL;
-
-        TAILQ_INIT((ExtraDataRecordCache *)(((char *)(spooler->record.data))+record_length)+sizeof(void *));
-        //*(&(spooler->record.data)+record_length+sizeof(ExtraDataRecordCache)) = NULL;
+        InitPEDByType(spooler->record.data, record_type);
 #else
         spooler->record.data = SnortAlloc(record_length);
 #endif

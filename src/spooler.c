@@ -50,6 +50,9 @@ static Spooler *spoolerOpen(const char *, const char *, uint32_t);
 int spoolerClose(Spooler *);
 static int spoolerReadRecordHeader(Spooler *);
 static int spoolerReadRecord(Spooler *);
+//rb:ini
+static Packet * spoolerAllocateFirstPacket(Spooler *);
+//rb:fin
 static void spoolerProcessRecord(Spooler *, int);
 static void spoolerFreeRecord(Record *record);
 
@@ -67,6 +70,9 @@ static int spoolerCallOutputPluginsByERN (EventRecordNode *);
 static EventRecordNode * spoolerEventCacheGetByEventID(Spooler *, uint32_t);
 static EventRecordNode * spoolerEventCacheGetHead(Spooler *);
 static uint8_t spoolerEventCacheHeadUsed(Spooler *);
+//rb:ini
+static int spoolerExtraDataCacheClean(EventRecordNode *ern);
+//rb:fin
 static int spoolerEventCacheClean(Spooler *);
 
 /* Find the next spool file timestamp extension with a value equal to or 
@@ -703,6 +709,41 @@ int ProcessContinuousWithWaldo(Waldo *waldo)
                              waldo->data.record_idx, waldo->data.timestamp);
 }
 
+//rb:ini
+static Packet * spoolerAllocateFirstPacket(Spooler *spooler)
+{
+    struct pcap_pkthdr      pkth;
+    Packet *packet = NULL;
+
+    /* allocate space for the packet and construct the packet header */
+    packet = SnortAlloc(sizeof(Packet));
+
+    pkth.caplen = ntohl(((Unified2Packet *)spooler->record.data)->packet_length);
+    pkth.len = pkth.caplen;
+    pkth.ts.tv_sec = ntohl(((Unified2Packet *)spooler->record.data)->packet_second);
+    pkth.ts.tv_usec = ntohl(((Unified2Packet *)spooler->record.data)->packet_microsecond);
+
+    /* decode the packet from the Unified2Packet information */
+    datalink = ntohl(((Unified2Packet *)spooler->record.data)->linktype);
+    DecodePacket(datalink, packet, &pkth, 
+                 ((Unified2Packet *)spooler->record.data)->packet_data);
+
+    /* This is a fixup for portscan... */
+    if( (packet->iph == NULL) && 
+        ((packet->inner_iph != NULL) && (packet->inner_iph->ip_proto == 255)))
+        {
+            packet->iph = packet->inner_iph;
+        }
+
+    /* check if it's been re-assembled */
+    if (packet->packet_flags & PKT_REBUILT_STREAM)
+    {
+        DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Packet has been rebuilt from a stream\n"););
+    }
+
+    return packet;
+}
+//rb:fin
 
 /*
 ** RECORD PROCESSING EVENTS
@@ -710,7 +751,11 @@ int ProcessContinuousWithWaldo(Waldo *waldo)
 
 static void spoolerProcessRecord(Spooler *spooler, int fire_output)
 {
+//rb:ini
+#ifndef rbtest_spooler
     struct pcap_pkthdr      pkth;
+#endif
+//rb:fin
     uint32_t                type;
     EventRecordNode         *ernCache;
 
@@ -750,6 +795,53 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
         /* check if there is a previously cached event that matches this event id */
         ernCache = spoolerEventCacheGetByEventID(spooler, event_id);
 
+//rb:ini
+#ifdef rbtest_spooler
+        datalink = ntohl(((Unified2Packet *)spooler->record.data)->linktype);
+
+        /* if the packet and cached event share the same id */
+        if (ernCache != NULL)
+        {
+            /* add the packet into the cached event */
+            switch (ernCache->type)
+            {
+                case UNIFIED2_IDS_EVENT:
+                    /* if there is no previous packet */
+                    if (((Unified2IDSEvent_legacy_WithPED *)ernCache->data)->packet == NULL)
+                        ((Unified2IDSEvent_legacy_WithPED *)ernCache->data)->packet = spoolerAllocateFirstPacket(spooler);
+                    /* when != NULL there is a previous packet cached with the event. do nothing here. */
+                    break;
+                case UNIFIED2_IDS_EVENT_MPLS:
+                case UNIFIED2_IDS_EVENT_VLAN:
+                    /* if there is no previous packet */
+                    if (((Unified2IDSEvent_WithPED *)ernCache->data)->packet == NULL)
+                        ((Unified2IDSEvent_WithPED *)ernCache->data)->packet = spoolerAllocateFirstPacket(spooler);
+                    /* when != NULL there is a previous packet cached with the event. do nothing here. */
+                    break;
+                case UNIFIED2_IDS_EVENT_IPV6:
+                    /* if there is no previous packet */
+                    if (((Unified2IDSEventIPv6_legacy_WithPED *)ernCache->data)->packet == NULL)
+                        ((Unified2IDSEventIPv6_legacy_WithPED *)ernCache->data)->packet = spoolerAllocateFirstPacket(spooler);
+                    /* when != NULL there is a previous packet cached with the event. do nothing here. */
+                    break;
+                case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+                case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+                    /* if there is no previous packet */
+                    if (((Unified2IDSEventIPv6_WithPED *)ernCache->data)->packet == NULL)
+                        ((Unified2IDSEventIPv6_WithPED *)ernCache->data)->packet = spoolerAllocateFirstPacket(spooler);
+                    /* when != NULL there is a previous packet cached with the event. do nothing here. */
+                    break;
+                default:
+                    LogMessage("WARNING: spoolerProcessRecord(): type inconsistent (%d)\n", ernCache->type);
+                break;
+            }
+        }
+        //else
+        //{
+            // We are assuming that a packet record will never show up before an event record does
+            // This hypothetical case should be taken into account after testings
+        //}
+#else
         /* allocate space for the packet and construct the packet header */
         spooler->record.pkt = SnortAlloc(sizeof(Packet));
 
@@ -763,12 +855,12 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
         DecodePacket(datalink, spooler->record.pkt, &pkth, 
                      ((Unified2Packet *)spooler->record.data)->packet_data);
 
-	/* This is a fixup for portscan... */
-	if( (spooler->record.pkt->iph == NULL) && 
-	    ((spooler->record.pkt->inner_iph != NULL) && (spooler->record.pkt->inner_iph->ip_proto == 255)))
-	    {
-		spooler->record.pkt->iph = spooler->record.pkt->inner_iph;
-	    }
+        /* This is a fixup for portscan... */
+        if( (spooler->record.pkt->iph == NULL) && 
+            ((spooler->record.pkt->inner_iph != NULL) && (spooler->record.pkt->inner_iph->ip_proto == 255)))
+            {
+                spooler->record.pkt->iph = spooler->record.pkt->inner_iph;
+            }
 
         /* check if it's been re-assembled */
         if (spooler->record.pkt->packet_flags & PKT_REBUILT_STREAM)
@@ -776,38 +868,6 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
             DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Packet has been rebuilt from a stream\n"););
         }
 
-//rb:ini
-#ifdef rbtest_spooler
-        /* if the packet and cached event share the same id */
-        if (ernCache != NULL)
-        {
-            /* add the packet into the cached event */
-            switch (ernCache->type)
-            {
-                case UNIFIED2_IDS_EVENT:
-                case UNIFIED2_IDS_EVENT_MPLS:
-                case UNIFIED2_IDS_EVENT_VLAN:
-                    /* if there is no previous packet */
-                    if (((Unified2IDSEvent_WithPED *)ernCache->data)->packet == NULL)
-                        ((Unified2IDSEvent_WithPED *)ernCache->data)->packet = spooler->record.pkt;
-                    /* when != NULL there is a previous packet cached with the event. do nothing here. */
-                    break;
-                case UNIFIED2_IDS_EVENT_IPV6:
-                case UNIFIED2_IDS_EVENT_IPV6_MPLS:
-                case UNIFIED2_IDS_EVENT_IPV6_VLAN:
-                    /* if there is no previous packet */
-                    if (((Unified2IDSEventIPv6_WithPED *)ernCache->data)->packet == NULL)
-                        ((Unified2IDSEventIPv6_WithPED *)ernCache->data)->packet = spooler->record.pkt;
-                    /* when != NULL there is a previous packet cached with the event. do nothing here. */
-                    break;
-            }
-        }
-        //else
-        //{
-            // We are assuming that a packet record will never show up before an event record does
-            // This hypothetical case should be taken into account after testings
-        //}
-#else
         /* if the packet and cached event share the same id */
         if ( ernCache != NULL )
         {
@@ -917,7 +977,7 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
         if ( ernCache != NULL )
         {
             /* include extra data record */
-            spoolerExtraDataCachePush(spooler, type, /*((Unified2ExtraDataHdr *)spooler->record.data)+1*/spooler->record.data, ernCache);
+            spoolerExtraDataCachePush(spooler, type, spooler->record.data, ernCache);
             spooler->record.data = NULL;
         }
         //else
@@ -1166,6 +1226,74 @@ static uint8_t spoolerEventCacheHeadUsed(Spooler *spooler)
         (elm) = (tmpelm))
 #endif
 
+//rb:ini
+static int spoolerExtraDataCacheClean(EventRecordNode *ern)
+{
+    ExtraDataRecordNode *edrn_next = NULL;
+    ExtraDataRecordNode *edrn = NULL;
+    ExtraDataRecordCache *edrc = NULL;
+    void *packet;
+
+    if (ern == NULL)
+    {
+        LogMessage("WARNING: spoolerExtraDataCacheClean(): ern is NULL\n");
+        return 1;
+    }
+
+    switch (ern->type)
+    {
+        case UNIFIED2_IDS_EVENT:
+            edrc = &(((Unified2IDSEvent_legacy_WithPED *)(ern->data)))->extra_data_cache;
+            packet = (((Unified2IDSEvent_legacy_WithPED *)(ern->data))->packet);
+            break;
+        case UNIFIED2_IDS_EVENT_MPLS:
+        case UNIFIED2_IDS_EVENT_VLAN:
+            edrc = &(((Unified2IDSEvent_WithPED *)(ern->data)))->extra_data_cache;
+            packet = ((Unified2IDSEvent_WithPED *)(ern->data))->packet;
+            break;
+        case UNIFIED2_IDS_EVENT_IPV6:
+            edrc = &(((Unified2IDSEventIPv6_legacy_WithPED *)(ern->data)))->extra_data_cache;
+            packet = ((Unified2IDSEventIPv6_legacy_WithPED *)(ern->data))->packet;
+            break;
+        case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+        case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+            edrc = &(((Unified2IDSEventIPv6_WithPED *)(ern->data)))->extra_data_cache;
+            packet = ((Unified2IDSEventIPv6_WithPED *)(ern->data))->packet;
+            break;
+        case UNIFIED2_PACKET:
+        case UNIFIED2_EXTRA_DATA:
+            break;
+        default:
+            LogMessage("WARNING: spoolerExtraDataCacheClean(): type inconsistent (%d)\n", ern->type);
+            break;
+    }
+
+    if (packet)
+    {
+        free(packet);
+        packet = NULL;
+    }
+
+    if (edrc == NULL || TAILQ_EMPTY(edrc))
+        return 1;
+
+    TAILQ_FOREACH_SAFE(edrn, edrn_next, edrc, entry)
+    {
+        TAILQ_REMOVE(edrc, edrn, entry);
+
+        if (edrn && edrn->data)
+        {
+            free(edrn->data);
+            edrn->data = NULL;
+        }
+        if (edrn)
+            free(edrn);
+    }
+
+    return 0;
+}
+//rb:fin
+
 static int spoolerEventCacheClean(Spooler *spooler)
 {
     EventRecordNode     *ernCurrent = NULL;
@@ -1177,54 +1305,25 @@ static int spoolerEventCacheClean(Spooler *spooler)
     ernCurrent = TAILQ_LAST(&spooler->event_cache,_EventRecordList);
     while (ernCurrent != NULL && spooler->events_cached > barnyard2_conf->event_cache_size )
     {
-	ernPrev = TAILQ_PREV(ernCurrent, _EventRecordList, entry);
-	if ( ernCurrent->used == 1 )
+        ernPrev = TAILQ_PREV(ernCurrent, _EventRecordList, entry);
+        if ( ernCurrent->used == 1 )
         {
-	    /* Delete from list */
-	    TAILQ_REMOVE(&spooler->event_cache, ernCurrent, entry);
-	    
+            /* Delete from list */
+            TAILQ_REMOVE(&spooler->event_cache, ernCurrent, entry);
             spooler->events_cached--;
 
-	    if(ernCurrent->data != NULL)
-	    {
-//rb:ini (Liberar memoria (TAILQ_REMOVE). Hay que ver si se hace aquí)
-#ifdef AAOSOFOSO
-//#ifdef rbtest_spi_unified2
-            switch (ernCurrent->type)
+            if(ernCurrent->data != NULL)
             {
-                case UNIFIED2_IDS_EVENT:
-                case UNIFIED2_IDS_EVENT_MPLS:
-                case UNIFIED2_IDS_EVENT_VLAN:
-                    /* if there is no previous packet */
-                    if (((Unified2IDSEvent_WithPED *)ernCache->data)->packet == NULL)
-                        //((Unified2IDSEvent_WithPED *)ernCache->data)->packet = spooler->record.pkt;
-                        TAILQ_INIT((Unified2IDSEvent_WithPED *)ernCurrent->data)->extra_data_cache));
-                    /* when != NULL there is a previous packet cached with the event. do nothing here. */
-                    break;
-                case UNIFIED2_IDS_EVENT_IPV6:
-                case UNIFIED2_IDS_EVENT_IPV6_MPLS:
-                case UNIFIED2_IDS_EVENT_IPV6_VLAN:
-                    /* if there is no previous packet */
-                    if (((Unified2IDSEventIPv6_WithPED *)ernCache->data)->packet == NULL)
-                        //((Unified2IDSEventIPv6_WithPED *)ernCache->data)->packet = spooler->record.pkt;
-                        TAILQ_INIT((ExtraDataRecordCache *)(((char *)(spooler->record.data))+record_length)+sizeof(void *));
-                    /* when != NULL there is a previous packet cached with the event. do nothing here. */
-                    break;
-            }
-        //TAILQ_INIT((ExtraDataRecordCache *)(((char *)(spooler->record.data))+record_length)+sizeof(void *));
-#endif
+//rb:ini
+                spoolerExtraDataCacheClean(ernCurrent);
 //rb:fin
-		free(ernCurrent->data);
-	    }
-	    
-	    if(ernCurrent != NULL)
-	    {
-		free(ernCurrent);
-	    }
-        }
-	
-	ernCurrent = ernPrev;
+                free(ernCurrent->data);
+            }
 
+            if(ernCurrent != NULL)
+                free(ernCurrent);
+        }
+        ernCurrent = ernPrev;
     }
 
     return 0;
@@ -1242,15 +1341,18 @@ void spoolerEventCacheFlush(Spooler *spooler)
     {
         TAILQ_REMOVE(&spooler->event_cache,evt_ptr,entry);
 
-	if(evt_ptr->data)
-	{
-	    free(evt_ptr->data);
-	    evt_ptr->data = NULL;
-	}
-	
-	free(evt_ptr);
+        if(evt_ptr->data)
+        {
+//rb:ini
+            spoolerExtraDataCacheClean(evt_ptr);
+//rb:fin
+            free(evt_ptr->data);
+            evt_ptr->data = NULL;
+        }
+
+        free(evt_ptr);
     }
-    
+
     return;
 }
 

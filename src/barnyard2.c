@@ -55,11 +55,11 @@
 #endif
 #include <getopt.h>
 
-//rb:ini (disable the unused time stats)
-//#ifdef TIMESTATS
-//# include <time.h>   /* added for new time stats function in util.c */
-//#endif
-//rb:ini
+#ifndef RB_EXTRADATA
+#ifdef TIMESTATS
+# include <time.h>   /* added for new time stats function in util.c */
+#endif
+#endif
 
 #ifdef HAVE_STRINGS_H
 # include <strings.h>
@@ -134,9 +134,11 @@ VarNode *cmd_line_var_list = NULL;
 int exit_signal = 0;
 
 static int usr_signal = 0;
-//rb:ini
+
+#ifdef RB_EXTRADATA
 static int alarm_raised = 0;
-//rb:fin
+#endif
+
 static volatile int hup_signal = 0;
 volatile int barnyard2_initializing = 1;
 
@@ -241,9 +243,10 @@ int SignalCheck(void);
 static void SigExitHandler(int);
 static void SigUsrHandler(int);
 static void SigHupHandler(int);
-//rb:ini
+
+#ifdef RB_EXTRADATA
 static void SigAlrmHandler(int);
-//rb:fin
+#endif
 
 
 /*  F U N C T I O N   D E F I N I T I O N S  **********************************/
@@ -1062,12 +1065,12 @@ static void SigHupHandler(int signal)
     return;
 }
 
-//rb:ini
+#ifdef RB_EXTRADATA
 static void SigAlrmHandler(int signal)
 {
     alarm_raised = 1;
 }
-//rb:fin
+#endif
 
 /****************************************************************************
  *
@@ -1436,7 +1439,7 @@ int SignalCheck(void)
     return 0;
 }
 
-//rb:ini
+#ifdef RB_EXTRADATA
 /* check for alarm activity */
 int AlarmCheck(void)
 {
@@ -1454,7 +1457,7 @@ void AlarmClear(void)
 {
     alarm_raised = 0;
 }
-//rb:fin
+#endif
 
 static void InitGlobals(void)
 {
@@ -2178,15 +2181,18 @@ static void InitSignals(void)
     signal(SIGINT, SigExitHandler);
     signal(SIGQUIT, SigExitHandler);
     signal(SIGUSR1, SigUsrHandler);
-//rb:ini (define an own SigAlrmHandler and discard the previous and unused one)
+
+#ifdef RB_EXTRADATA /* define an own SigAlrmHandler and discard the previous and unused one */
     signal(SIGALRM, SigAlrmHandler);
-//#ifdef TIMESTATS
-//    /* Establish a handler for SIGALRM signals and set an alarm to go off
-//     * in approximately one hour.  This is used to drop statistics at
-//     * an interval which the alarm will tell us to do. */
-//    signal(SIGALRM, SigAlrmHandler);
-//#endif
-//rb:fin
+#else
+    #ifdef TIMESTATS
+        /* Establish a handler for SIGALRM signals and set an alarm to go off
+         * in approximately one hour.  This is used to drop statistics at
+         * an interval which the alarm will tell us to do. */
+        signal(SIGALRM, SigAlrmHandler);
+    #endif
+#endif
+
 
     signal(SIGHUP, SigHupHandler);
 

@@ -63,13 +63,13 @@ static EventRecordNode * spoolerEventCacheGetHead(Spooler *);
 static uint8_t spoolerEventCacheHeadUsed(Spooler *);
 static int spoolerEventCacheClean(Spooler *);
 
-//rb:ini
+#ifdef RB_EXTRADATA
 static Packet * spoolerAllocateFirstPacket(Spooler *);
 static int spoolerExtraDataCachePush(Spooler *, uint32_t, void *, EventRecordNode *);
 static void spoolerFireLastEvent(Spooler *);
 static int spoolerCallOutputPluginsByERN (EventRecordNode *);
 static int spoolerExtraDataCacheClean(EventRecordNode *ern);
-//rb:fin
+#endif
 
 /* Find the next spool file timestamp extension with a value equal to or 
  * greater than timet.  If extension != NULL, the extension will be 
@@ -531,14 +531,14 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
             
             continue;
         }
-//rb:ini
+#ifdef RB_EXTRADATA
         if (AlarmCheck())
         {
             spoolerFireLastEvent(spooler);
             AlarmClear();
         }
         else
-//rb:fin
+#endif
         /* act according to current spooler state */
         switch(spooler->state)
         {
@@ -700,11 +700,9 @@ int ProcessContinuousWithWaldo(Waldo *waldo)
 
 static void spoolerProcessRecord(Spooler *spooler, int fire_output)
 {
-//rb:ini
-#ifndef rbtest_spooler
+#ifndef RB_EXTRADATA
     struct pcap_pkthdr      pkth;
 #endif
-//rb:fin
     uint32_t                type;
     EventRecordNode         *ernCache;
 
@@ -726,11 +724,11 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
         case UNIFIED2_IDS_EVENT_IPV6_VLAN:
             pc.total_events++;
             break;
-//rb:ini
+#ifdef RB_EXTRADATA
         case UNIFIED2_EXTRA_DATA:
             pc.total_extra_data++;
             break;
-//rb:fin
+#endif
         default:
             pc.total_unknown++;
     }
@@ -744,8 +742,7 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
         /* check if there is a previously cached event that matches this event id */
         ernCache = spoolerEventCacheGetByEventID(spooler, event_id);
 
-//rb:ini
-#ifdef rbtest_spooler
+#ifdef RB_EXTRADATA
         datalink = ntohl(((Unified2Packet *)spooler->record.data)->linktype);
 
         /* if the packet and cached event share the same id */
@@ -867,7 +864,6 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
         free(spooler->record.pkt);
         spooler->record.pkt = NULL;
 #endif
-//rb:fin
 
         /* waldo operations occur after the output plugins are called */
         if (fire_output)
@@ -886,8 +882,7 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
 
             ernCache = spoolerEventCacheGetHead(spooler);
 
-//rb:ini
-#ifdef rbtest_spooler
+#ifdef RB_EXTRADATA
             /* not checked ernCache->used == 0 since this cached event must be fired in any case,
              even though the expected value should be ernCache->used = 0 */
             if (fire_output)
@@ -899,7 +894,6 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
                               ernCache->data, 
                               ernCache->type);
 #endif
-//rb:fin
 
             /* flush the event cache flag */
             ernCache->used = 1;
@@ -915,7 +909,7 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
     }
     else if (type == UNIFIED2_EXTRA_DATA)
     {
-//rb:ini
+#ifdef RB_EXTRADATA
         /* convert event id once */
         uint32_t event_id = ntohl(((Unified2ExtraData *)(((Unified2ExtraDataHdr *)spooler->record.data)+1))->event_id);
 
@@ -934,7 +928,7 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
             // We are assuming that an extra data record will never show up before an event record does
             // This hypothetical case should be taken into account after testings
         //}
-//rb:fin
+#endif
 
         /* waldo operations occur after the output plugins are called */
         if (fire_output)
@@ -964,10 +958,10 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
 
     /* clean the cache out */
     spoolerEventCacheClean(spooler);
-//rb:ini
+#ifdef RB_EXTRADATA
     /* If there is no more records in TIME_ALARM seconds flush the cached records */
     AlarmStart(TIME_ALARM);
-//rb:fin
+#endif
 }
 
 static int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)
@@ -984,16 +978,9 @@ static int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)
     ernNode->type = type;
     ernNode->data = data;
 
-//rb:ini (Si no se consigue inicializar a NULL en spi_unified2.c, habría que plantearse hacerlo aquí.)
-    ((Unified2IDSEvent_WithPED *)ernNode->data)->packet = NULL;
-//rb:fin
-
     /* add new events to the front of the cache */
     TAILQ_INSERT_HEAD(&spooler->event_cache, ernNode, entry);
     spooler->events_cached++;
-//rb:ini (test)
-    //printf ("spooler: %x | Cached event %d with id '%d'\n", (int )(&spooler), spooler->events_cached, ntohl(((Unified2EventCommon *)data)->event_id));
-//rb:fin
 
     DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Cached event: %d\n", spooler->events_cached););
 
@@ -1059,9 +1046,9 @@ static int spoolerEventCacheClean(Spooler *spooler)
 
             if(ernCurrent->data != NULL)
             {
-//rb:ini
+#ifdef RB_EXTRADATA
                 spoolerExtraDataCacheClean(ernCurrent);
-//rb:fin
+#endif
                 free(ernCurrent->data);
             }
 
@@ -1088,9 +1075,9 @@ void spoolerEventCacheFlush(Spooler *spooler)
 
         if(evt_ptr->data)
         {
-//rb:ini
+#ifdef RB_EXTRADATA
             spoolerExtraDataCacheClean(evt_ptr);
-//rb:fin
+#endif
             free(evt_ptr->data);
             evt_ptr->data = NULL;
         }
@@ -1314,7 +1301,7 @@ static int spoolerWriteWaldo(Waldo *waldo, Spooler *spooler)
     return WALDO_FILE_SUCCESS;
 }
 
-//rb:ini
+#ifdef RB_EXTRADATA
 static Packet * spoolerAllocateFirstPacket(Spooler *spooler)
 {
     struct pcap_pkthdr      pkth;
@@ -1573,4 +1560,4 @@ static int spoolerExtraDataCacheClean(EventRecordNode *ern)
 
     return 0;
 }
-//rb:fin
+#endif

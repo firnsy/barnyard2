@@ -681,8 +681,7 @@ void CallOutputPlugins(OutputType out_type, Packet *packet, void *event, uint32_
 	    return;
     }
 
-//rb:ini (this piece of code should probably be altered)
-//rb:fin
+
     if (out_type == OUTPUT_TYPE__SPECIAL)
     {
         idx = AlertList;

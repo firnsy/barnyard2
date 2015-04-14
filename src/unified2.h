@@ -30,9 +30,9 @@
 #include "config.h"
 #endif
 
-//rb:ini
+#ifdef RB_EXTRADATA
 #include <sys/queue.h>
-//rb:fin
+#endif
 
 //SNORT DEFINES
 //Long time ago...
@@ -48,7 +48,7 @@
 #define UNIFIED2_IDS_EVENT_IPV6_VLAN 105
 #define UNIFIED2_EXTRA_DATA          110
 
-//rb:ini
+#ifdef RB_EXTRADATA
 typedef struct _ExtraDataRecordNode
 {
     uint32_t    type;
@@ -59,7 +59,7 @@ typedef struct _ExtraDataRecordNode
 } ExtraDataRecordNode;
 
 typedef TAILQ_HEAD(_ExtraDataRecordList, _ExtraDataRecordNode) ExtraDataRecordCache;
-//rb:fin
+#endif
 
 /* Each unified2 record will start out with one of these */
 typedef struct _Unified2RecordHeader
@@ -94,7 +94,7 @@ typedef struct _Unified2IDSEvent
     uint16_t pad2;//Policy ID
 } Unified2IDSEvent;
 
-//rb:ini
+#ifdef RB_EXTRADATA
 typedef struct _Unified2IDSEvent_WithPED
 {
     Unified2IDSEvent        event;
@@ -102,7 +102,7 @@ typedef struct _Unified2IDSEvent_WithPED
     ExtraDataRecordCache    extra_data_cache;
     //uint32_t                extra_data_cached;
 }Unified2IDSEvent_WithPED;
-//rb:fin
+#endif
 
 //UNIFIED2_IDS_EVENT_IPV6_VLAN = type 105
 typedef struct _Unified2IDSEventIPv6
@@ -129,7 +129,7 @@ typedef struct _Unified2IDSEventIPv6
     uint16_t pad2;/*could be IPS Policy local id to support local sensor alerts*/
 } Unified2IDSEventIPv6;
 
-//rb:ini
+#ifdef RB_EXTRADATA
 typedef struct _Unified2IDSEventIPv6_WithPED
 {
     Unified2IDSEventIPv6    event;
@@ -137,7 +137,7 @@ typedef struct _Unified2IDSEventIPv6_WithPED
     ExtraDataRecordCache    extra_data_cache; //linked list of concurrent extra data records
     //uint32_t                extra_data_cached;
 }Unified2IDSEventIPv6_WithPED;
-//rb:fin
+#endif
 
 //UNIFIED2_PACKET = type 2
 typedef struct _Unified2Packet
@@ -174,8 +174,7 @@ typedef enum _EventInfoEnum
     EVENT_INFO_XFF_IPV4 = 1,
     EVENT_INFO_XFF_IPV6 ,
     EVENT_INFO_REVIEWED_BY,
-//rb:ini
-    //EVENT_INFO_GZIP_DATA
+#ifdef RB_EXTRADATA
     EVENT_INFO_GZIP_DATA,
     EVENT_INFO_SMTP_FILENAME,
     EVENT_INFO_SMTP_MAILFROM,
@@ -190,7 +189,9 @@ typedef enum _EventInfoEnum
     EVENT_INFO_FILE_SIZE,
     EVENT_INFO_FILE_URI,
     EVENT_INFO_FILE_HOSTNAME
-//rb:fin
+#else
+    EVENT_INFO_GZIP_DATA
+#endif
 }EventInfoEnum;
 
 typedef enum _EventDataType
@@ -229,7 +230,7 @@ typedef struct Unified2IDSEvent_legacy
     uint8_t  blocked;
 } Unified2IDSEvent_legacy;
 
-//rb:ini
+#ifdef RB_EXTRADATA
 typedef struct _Unified2IDSEvent_legacy_WithPED
 {
     Unified2IDSEventIPv6    event;
@@ -237,7 +238,7 @@ typedef struct _Unified2IDSEvent_legacy_WithPED
     ExtraDataRecordCache    extra_data_cache; //linked list of concurrent extra data records
     //uint32_t                extra_data_cached;
 }Unified2IDSEvent_legacy_WithPED;
-//rb:fin
+#endif
 
 //----------LEGACY, type '72'
 typedef struct Unified2IDSEventIPv6_legacy
@@ -261,7 +262,7 @@ typedef struct Unified2IDSEventIPv6_legacy
     uint8_t  blocked;
 } Unified2IDSEventIPv6_legacy;
 
-//rb:ini
+#ifdef RB_EXTRADATA
 typedef struct _Unified2IDSEventIPv6_legacy_WithPED
 {
     Unified2IDSEventIPv6    event;
@@ -269,7 +270,7 @@ typedef struct _Unified2IDSEventIPv6_legacy_WithPED
     ExtraDataRecordCache    extra_data_cache; //linked list of concurrent extra data records
     //uint32_t                extra_data_cached;
 }Unified2IDSEventIPv6_legacy_WithPED;
-//rb:fin
+#endif
 
 ////////////////////-->LEGACY
 

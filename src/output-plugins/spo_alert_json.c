@@ -93,10 +93,8 @@
 // Note: Always including ,sensor_name,domain_name,group_name,src_net_name,src_as_name,dst_net_name,dst_as_name
 //#define SEND_NAMES
 
-//rb:ini
-//#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,l4_proto,src,src_net,src_net_name,src_as,src_as_name,dst,dst_net,dst_net_name,dst_as,dst_as_name,l4_srcport,l4_dstport,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
-#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,file_sha256,file_size,file_hostname,file_uri,payload,l4_proto,src,src_net,src_net_name,src_as,src_as_name,dst,dst_net,dst_net_name,dst_as,dst_as_name,l4_srcport,l4_dstport,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
-//rb:fin
+
+#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,l4_proto,src,src_net,src_net_name,src_as,src_as_name,dst,dst_net,dst_net_name,dst_as,dst_as_name,l4_srcport,l4_dstport,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
 
 #ifdef HAVE_GEOIP
 #define DEFAULT_JSON_1 DEFAULT_JSON_0 ",src_country,dst_country,src_country_code,dst_country_code" /* link with previous string */
@@ -114,6 +112,12 @@
 #define DEFAULT_JSON DEFAULT_JSON_2 ",l4_proto_name,src_name,dst_name,l4_srcport_name,l4_dstport_name,vlan_name"
 #else
 #define DEFAULT_JSON DEFAULT_JSON_2
+#endif
+
+#ifdef RB_EXTRADATA
+#define DEFAULT_JSON_3 DEFAULT_JSON ",file_sha256,file_size,file_hostname,file_uri"
+#else
+#define DEFAULT_JSON_3 DEFAULT_JSON
 #endif
 
 #define DEFAULT_FILE  "alert.json"
@@ -148,12 +152,12 @@ typedef enum{
     ACTION,
     CLASSIFICATION,
     MSG,
-//rb:ini
+#ifdef RB_EXTRADATA
     FILE_SHA256,
     FILE_SIZE,
     FILE_HOSTNAME,
     FILE_URI,
-//rb:fin
+#endif
     PAYLOAD,
     PROTO,
     PROTO_ID,
@@ -281,12 +285,12 @@ static AlertJSONTemplateElement template[] = {
     {PRIORITY,"priority","priority",stringFormat,"unknown"},
     {CLASSIFICATION,"classification","classification",stringFormat,"-"},
     {MSG,"msg","msg",stringFormat,"-"},
-//rb:ini
+#ifdef RB_EXTRADATA
     {FILE_SHA256,"file_sha256","file_sha256",stringFormat,"-"},
     {FILE_SIZE,"file_size","file_size",stringFormat,"-"},
     {FILE_HOSTNAME,"file_hostname","file_hostname",stringFormat,"-"},
     {FILE_URI,"file_uri","file_uri",stringFormat,"-"},
-//rb:fin
+#endif
     {PAYLOAD,"payload","payload",stringFormat,"-"},
     {PROTO,"l4_proto_name","l4_proto_name",stringFormat,"-"},
     {PROTO_ID,"l4_proto","l4_proto",numericFormat,"0"},
@@ -858,8 +862,6 @@ char* _itoa(uint64_t value, char* result, int base, size_t bufsize) {
 
 /* shortcut to used bases */
 static inline char *itoa10(uint64_t value,char *result,const size_t bufsize){return _itoa(value,result,10,bufsize);}
-//rb:ini
-//static inline char *itoa16(uint64_t value,char *result,const size_t bufsize){return _itoa(value,result,16,bufsize);}
 static inline char *itoa16(uint64_t value,char *result,const size_t bufsize){
     char *ret = _itoa(value,result,16,bufsize);
     if(value < 16 && ret > result){
@@ -868,7 +870,6 @@ static inline char *itoa16(uint64_t value,char *result,const size_t bufsize){
     }
     return ret;
 }
-//rb:fin
 
 static inline void printHWaddr(KafkaLog *kafka,const uint8_t *addr,char * buf,const size_t bufLen){
     int i;
@@ -1236,7 +1237,7 @@ static char *extract_AS(AlertJSONData *jsonData,const sfip_t *ip)
 
 #endif
 
-//rb:ini
+#ifdef RB_EXTRADATA
 static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement, KafkaLog *kafka, Unified2ExtraData *U2ExtraData)
 {
     uint32_t    event_info;     /* type in Unified2 Event */
@@ -1334,7 +1335,7 @@ static int printElementExtraData(void *event, uint32_t event_type, AlertJSONTemp
 
     return 0;
 }
-//rb:fin
+#endif
 
 /*
  * Function: PrintElementWithTemplate(Packet *, char *, FILE *, char *, numargs const int)
@@ -1478,7 +1479,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
                 }
             }
             break;
-//rb:ini
+#ifdef RB_EXTRADATA
         case FILE_SHA256:
         case FILE_SIZE:
         case FILE_URI:
@@ -1486,7 +1487,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             if (event != NULL)
                 printElementExtraData(event, event_type, templateElement, kafka);
             break;
-//rb:fin
+#endif
         case PAYLOAD:
             {
                 /* Sending packet payload (Packet->data) inside kafka message, instead of

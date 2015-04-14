@@ -160,7 +160,7 @@ int Unified2ReadRecordHeader(void *sph)
     return 0;
 }
 
-//rb:ini
+#ifdef RB_EXTRADATA
 unsigned long GetSizeofByType(uint32_t type, uint32_t length)
 {
     unsigned long ret = 0;
@@ -232,7 +232,7 @@ void InitPEDByType(void *data, uint32_t type)
             break;
     }
 }
-//rb:fin
+#endif
 
 int Unified2ReadRecord(void *sph)
 {
@@ -251,15 +251,13 @@ int Unified2ReadRecord(void *sph)
     if(!spooler->record.data)
     {
         /* SnortAlloc will FatalError if memory can't be assigned */
-//rb:ini
-#ifdef rbtest_spi_unified2
+#ifdef RB_EXTRADATA
         spooler->record.data = SnortAlloc(GetSizeofByType(record_type, record_length));
 
         InitPEDByType(spooler->record.data, record_type);
 #else
         spooler->record.data = SnortAlloc(record_length);
 #endif
-//rb:fin
     }
 
     if (spooler->offset < record_length)

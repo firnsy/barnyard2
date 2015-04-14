@@ -842,10 +842,10 @@ void DropStats(int exiting)
                CalcPct(pc.total_events, pc.total_records));
     LogMessage("   Packets:"     FMTu64("12") " (%.3f%%)\n", pc.total_packets,
                CalcPct(pc.total_packets, pc.total_records));
-//rb:ini
+#ifdef RB_EXTRADATA
     LogMessage("   Extra Data:"  FMTu64("9") " (%.3f%%)\n", pc.total_extra_data,
                CalcPct(pc.total_extra_data, pc.total_records));
-//rb:fin
+#endif
     LogMessage("   Unknown:"     FMTu64("12") " (%.3f%%)\n", pc.total_unknown,
                CalcPct(pc.total_unknown, pc.total_records));
     LogMessage("   Suppressed:"  FMTu64("9") " (%.3f%%)\n", pc.total_suppressed,

@@ -1355,6 +1355,10 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             break;
         case PAYLOAD:
             {
+                /* Sending packet payload (Packet->data) inside kafka message, instead of
+                   raw packet data (Packet->pkt). See Packet structure in decode.h file.
+                   Please take into account that snort.log.<timestamp> files contains
+                   the raw packet data, not packet payload, so they won't match. */
                 uint16_t i;
                 if(p &&  p->dsize>0){
                     for(i=0;i<p->dsize;++i)

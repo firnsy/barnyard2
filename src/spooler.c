@@ -1109,6 +1109,9 @@ static EventRecordNode *spoolerEventCacheGetBySpooler(Spooler *spooler)
         case UNIFIED2_EXTRA_DATA:
             event_id = ntohl(((Unified2ExtraData *)(((Unified2ExtraDataHdr *)spooler->record.data)+1))->event_id);
             break;
+        default:
+            LogMessage("WARNING: spoolerEventCacheGetBySpooler(): type inconsistent (%d)\n", type);
+            break;
     }
 
     /* check if there is a previously cached event that matches this event id */
@@ -1143,6 +1146,22 @@ static int spoolerCallOutputPluginsByERN(EventRecordNode *ern)
         switch (ern->type)
         {
             case UNIFIED2_IDS_EVENT:
+                /* if there is a cached packet */
+                if (((Unified2IDSEvent_legacy_WithPED *)ern->data)->packet != NULL)
+                {
+                    CallOutputPlugins(OUTPUT_TYPE__SPECIAL,
+                                      ((Unified2IDSEvent_legacy_WithPED *)ern->data)->packet,
+                                      ern->data,
+                                      ern->type);
+                    free(((Unified2IDSEvent_legacy_WithPED *)ern->data)->packet);
+                    ((Unified2IDSEvent_legacy_WithPED *)ern->data)->packet = NULL;
+                }
+                else
+                    CallOutputPlugins(OUTPUT_TYPE__ALERT,
+                                      NULL,
+                                      ern->data,
+                                      ern->type);
+                break;
             case UNIFIED2_IDS_EVENT_MPLS:
             case UNIFIED2_IDS_EVENT_VLAN:
                 /* if there is a cached packet */
@@ -1162,6 +1181,22 @@ static int spoolerCallOutputPluginsByERN(EventRecordNode *ern)
                                       ern->type);
                 break;
             case UNIFIED2_IDS_EVENT_IPV6:
+                /* if there is a cached packet */
+                if (((Unified2IDSEventIPv6_legacy_WithPED *)ern->data)->packet != NULL)
+                {
+                    CallOutputPlugins(OUTPUT_TYPE__SPECIAL,
+                                      ((Unified2IDSEventIPv6_legacy_WithPED *)ern->data)->packet,
+                                      ern->data,
+                                      ern->type);
+                    free(((Unified2IDSEventIPv6_legacy_WithPED *)ern->data)->packet);
+                    ((Unified2IDSEventIPv6_legacy_WithPED *)ern->data)->packet = NULL;
+                }
+                else
+                    CallOutputPlugins(OUTPUT_TYPE__ALERT,
+                                      NULL,
+                                      ern->data,
+                                      ern->type);
+                break;
             case UNIFIED2_IDS_EVENT_IPV6_MPLS:
             case UNIFIED2_IDS_EVENT_IPV6_VLAN:
                 /* if there is a cached packet */
@@ -1179,6 +1214,9 @@ static int spoolerCallOutputPluginsByERN(EventRecordNode *ern)
                                       NULL,
                                       ern->data,
                                       ern->type);
+                break;
+            default:
+                LogMessage("WARNING: spoolerCallOutputPluginsByERN(): type inconsistent (%d)\n", ern->type);
                 break;
         }
         ret = 1;
@@ -1287,7 +1325,10 @@ static int spoolerExtraDataCacheClean(EventRecordNode *ern)
             edrn->data = NULL;
         }
         if (edrn)
+        {
             free(edrn);
+            edrn = NULL;
+        }
     }
 
     return 0;

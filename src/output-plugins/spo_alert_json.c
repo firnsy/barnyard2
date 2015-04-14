@@ -1237,8 +1237,7 @@ static char *extract_AS(AlertJSONData *jsonData,const sfip_t *ip)
 #endif
 
 //rb:ini
-static int printElementExtraDataBlob(Packet *p, void *event, uint32_t event_type, AlertJSONData *jsonData, AlertJSONTemplateElement *templateElement, KafkaLog *kafka,
-    Unified2ExtraData *U2ExtraData)
+static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement, KafkaLog *kafka, Unified2ExtraData *U2ExtraData)
 {
     uint32_t    event_info;     /* type in Unified2 Event */
     const char  *str;
@@ -1292,7 +1291,7 @@ static int printElementExtraDataBlob(Packet *p, void *event, uint32_t event_type
     return 0;
 }
 
-static int printElementExtraData(Packet *p, void *event, uint32_t event_type, AlertJSONData *jsonData, AlertJSONTemplateElement *templateElement, KafkaLog *kafka)
+static int printElementExtraData(void *event, uint32_t event_type, AlertJSONTemplateElement *templateElement, KafkaLog *kafka)
 {
     uint32_t                event_data_type;        /* datatype in Unified2 Event*/
     ExtraDataRecordNode     *edrnCurrent = NULL;
@@ -1302,11 +1301,15 @@ static int printElementExtraData(Packet *p, void *event, uint32_t event_type, Al
     switch (event_type)
     {
         case UNIFIED2_IDS_EVENT:
+            extra_data_cache = &(((Unified2IDSEvent_legacy_WithPED *)(event))->extra_data_cache);
+            break;
         case UNIFIED2_IDS_EVENT_MPLS:
         case UNIFIED2_IDS_EVENT_VLAN:
             extra_data_cache = &(((Unified2IDSEvent_WithPED *)(event))->extra_data_cache);
             break;
         case UNIFIED2_IDS_EVENT_IPV6:
+            extra_data_cache = &(((Unified2IDSEventIPv6_legacy_WithPED *)(event))->extra_data_cache);
+            break;
         case UNIFIED2_IDS_EVENT_IPV6_MPLS:
         case UNIFIED2_IDS_EVENT_IPV6_VLAN:
             extra_data_cache = &(((Unified2IDSEventIPv6_WithPED *)(event))->extra_data_cache);
@@ -1325,9 +1328,8 @@ static int printElementExtraData(Packet *p, void *event, uint32_t event_type, Al
         U2ExtraData = (Unified2ExtraData *)(((Unified2ExtraDataHdr *)edrnCurrent->data)+1);
         event_data_type = ntohl(U2ExtraData->data_type);
 
-        printf ("\n");
         if (event_data_type == EVENT_DATA_TYPE_BLOB)
-            printElementExtraDataBlob(p, event, event_type, jsonData, templateElement, kafka, U2ExtraData);
+            printElementExtraDataBlob(templateElement, kafka, U2ExtraData);
     }
 
     return 0;
@@ -1482,7 +1484,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case FILE_URI:
         case FILE_HOSTNAME:
             if (event != NULL)
-                printElementExtraData(p, event, event_type, jsonData, templateElement, kafka);
+                printElementExtraData(event, event_type, templateElement, kafka);
             break;
 //rb:fin
         case PAYLOAD:

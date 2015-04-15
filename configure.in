@@ -161,6 +161,17 @@ else
     AC_MSG_RESULT(no)
 fi
 
+AC_ARG_ENABLE(extradata,
+[  --enable-extradata       Enable ExtraData collection.],
+       enable_extradata="$enableval", enable_extradata="no")
+
+if test "x$enable_extradata" = "xyes"; then
+    AC_MSG_RESULT(yes)
+    AC_DEFINE_UNQUOTED([RB_EXTRADATA],[],[ExtraData collection])
+else
+    AC_MSG_RESULT(no)
+fi
+
 AC_ARG_WITH(macs-vendors-includes,
         [  --with-macs-vendors-include=DIR    librb_macs_vendors include directory],
         [with_macsvendors_includes="$withval"],[with_macsvendors_includes="no"])

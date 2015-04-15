@@ -1497,7 +1497,7 @@ static int spoolerExtraDataCacheClean(EventRecordNode *ern)
     ExtraDataRecordNode *edrn_next = NULL;
     ExtraDataRecordNode *edrn = NULL;
     ExtraDataRecordCache *edrc = NULL;
-    void *packet;
+    void *packet = NULL;
 
     if (ern == NULL)
     {

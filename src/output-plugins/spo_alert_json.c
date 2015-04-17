@@ -97,28 +97,30 @@
 #define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,l4_proto,src,src_net,src_net_name,src_as,src_as_name,dst,dst_net,dst_net_name,dst_as,dst_as_name,l4_srcport,l4_dstport,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
 
 #ifdef HAVE_GEOIP
-#define DEFAULT_JSON_1 DEFAULT_JSON_0 ",src_country,dst_country,src_country_code,dst_country_code" /* link with previous string */
+#define FIELDS_GEOIP ",src_country,dst_country,src_country_code,dst_country_code" /* link with previous string */
 #else
-#define DEFAULT_JSON_1 DEFAULT_JSON_0
+#define FIELDS_GEOIP 
 #endif
 
 #ifdef HAVE_RB_MAC_VENDORS
-#define DEFAULT_JSON_2 DEFAULT_JSON_1 ",ethsrc_vendor,ethdst_vendor"
+#define FIELDS_MAC_VENDORS ",ethsrc_vendor,ethdst_vendor"
 #else
-#define DEFAULT_JSON_2 DEFAULT_JSON_1
+#define FIELDS_MAC_VENDORS
 #endif
 
 #ifdef SEND_NAMES
-#define DEFAULT_JSON DEFAULT_JSON_2 ",l4_proto_name,src_name,dst_name,l4_srcport_name,l4_dstport_name,vlan_name"
+#define FIELDS_PROTO_NAMES ",l4_proto_name,src_name,dst_name,l4_srcport_name,l4_dstport_name,vlan_name"
 #else
-#define DEFAULT_JSON DEFAULT_JSON_2
+#define FIELDS_PROTO_NAMES
 #endif
 
 #ifdef RB_EXTRADATA
-#define DEFAULT_JSON_3 DEFAULT_JSON ",file_sha256,file_size,file_hostname,file_uri"
+#define FIELDS_EXTRADATA ",file_sha256,file_size,file_hostname,file_uri"
 #else
-#define DEFAULT_JSON_3 DEFAULT_JSON
+#define FIELDS_EXTRADATA 
 #endif
+
+#define DEFAULT_JSON DEFAULT_JSON_0 FIELDS_GEOIP FIELDS_MAC_VENDORS FIELDS_PROTO_NAMES FIELDS_EXTRADATA
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"
@@ -1275,13 +1277,17 @@ static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement, 
         case FILE_URI:
             if (event_info == EVENT_INFO_FILE_URI)
             {
-
+                str = (char *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                KafkaLog_Write(kafka, str, len);
             }
             break;
         case FILE_HOSTNAME:
             if (event_info == EVENT_INFO_FILE_HOSTNAME)
             {
-
+                str = (char *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                KafkaLog_Write(kafka, str, len);
             }
             break;
         default:

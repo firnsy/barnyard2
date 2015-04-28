@@ -115,7 +115,7 @@
 #endif
 
 #ifdef RB_EXTRADATA
-#define FIELDS_EXTRADATA ",file_sha256,file_size,file_hostname,file_uri"
+#define FIELDS_EXTRADATA ",sha256,file_size,file_hostname,file_uri"
 #else
 #define FIELDS_EXTRADATA 
 #endif
@@ -155,7 +155,7 @@ typedef enum{
     CLASSIFICATION,
     MSG,
 #ifdef RB_EXTRADATA
-    FILE_SHA256,
+    SHA256,
     FILE_SIZE,
     FILE_HOSTNAME,
     FILE_URI,
@@ -288,7 +288,7 @@ static AlertJSONTemplateElement template[] = {
     {CLASSIFICATION,"classification","classification",stringFormat,"-"},
     {MSG,"msg","msg",stringFormat,"-"},
 #ifdef RB_EXTRADATA
-    {FILE_SHA256,"file_sha256","file_sha256",stringFormat,"-"},
+    {SHA256,"sha256","sha256",stringFormat,"-"},
     {FILE_SIZE,"file_size","file_size",stringFormat,"-"},
     {FILE_HOSTNAME,"file_hostname","file_hostname",stringFormat,"-"},
     {FILE_URI,"file_uri","file_uri",stringFormat,"-"},
@@ -1250,7 +1250,7 @@ static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement, 
 
     switch (templateElement->id)
     {
-        case FILE_SHA256:
+        case SHA256:
             if (event_info == EVENT_INFO_FILE_SHA256)
             {
                 const uint8_t *sha_str = (uint8_t *)(U2ExtraData+1);
@@ -1486,7 +1486,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             }
             break;
 #ifdef RB_EXTRADATA
-        case FILE_SHA256:
+        case SHA256:
         case FILE_SIZE:
         case FILE_URI:
         case FILE_HOSTNAME:

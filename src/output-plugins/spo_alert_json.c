@@ -678,6 +678,16 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
             KafkaLog_FlushAll(data->kafka);
             KafkaLog_Term(data->kafka);
         }
+
+        if(data->gi)
+            GeoIP_delete(data->gi);
+        if(data->gi_org)
+            GeoIP_delete(data->gi_org);
+        if(data->gi6)
+            GeoIP_delete(data->gi6);
+        if(data->gi6_org)
+            GeoIP_delete(data->gi6_org);
+
         free(data->jsonargs);
         freeNumberStrAssocList(data->hosts);
         freeNumberStrAssocList(data->nets);

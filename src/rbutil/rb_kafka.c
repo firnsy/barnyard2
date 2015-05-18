@@ -259,6 +259,19 @@ bool KafkaLog_Flush(KafkaLog* this)
     return TRUE;
 }
 
+bool KafkaLog_FlushAll(KafkaLog* this)
+{
+#if HAVE_LIBRDKAFKA
+    while (rd_kafka_outq_len(this->handler) > 0)
+        rd_kafka_poll(this->handler, 100);
+#endif /* HAVE_LIBRDKAFKA */
+
+    if(this->textLog) TextLog_Flush(this->textLog);
+
+    KafkaLog_Reset(this);
+    return TRUE;
+}
+
 /*-------------------------------------------------------------------
  * KafkaLog_Putc: append char to buffer
  *-------------------------------------------------------------------

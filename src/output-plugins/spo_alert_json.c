@@ -315,6 +315,7 @@ static void AlertJSONInit(char *args)
     /* Set the preprocessor function into the function list */
     AddFuncToOutputList(AlertJSON, OUTPUT_TYPE__ALERT, data);
     AddFuncToCleanExitList(AlertJSONCleanExit, data);
+    AddFuncToShutdownList(AlertJSONCleanExit, data);
     AddFuncToRestartList(AlertRestart, data);
 }
 
@@ -673,8 +674,10 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
 
     if(data)
     {
-        if(data->kafka)
+        if(data->kafka){
+            KafkaLog_FlushAll(data->kafka);
             KafkaLog_Term(data->kafka);
+        }
         free(data->jsonargs);
         freeNumberStrAssocList(data->hosts);
         freeNumberStrAssocList(data->nets);

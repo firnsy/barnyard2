@@ -88,24 +88,42 @@
 
 #include "math.h"
 
+static const size_t initial_enrich_with_buf_len = 1024;
 
 // Send object_name or not.
 // Note: Always including ,sensor_name,domain_name,group_name,src_net_name,src_as_name,dst_net_name,dst_as_name
 //#define SEND_NAMES
 
-
-#define DEFAULT_JSON_0 "timestamp,sensor_id,type,sensor_name,sensor_ip,domain_name,group_name,group_id,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,l4_proto,src,src_net,src_net_name,src_as,src_as_name,dst,dst_net,dst_net_name,dst_as,dst_as_name,l4_srcport,l4_dstport,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
+#define DEFAULT_JSON_0 "timestamp,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,\
+    l4_proto,src,src_net,src_net_name,src_as,src_as_name,dst,dst_net,dst_net_name,dst_as,dst_as_name,\
+    l4_srcport,l4_dstport,ethsrc,ethdst,ethlen,ethlength_range,\
+    arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,\
+    tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
 
 #ifdef HAVE_GEOIP
 #define FIELDS_GEOIP ",src_country,dst_country,src_country_code,dst_country_code" /* link with previous string */
+#define X_RB_GEOIP \
+    _X(SRC_COUNTRY,"src_country","src_country",stringFormat,"N/A") \
+    _X(DST_COUNTRY,"dst_country","dst_country",stringFormat,"N/A") \
+    _X(SRC_COUNTRY_CODE,"src_country_code","src_country_code",stringFormat,"N/A") \
+    _X(DST_COUNTRY_CODE,"dst_country_code","dst_country_code",stringFormat,"N/A") \
+    _X(SRC_AS,"src_as","src_as",numericFormat, 0) \
+    _X(DST_AS,"dst_as","dst_as",numericFormat, 0) \
+    _X(SRC_AS_NAME,"src_as_name","src_as_name",stringFormat,"N/A") \
+    _X(DST_AS_NAME,"dst_as_name","dst_as_name",stringFormat,"N/A")
 #else
 #define FIELDS_GEOIP 
+#define X_RB_GEOIP
 #endif
 
 #ifdef HAVE_RB_MAC_VENDORS
 #define FIELDS_MAC_VENDORS ",ethsrc_vendor,ethdst_vendor"
+#define X_RB_MAC_VENDORS \
+    _X(ETHSRC_VENDOR,"ethsrc_vendor","ethsrc_vendor",stringFormat,"-") \
+    _X(ETHDST_VENDOR,"ethdst_vendor","ethdst_vendor",stringFormat,"-")
 #else
 #define FIELDS_MAC_VENDORS
+#define X_RB_MAC_VENDORS
 #endif
 
 #ifdef SEND_NAMES
@@ -116,8 +134,14 @@
 
 #ifdef RB_EXTRADATA
 #define FIELDS_EXTRADATA ",sha256,file_size,file_hostname,file_uri"
+#define X_RB_EXTRADATA \
+    _X(SHA256,"sha256","sha256",stringFormat,"-") \
+    _X(FILE_SIZE,"file_size","file_size",stringFormat,"-") \
+    _X(FILE_HOSTNAME,"file_hostname","file_hostname",stringFormat,"-") \
+    _X(FILE_URI,"file_uri","file_uri",stringFormat,"-")
 #else
-#define FIELDS_EXTRADATA 
+#define FIELDS_EXTRADATA
+#define X_RB_EXTRADATA
 #endif
 
 #define DEFAULT_JSON DEFAULT_JSON_0 FIELDS_GEOIP FIELDS_MAC_VENDORS FIELDS_PROTO_NAMES FIELDS_EXTRADATA
@@ -135,95 +159,74 @@
 #define FIELD_NAME_VALUE_SEPARATOR ": "
 #define JSON_FIELDS_SEPARATOR ", "
 
+#define X_FUNCTION_TEMPLATE \
+    _X(TIMESTAMP,"timestamp","timestamp",numericFormat,"0") \
+    _X(SENSOR_ID_SNORT,"sensor_id_snort","sensor_id_snort",numericFormat,"0") \
+    _X(TYPE,"type","type",stringFormat,"-") \
+    _X(ACTION,"action","action",stringFormat,"-") \
+    _X(SIG_GENERATOR,"sig_generator","sig_generator",numericFormat,"0") \
+    _X(SIG_ID,"sig_id","sig_id",numericFormat,"0") \
+    _X(SIG_REV,"sig_rev","rev",numericFormat,"0") \
+    _X(PRIORITY,"priority","priority",stringFormat,"unknown") \
+    _X(CLASSIFICATION,"classification","classification",stringFormat,"-") \
+    _X(MSG,"msg","msg",stringFormat,"-") \
+    X_RB_EXTRADATA \
+    _X(PAYLOAD,"payload","payload",stringFormat,"-") \
+    _X(PROTO,"l4_proto_name","l4_proto_name",stringFormat,"-") \
+    _X(PROTO_ID,"l4_proto","l4_proto",numericFormat,"0") \
+    _X(ETHSRC,"ethsrc","ethsrc",stringFormat,"-") \
+    _X(ETHDST,"ethdst","ethdst",stringFormat,"-") \
+    X_RB_MAC_VENDORS \
+    _X(ETHTYPE,"ethtype","ethtype",numericFormat,"0") \
+    _X(ARP_HW_SADDR,"arp_hw_saddr","arp_hw_saddr",stringFormat,"-") \
+    _X(ARP_HW_SPROT,"arp_hw_sprot","arp_hw_sprot",stringFormat,"-") \
+    _X(ARP_HW_TADDR,"arp_hw_taddr","arp_hw_taddr",stringFormat,"-") \
+    _X(ARP_HW_TPROT,"arp_hw_tprot","arp_hw_tprot",stringFormat,"-") \
+    _X(VLAN,"vlan","vlan",numericFormat,"0") \
+    _X(VLAN_NAME,"vlan_name","vlan_name",stringFormat,"0") \
+    _X(VLAN_PRIORITY,"vlan_priority","vlan_priority",numericFormat,"0") \
+    _X(VLAN_DROP,"vlan_drop","vlan_drop",numericFormat,"0") \
+    _X(UDPLENGTH,"udplength","udplength",numericFormat,"0") \
+    _X(ETHLENGTH,"ethlen","ethlength",numericFormat,"0") \
+    _X(ETHLENGTH_RANGE,"ethlength_range","ethlength_range",stringFormat,"0") \
+    _X(TRHEADER,"trheader","trheader",stringFormat,"-") \
+    _X(SRCPORT,"l4_srcport","src_port",numericFormat,"0") \
+    _X(SRCPORT_NAME,"l4_srcport_name","src_port_name",stringFormat,"-") \
+    _X(DSTPORT,"l4_dstport","dst_port",numericFormat,"0") \
+    _X(DSTPORT_NAME,"l4_dstport_name","dst_port_name",stringFormat,"-") \
+    _X(SRC_TEMPLATE_ID,"src_asnum","src_asnum",numericFormat,"0") \
+    _X(SRC_STR,"src","src",stringFormat,"-") \
+    _X(SRC_NAME,"src_name","src_name",stringFormat,"-") \
+    _X(SRC_NET,"src_net","src_net",stringFormat,"0.0.0.0/0") \
+    _X(SRC_NET_NAME,"src_net_name","src_net_name",stringFormat,"0.0.0.0/0") \
+    _X(DST_TEMPLATE_ID,"dst_asnum","dst_asnum",stringFormat,"0")  \
+    _X(DST_NAME,"dst_name","dst_name",stringFormat,"-") \
+    _X(DST_STR,"dst","dst",stringFormat,"-") \
+    _X(DST_NET,"dst_net","dst_net",stringFormat,"0.0.0.0/0") \
+    _X(DST_NET_NAME,"dst_net_name","dst_net_name",stringFormat,"0.0.0.0/0") \
+    _X(ICMPTYPE,"icmptype","icmptype",numericFormat,"0") \
+    _X(ICMPCODE,"icmpcode","icmpcode",numericFormat,"0") \
+    _X(ICMPID,"icmpid","icmpid",numericFormat,"0") \
+    _X(ICMPSEQ,"icmpseq","icmpseq",numericFormat,"0") \
+    _X(TTL,"ttl","ttl",numericFormat,"0") \
+    _X(TOS,"tos","tos",numericFormat,"0") \
+    _X(ID,"id","id",numericFormat,"0") \
+    _X(IPLEN,"iplen","iplen",numericFormat,"0") \
+    _X(IPLEN_RANGE,"iplen_range","iplen_range",stringFormat,"0") \
+    _X(DGMLEN,"dgmlen","dgmlen",numericFormat,"0") \
+    _X(TCPSEQ,"tcpseq","tcpseq",numericFormat,"0") \
+    _X(TCPACK,"tcpack","tcpack",numericFormat,"0") \
+    _X(TCPLEN,"tcplen","tcplen",numericFormat,"0") \
+    _X(TCPWINDOW,"tcpwindow","tcpwindow",numericFormat,"0") \
+    _X(TCPFLAGS,"tcpflags","tcpflags",stringFormat,"-") \
+    X_RB_GEOIP \
+    _X(TEMPLATE_END_ID,"","",numericFormat,"0")
+
 /* If you change some of this, remember to change printElementWithTemplate too */
 typedef enum{
-    TIMESTAMP,
-    SENSOR_ID_SNORT,
-    SENSOR_ID,
-    SENSOR_NAME,
-    SENSOR_IP,
-    DOMAIN_ID,
-    DOMAIN_NAME,
-    GROUP_ID,
-    GROUP_NAME,
-    TYPE,
-    SIG_GENERATOR,
-    SIG_ID,
-    SIG_REV,
-    PRIORITY,
-    ACTION,
-    CLASSIFICATION,
-    MSG,
-#ifdef RB_EXTRADATA
-    SHA256,
-    FILE_SIZE,
-    FILE_HOSTNAME,
-    FILE_URI,
-#endif
-    PAYLOAD,
-    PROTO,
-    PROTO_ID,
-    ETHSRC,
-    ETHDST,
-#ifdef HAVE_RB_MAC_VENDORS
-    ETHSRC_VENDOR,
-    ETHDST_VENDOR,
-#endif
-    ETHTYPE,
-    VLAN, /* See vlan header */
-    VLAN_NAME,
-    VLAN_PRIORITY,
-    VLAN_DROP,
-    ARP_HW_SADDR, /* Sender ARP Hardware Address */
-    ARP_HW_SPROT, /* Sender ARP Hardware Protocol */
-    ARP_HW_TADDR, /* Destination ARP Hardware Address */
-    ARP_HW_TPROT, /* Destination ARP Hardware Protocol */
-    UDPLENGTH,
-    ETHLENGTH,
-    ETHLENGTH_RANGE,
-    TRHEADER,
-    SRCPORT,
-    DSTPORT,
-    SRCPORT_NAME,
-    DSTPORT_NAME,
-    SRC_TEMPLATE_ID,
-    SRC_STR,
-    SRC_NAME,
-    SRC_NET,
-    SRC_NET_NAME,
-    DST_TEMPLATE_ID,
-    DST_NAME,
-    DST_STR,
-    DST_NET,
-    DST_NET_NAME,
-    ICMPTYPE,
-    ICMPCODE,
-    ICMPID,
-    ICMPSEQ,
-    TTL,
-    TOS,
-    ID,
-    IPLEN,
-    IPLEN_RANGE,
-    DGMLEN,
-    TCPSEQ,
-    TCPACK,
-    TCPLEN,
-    TCPWINDOW,
-    TCPFLAGS,
-
-#ifdef HAVE_GEOIP
-    SRC_COUNTRY,
-    DST_COUNTRY,
-    SRC_COUNTRY_CODE,
-    DST_COUNTRY_CODE,
-    SRC_AS,
-    DST_AS,
-    SRC_AS_NAME,
-    DST_AS_NAME,
-#endif // HAVE_GEOIP
-
-    TEMPLATE_END_ID
+    #define _X(a,b,c,d,e) a,
+    X_FUNCTION_TEMPLATE
+    #undef _X
 }TEMPLATE_ID;
 
 typedef enum{stringFormat,numericFormat} JsonPrintFormat;
@@ -253,8 +256,7 @@ typedef struct _AlertJSONData
     TemplateElementsList * outputTemplate;
     AlertJSONConfig *config;
     Number_str_assoc * hosts, *nets, *services, *protocols, *vlans;
-    uint32_t sensor_id,domain_id,group_id;
-    char * sensor_name, *sensor_type,*domain,*sensor_ip,*group_name;
+    char *enrich_with;
 #ifdef HAVE_GEOIP
     GeoIP *gi,*gi_org;
 #ifdef SUP_IP6
@@ -270,91 +272,9 @@ static const char *priority_name[] = {NULL, "high", "medium", "low", "very low"}
 
 /* Remember update printElementWithTemplate if some element modified here */
 static AlertJSONTemplateElement template[] = {
-    {TIMESTAMP,"timestamp","timestamp",numericFormat,"0"},
-    {SENSOR_ID_SNORT,"sensor_id_snort","sensor_id_snort",numericFormat,"0"},
-    {SENSOR_ID,"sensor_id","sensor_id",numericFormat,"0"},
-    {SENSOR_IP,"sensor_ip","sensor_ip",stringFormat,"0"},
-    {SENSOR_NAME,"sensor_name","sensor_name",stringFormat,"-"},
-    {DOMAIN_NAME,"domain_name","domain_name",stringFormat,"-"},
- /*   {DOMAIN_ID,"domain_id","domain_id",numericFormat,"-"}, */
-    {GROUP_NAME,"group_name","group_name",stringFormat,"-"},
-    {GROUP_ID,"group_id","group_id",numericFormat,"-"},
-    {TYPE,"type","type",stringFormat,"-"},
-    {ACTION,"action","action",stringFormat,"-"},
-    {SIG_GENERATOR,"sig_generator","sig_generator",numericFormat,"0"},
-    {SIG_ID,"sig_id","sig_id",numericFormat,"0"},
-    {SIG_REV,"sig_rev","rev",numericFormat,"0"},
-    {PRIORITY,"priority","priority",stringFormat,"unknown"},
-    {CLASSIFICATION,"classification","classification",stringFormat,"-"},
-    {MSG,"msg","msg",stringFormat,"-"},
-#ifdef RB_EXTRADATA
-    {SHA256,"sha256","sha256",stringFormat,"-"},
-    {FILE_SIZE,"file_size","file_size",stringFormat,"-"},
-    {FILE_HOSTNAME,"file_hostname","file_hostname",stringFormat,"-"},
-    {FILE_URI,"file_uri","file_uri",stringFormat,"-"},
-#endif
-    {PAYLOAD,"payload","payload",stringFormat,"-"},
-    {PROTO,"l4_proto_name","l4_proto_name",stringFormat,"-"},
-    {PROTO_ID,"l4_proto","l4_proto",numericFormat,"0"},
-    {ETHSRC,"ethsrc","ethsrc",stringFormat,"-"},
-    {ETHDST,"ethdst","ethdst",stringFormat,"-"},
-#ifdef HAVE_RB_MAC_VENDORS
-    {ETHSRC_VENDOR,"ethsrc_vendor","ethsrc_vendor",stringFormat,"-"},
-    {ETHDST_VENDOR,"ethdst_vendor","ethdst_vendor",stringFormat,"-"},
-#endif
-    {ETHTYPE,"ethtype","ethtype",numericFormat,"0"},
-    {ARP_HW_SADDR,"arp_hw_saddr","arp_hw_saddr",stringFormat,"-"},
-    {ARP_HW_SPROT,"arp_hw_sprot","arp_hw_sprot",stringFormat,"-"},
-    {ARP_HW_TADDR,"arp_hw_taddr","arp_hw_taddr",stringFormat,"-"},
-    {ARP_HW_TPROT,"arp_hw_tprot","arp_hw_tprot",stringFormat,"-"},
-    {VLAN,"vlan","vlan",numericFormat,"0"},
-    {VLAN_NAME,"vlan_name","vlan_name",stringFormat,"0"},
-    {VLAN_PRIORITY,"vlan_priority","vlan_priority",numericFormat,"0"},
-    {VLAN_DROP,"vlan_drop","vlan_drop",numericFormat,"0"},
-    {UDPLENGTH,"udplength","udplength",numericFormat,"0"},
-    {ETHLENGTH,"ethlen","ethlength",numericFormat,"0"},
-    {ETHLENGTH_RANGE,"ethlength_range","ethlength_range",stringFormat,"0"},
-    {TRHEADER,"trheader","trheader",stringFormat,"-"},
-    {SRCPORT,"l4_srcport","src_port",numericFormat,"0"},
-    {SRCPORT_NAME,"l4_srcport_name","src_port_name",stringFormat,"-"},
-    {DSTPORT,"l4_dstport","dst_port",numericFormat,"0"},
-    {DSTPORT_NAME,"l4_dstport_name","dst_port_name",stringFormat,"-"},
-    {SRC_TEMPLATE_ID,"src_asnum","src_asnum",numericFormat,"0"}, 
-    {SRC_STR,"src","src",stringFormat,"-"},
-    {SRC_NAME,"src_name","src_name",stringFormat,"-"},
-    {SRC_NET,"src_net","src_net",stringFormat,"0.0.0.0/0"},
-    {SRC_NET_NAME,"src_net_name","src_net_name",stringFormat,"0.0.0.0/0"},
-    {DST_TEMPLATE_ID,"dst_asnum","dst_asnum",stringFormat,"0"}, 
-    {DST_NAME,"dst_name","dst_name",stringFormat,"-"},
-    {DST_STR,"dst","dst",stringFormat,"-"},
-    {DST_NET,"dst_net","dst_net",stringFormat,"0.0.0.0/0"},
-    {DST_NET_NAME,"dst_net_name","dst_net_name",stringFormat,"0.0.0.0/0"},
-    {ICMPTYPE,"icmptype","icmptype",numericFormat,"0"},
-    {ICMPCODE,"icmpcode","icmpcode",numericFormat,"0"},
-    {ICMPID,"icmpid","icmpid",numericFormat,"0"},
-    {ICMPSEQ,"icmpseq","icmpseq",numericFormat,"0"},
-    {TTL,"ttl","ttl",numericFormat,"0"},
-    {TOS,"tos","tos",numericFormat,"0"},
-    {ID,"id","id",numericFormat,"0"},
-    {IPLEN,"iplen","iplen",numericFormat,"0"},
-    {IPLEN_RANGE,"iplen_range","iplen_range",stringFormat,"0"},
-    {DGMLEN,"dgmlen","dgmlen",numericFormat,"0"},
-    {TCPSEQ,"tcpseq","tcpseq",numericFormat,"0"},
-    {TCPACK,"tcpack","tcpack",numericFormat,"0"},
-    {TCPLEN,"tcplen","tcplen",numericFormat,"0"},
-    {TCPWINDOW,"tcpwindow","tcpwindow",numericFormat,"0"},
-    {TCPFLAGS,"tcpflags","tcpflags",stringFormat,"-"},
-    #ifdef HAVE_GEOIP
-    {SRC_COUNTRY,"src_country","src_country",stringFormat,"N/A"},
-    {DST_COUNTRY,"dst_country","dst_country",stringFormat,"N/A"},
-    {SRC_COUNTRY_CODE,"src_country_code","src_country_code",stringFormat,"N/A"},
-    {DST_COUNTRY_CODE,"dst_country_code","dst_country_code",stringFormat,"N/A"},
-    {SRC_AS,"src_as","src_as",numericFormat, 0},
-    {DST_AS,"dst_as","dst_as",numericFormat, 0},
-    {SRC_AS_NAME,"src_as_name","src_as_name",stringFormat,"N/A"},
-    {DST_AS_NAME,"dst_as_name","dst_as_name",stringFormat,"N/A"},
-    #endif /* HAVE_GEOIP */
-    {TEMPLATE_END_ID,"","",numericFormat,"0"}
+    #define _X(a,b,c,d,e) {a,b,c,d,e},
+    X_FUNCTION_TEMPLATE
+    #undef _X
 };
 
 /* list of function prototypes for this preprocessor */
@@ -414,6 +334,7 @@ static void AlertJSONInit(char *args)
     /* Set the preprocessor function into the function list */
     AddFuncToOutputList(AlertJSON, OUTPUT_TYPE__ALERT, data);
     AddFuncToCleanExitList(AlertJSONCleanExit, data);
+    AddFuncToShutdownList(AlertJSONCleanExit, data);
     AddFuncToRestartList(AlertRestart, data);
 }
 
@@ -474,7 +395,7 @@ rdkafka_add_str_to_config(rd_kafka_conf_t *rk_conf, rd_kafka_topic_conf_t *rkt_c
  * Function: ParseJSONArgs(char *)
  *
  * Purpose: Process positional args, if any.  Syntax is:
- * output alert_json: [<logpath> ["default"|<list> [sensor_name=name] [sensor_id=id]]
+ * output alert_json: [<logpath> ["default"|<list>]]
  * list ::= <field>(,<field>)*
  * field ::= "dst"|"src"|"ttl" ...
  * name ::= sensor name
@@ -537,29 +458,21 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         {
             RB_IF_CLEAN(data->jsonargs,data->jsonargs = SnortStrdup(DEFAULT_JSON),"%s(%i) param setted twice\n",tok,i);
         }
-        else if(!strncasecmp(tok,"sensor_name=",strlen("sensor_name=")) && !data->sensor_name)
+        else if(!strncasecmp(tok,"enrich_with=",strlen("enrich_with=")))
         {
-			RB_IF_CLEAN(data->sensor_name,data->sensor_name = SnortStrdup(tok+strlen("sensor_name=")),"%s(%i) param setted twice\n",tok,i);
-		}
-        else if(!strncasecmp(tok,"sensor_id=",strlen("sensor_id=")))
-        {
-            data->sensor_id = atol(tok + strlen("sensor_id="));
-        }
-        else if(!strncasecmp(tok,"sensor_ip=",strlen("sensor_ip=")))
-        {
-            data->sensor_ip = strdup(tok + strlen("sensor_ip="));
-        }
-        else if(!strncasecmp(tok,"group_id=",strlen("group_id=")))
-        {
-	        data->group_id = atol(tok + strlen("group_id="));
-        }
-        else if(!strncasecmp(tok,"group_name=",strlen("group_name=")))
-        {
-            data->group_name = strdup(tok + strlen("group_name="));
-        }
-        else if(!strncasecmp(tok,"sensor_type=",strlen("sensor_type=")))
-        {
-            RB_IF_CLEAN(data->sensor_type,data->sensor_type = SnortStrdup(tok + strlen("sensor_type=")),"%s(%i) param setted twice.\n",tok,i);
+            RB_IF_CLEAN(data->enrich_with,data->enrich_with = SnortStrdup(tok+strlen("enrich_with=")),"%s(%i) param setted twice\n",tok,i);
+            if( data->enrich_with[0]!='{' )
+            {
+                FatalError("alert_json: enrich_with argument does not start with {");
+            }
+            if( data->enrich_with[strlen(data->enrich_with)-1] != '}' )
+            {
+                FatalError("alert_json: enrich_with argument does not end with }");
+            }
+            /* More convenience to enrich */
+            data->enrich_with[0] = ',';
+            data->enrich_with[strlen(data->enrich_with)-1] = '\0';
+
         }
         else if(!strncasecmp(tok,"hosts=",strlen("hosts=")))
         {
@@ -603,10 +516,6 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         {
             RB_IF_CLEAN(eth_vendors_path,eth_vendors_path = SnortStrdup(tok+strlen("eth_vendors=")),"%s(%i) param setted twice.\n",tok,i);
         }
-        else if(!strncasecmp(tok,"domain_name=",strlen("domain_name=")))
-        {
-            RB_IF_CLEAN(data->domain, data->domain = SnortStrdup(tok+strlen("domain_name=")),"%s(%i) param setted twice.\n",tok,i);
-        }
         #ifdef HAVE_GEOIP
         else if(!strncasecmp(tok,"geoip=",strlen("geoip=")))
         {
@@ -642,7 +551,6 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
 
     /* DFEFAULT VALUES */
     if ( !data->jsonargs ) data->jsonargs = SnortStrdup(DEFAULT_JSON);
-    if ( !data->sensor_name ) data->sensor_name = SnortStrdup("-");
     if ( !filename ) filename = ProcessFileOption(barnyard2_conf_for_parsing, DEFAULT_FILE);
     if ( !kafka_str ) kafka_str = SnortStrdup(DEFAULT_KAFKA_BROKER);
     
@@ -785,14 +693,21 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
 
     if(data)
     {
-        if(data->kafka)
+        if(data->kafka){
+            KafkaLog_FlushAll(data->kafka);
             KafkaLog_Term(data->kafka);
+        }
+
+        if(data->gi)
+            GeoIP_delete(data->gi);
+        if(data->gi_org)
+            GeoIP_delete(data->gi_org);
+        if(data->gi6)
+            GeoIP_delete(data->gi6);
+        if(data->gi6_org)
+            GeoIP_delete(data->gi6_org);
+
         free(data->jsonargs);
-        free(data->sensor_name);
-        free(data->sensor_ip);
-        free(data->sensor_type);
-        free(data->group_name);
-        free(data->domain);
         freeNumberStrAssocList(data->hosts);
         freeNumberStrAssocList(data->nets);
         freeNumberStrAssocList(data->services);
@@ -1412,30 +1327,6 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case SENSOR_ID_SNORT:
             KafkaLog_Puts(kafka,event?itoa10(ntohl(((Unified2EventCommon *)event)->sensor_id),buf, bufLen):templateElement->defaultValue);
             break;
-        case SENSOR_ID:
-            KafkaLog_Puts(kafka,itoa10(jsonData->sensor_id,buf,bufLen));
-            break;
-        case SENSOR_IP:
-            if(jsonData->sensor_ip) KafkaLog_Puts(kafka,jsonData->sensor_ip);
-            break;
-        case SENSOR_NAME:
-            KafkaLog_Puts(kafka,jsonData->sensor_name);
-            break;
-        case DOMAIN_NAME:
-            if(jsonData->domain) KafkaLog_Puts(kafka,jsonData->domain);
-            break;
-        case DOMAIN_ID:
-            KafkaLog_Puts(kafka,itoa10(jsonData->domain_id,buf,bufLen));
-            break;
-        case GROUP_NAME:
-            if(jsonData->group_name) KafkaLog_Puts(kafka,jsonData->group_name);
-            break;
-        case GROUP_ID:
-            KafkaLog_Puts(kafka,itoa10(jsonData->group_id,buf,bufLen));
-            break;
-        case TYPE:
-            if(jsonData->sensor_type) KafkaLog_Puts(kafka,jsonData->sensor_type);
-            break;
         case ACTION:
             if((str_aux = actionOfEvent(event,event_type)))
                 KafkaLog_Puts(kafka,str_aux);
@@ -1922,7 +1813,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSO
 
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Logging JSON Alert data\n"););
     KafkaLog_Putc(kafka,'{');
-    for(iter=jsonData->outputTemplate;iter;iter=iter->next){
+    for(iter=jsonData->outputTemplate;iter;iter=iter->next)
+    {
         const int initial_pos = KafkaLog_Tell(kafka);
         if(iter!=jsonData->outputTemplate)
             KafkaLog_Puts(kafka,JSON_FIELDS_SEPARATOR);
@@ -1937,7 +1829,8 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSO
         if(iter->templateElement->printFormat==stringFormat)
             KafkaLog_Putc(kafka,'"');
 
-        if(0==writed){
+        if(0==writed)
+        {
             #ifdef HAVE_LIBRDKAFKA
             kafka->pos = initial_pos; // Revert the insertion of empty element */
             #endif
@@ -1945,6 +1838,11 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSO
             if(kafka->textLog) 
                 kafka->textLog->pos = initial_pos;
         }
+    }
+
+    if(jsonData->enrich_with)
+    {
+        KafkaLog_Puts(kafka,jsonData->enrich_with);
     }
 
     KafkaLog_Putc(kafka,'}');

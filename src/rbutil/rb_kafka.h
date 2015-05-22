@@ -102,6 +102,7 @@ bool KafkaLog_Write(KafkaLog*, const char*, int len);
 bool KafkaLog_Print(KafkaLog*, const char* format, ...);
 
 bool KafkaLog_Flush(KafkaLog*);
+bool KafkaLog_FlushAll(KafkaLog*);
 
 /*-------------------------------------------------------------------
   * helper functions

@@ -64,9 +64,11 @@ typedef struct _OpSyslog_Data
     u_int8_t payload_encoding;
     u_int8_t operation_mode;
     u_int8_t local_logging;
-    u_int32_t syslog_priority;
+    u_int32_t priority;
+    u_int32_t facility;
 
     char payload_escape_buffer[MAX_QUERY_LENGTH];
+    
     
     char syslog_tx_facility[16];
     char syslog_tx_priority[16];

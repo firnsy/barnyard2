@@ -60,6 +60,7 @@ static int OpSyslog_LogConfig(void *outputPlugin);
 static void OpSyslog_InitLog(char *args);
 static void OpSyslog_InitAlert(char *args);
 static OpSyslog_Data *OpSyslog_ParseArgs(char *);
+static int  syslogAppendHeader(OpSyslog_Data *);
 
 static int NetClose(OpSyslog_Data *data);
 static int NetSend(OpSyslog_Data *data);
@@ -316,6 +317,8 @@ int OpSyslog_LogConfig(void *pSyslogContext)
 		   iSyslogContext->port);
 	LogMessage("\tReporting Protocol: %s\n", 
 		   db_proto[iSyslogContext->proto]);
+	
+	
     }
     else if(iSyslogContext->local_logging == 1)
     {
@@ -370,12 +373,14 @@ static int Syslog_FormatTrigger(OpSyslog_Data *syslogData, Unified2EventCommon *
 	return 1;
     }
     
+ 
     switch(opType)
     {
 	
     case OUT_MODE_DEFAULT:
 	/* Alert */
-	if( (syslogData->format_current_pos += snprintf(syslogData->formatBuffer,SYSLOG_MAX_QUERY_SIZE,"[SNORTIDS[ALERT]: [%s] ]", syslogData->sensor_name)) >=  SYSLOG_MAX_QUERY_SIZE)
+	if( (syslogData->format_current_pos += snprintf(syslogData->formatBuffer,
+							SYSLOG_MAX_QUERY_SIZE,"[SNORTIDS[ALERT]: [%s] ]", syslogData->sensor_name)) >=  SYSLOG_MAX_QUERY_SIZE)
 	{
 	    /* XXX */
 	    return 1;
@@ -383,7 +388,8 @@ static int Syslog_FormatTrigger(OpSyslog_Data *syslogData, Unified2EventCommon *
 	break;
     case OUT_MODE_FULL:
 	/* Log */
-	if( (syslogData->format_current_pos += snprintf(syslogData->formatBuffer,SYSLOG_MAX_QUERY_SIZE,"[SNORTIDS[LOG]: [%s] ]", syslogData->sensor_name)) >=  SYSLOG_MAX_QUERY_SIZE)
+	if( (syslogData->format_current_pos += snprintf(syslogData->formatBuffer,
+							SYSLOG_MAX_QUERY_SIZE,"[SNORTIDS[LOG]: [%s] ]", syslogData->sensor_name)) >=  SYSLOG_MAX_QUERY_SIZE)
 	{
 	    /* XXX */
 	    return 1;
@@ -438,7 +444,8 @@ static int Syslog_FormatTrigger(OpSyslog_Data *syslogData, Unified2EventCommon *
     cn = ClassTypeLookupById(barnyard2_conf, 
 			     ntohl(pEvent->classification_id));
     
-    if( (syslogData->format_current_pos += snprintf(syslogData->formatBuffer,SYSLOG_MAX_QUERY_SIZE,"%s%c%u%c[%u:%u:%u]%c%s", 
+    if( (syslogData->format_current_pos += snprintf(syslogData->formatBuffer,
+						    SYSLOG_MAX_QUERY_SIZE,"%s%c%u%c[%u:%u:%u]%c%s", 
 						    timestamp_string,syslogData->field_separators,
 						    ntohl(pEvent->priority_id),syslogData->field_separators,
 						    ntohl(pEvent->generator_id),ntohl(pEvent->signature_id),ntohl(pEvent->signature_revision),syslogData->field_separators,
@@ -882,6 +889,53 @@ int Syslog_FormatPayload(OpSyslog_Data *data, Packet *p) {
     return OpSyslog_Concat(data);
 }
 
+int syslogAppendHeader(OpSyslog_Data *syslogContext)
+{
+    struct tm *tpart={0};
+    time_t cur_time = {0};
+    u_int32_t timepos = 0;
+
+    if(syslogContext == NULL)
+    {
+	return 1;
+    }
+
+    /* facility-priority */
+    if( (syslogContext->payload_current_pos += snprintf(syslogContext->payload,SYSLOG_MAX_QUERY_SIZE,
+						       "<%x%x> ",
+						       syslogContext->facility,
+						       syslogContext->priority)) >= SYSLOG_MAX_QUERY_SIZE)
+    {
+	/* XXX */
+	return 1;
+    }
+
+    cur_time = time(NULL);
+    tpart=gmtime(&cur_time);
+
+    if( (timepos = strftime(syslogContext->payload+syslogContext->payload_current_pos,
+						      SYSLOG_MAX_QUERY_SIZE,
+			    "%FT%TZ ",tpart)) == 0)
+    {
+	/* XXX */
+	return 1;
+    }
+    
+    syslogContext->payload_current_pos += timepos;
+
+    /* hostname */
+    if( (syslogContext->payload_current_pos += snprintf(syslogContext->payload+syslogContext->payload_current_pos,SYSLOG_MAX_QUERY_SIZE,
+                                                       "%s ",
+                                                       syslogContext->sensor_name)) >= SYSLOG_MAX_QUERY_SIZE)
+    {
+        /* XXX */
+        return 1;
+    }
+
+    return 0;
+}
+
+
 
 void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 {
@@ -923,6 +977,15 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
     syslogContext->payload_current_pos = 0;
     syslogContext->format_current_pos = 0;
 
+    /* Set syslog standard header */
+    if( syslogContext->local_logging == 0)
+    {
+	if(syslogAppendHeader(syslogContext))
+	{
+	    FatalError("Can't create syslog header \n");
+	}
+	
+    }
     
     switch(syslogContext->operation_mode)
     {
@@ -954,7 +1017,7 @@ void  OpSyslog_Alert(Packet *p, void *event, uint32_t event_type, void *arg)
 	cn = ClassTypeLookupById(barnyard2_conf,
 				 ntohl(iEvent->classification_id));
 	
-	if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer,SYSLOG_MAX_QUERY_SIZE,
+	if( (syslogContext->format_current_pos += snprintf(syslogContext->formatBuffer+syslogContext->format_current_pos,SYSLOG_MAX_QUERY_SIZE,
 							   "[%u:%u:%u] ",
 							   ntohl(iEvent->generator_id),
 							   ntohl(iEvent->signature_id),
@@ -1222,7 +1285,17 @@ void OpSyslog_Log(Packet *p, void *event, uint32_t event_type, void *arg)
     memset(syslogContext->formatBuffer,'\0',(SYSLOG_MAX_QUERY_SIZE));
     syslogContext->payload_current_pos = 0;
     syslogContext->format_current_pos = 0;
-    
+
+    /* Set syslog standard header */
+    if( syslogContext->local_logging == 0)
+    {
+        if(syslogAppendHeader(syslogContext))
+        {
+            FatalError("Can't create syslog header \n");
+        }
+
+    }
+
     if(Syslog_FormatTrigger(syslogContext, iEvent,1) ) 
     {
 	FatalError("WARNING: Unable to append Trigger header.\n");
@@ -1460,99 +1533,99 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
 		{
 		    if(!strcasecmp("LOG_KERN", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_KERN;
+			op_data->facility = LOG_KERN;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_KERN");
 		    }
 		    else if(!strcasecmp("LOG_MAIL", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_MAIL;
+			op_data->facility = LOG_MAIL;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_MAIL");
 		    }
 		    else if(!strcasecmp("LOG_DAEMON", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_DAEMON;
+			op_data->facility = LOG_DAEMON;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_DAEMON");
 		    }
 		    else if(!strcasecmp("LOG_AUTH", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_AUTH;
+			op_data->facility = LOG_AUTH;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_AUTH");
 		    }
 		    else if(!strcasecmp("LOG_SYSLOG", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_SYSLOG;
+			op_data->facility = LOG_SYSLOG;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_SYSLOG");
 		    }
 		    else if(!strcasecmp("LOG_LPR", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_LPR;
+			op_data->facility = LOG_LPR;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LPR");
 		    }
 		    else if(!strcasecmp("LOG_NEWS", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_NEWS;
+			op_data->facility = LOG_NEWS;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_NEWS");
 		    }
 		    else if(!strcasecmp("LOG_UUCP", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_UUCP;
+			op_data->facility = LOG_UUCP;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_UUCP");
 		    }
 		    else if(!strcasecmp("LOG_CRON", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_CRON;
+			op_data->facility = LOG_CRON;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_CRON");
 		    }
 		    else if(!strcasecmp("LOG_AUTHPRIV", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_AUTHPRIV;
+			op_data->facility = LOG_AUTHPRIV;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_AUTHPRIV");
 		    }
 		    else if(!strcasecmp("LOG_FTP", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_FTP;
+			op_data->facility = LOG_FTP;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_FTP");
 		    }
 		    else if(!strcasecmp("LOG_LOCAL1", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_LOCAL1;
+			op_data->facility = LOG_LOCAL1;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LOCAL1");
 		    }
 		    else if(!strcasecmp("LOG_LOCAL2", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_LOCAL2;
+			op_data->facility = LOG_LOCAL2;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LOCAL2");
 		    }
 		    else if(!strcasecmp("LOG_LOCAL3", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_LOCAL3;
+			op_data->facility = LOG_LOCAL3;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LOCAL3");
 		    }
 		    else if(!strcasecmp("LOG_LOCAL4", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_LOCAL4;
+			op_data->facility = LOG_LOCAL4;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LOCAL4");
 		    }
 		    else if(!strcasecmp("LOG_LOCAL5", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_LOCAL5;
+			op_data->facility = LOG_LOCAL5;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LOCAL5");
 		    }
 		    else if(!strcasecmp("LOG_LOCAL6", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_LOCAL6;
+			op_data->facility = LOG_LOCAL6;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LOCAL6");
 		    }
 
 		    else if(!strcasecmp("LOG_LOCAL7", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_LOCAL7;
+			op_data->facility = LOG_LOCAL7;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_LOCAL7");
 			
 		    }
 		    else if(!strcasecmp("LOG_USER", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_USER;
+			op_data->facility = LOG_USER;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_USER");
 		    }
 		    else
@@ -1560,7 +1633,7 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
 			LogMessage("[%s()]: Unknown log_facility defined [%s], using \"LOG_USER\" as default \n",
 				   __FUNCTION__,
 				   stoks[1]);
-			op_data->syslog_priority |= LOG_USER;
+			op_data->facility = LOG_USER;
 			snprintf(op_data->syslog_tx_facility,16,"%s","LOG_USER");
 		    }
 
@@ -1568,7 +1641,7 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
 		else
 		{
 		    LogMessage("No default log_facility defined, using LOG_USER as default \n");
-		    op_data->syslog_priority |= LOG_USER;
+		    op_data->facility = LOG_USER;
 		}
 		
 	    }
@@ -1578,42 +1651,42 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
 		{
 		    if(!strcasecmp("LOG_EMERG",stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_EMERG;
+			op_data->priority |= LOG_EMERG;
 			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_EMERG");
 		    }
 		    else if(!strcasecmp("LOG_ALERT", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_ALERT;
+			op_data->priority |= LOG_ALERT;
 			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_ALERT");
 		    }
 		    else if(!strcasecmp("LOG_CRIT", stoks[1]))
 		    {
-			op_data->syslog_priority |=LOG_CRIT;
+			op_data->priority |=LOG_CRIT;
 			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_CRIT");
 		    }
 		    else if(!strcasecmp("LOG_ERR", stoks[1]))
 		    {
-			op_data->syslog_priority |=LOG_ERR;
+			op_data->priority |=LOG_ERR;
 			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_ERR");
 		    }
 		    else if(!strcasecmp("LOG_WARNING", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_WARNING;
+			op_data->priority |= LOG_WARNING;
 			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_WARNING");
 		    }
 		    else if(!strcasecmp("LOG_NOTICE", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_NOTICE;
+			op_data->priority |= LOG_NOTICE;
 			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_NOTICE");
 		    }
 		    else if(!strcasecmp("LOG_INFO", stoks[1]))
 		    {
-			op_data->syslog_priority |=LOG_INFO;
+			op_data->priority |=LOG_INFO;
 			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_INFO");
 		    }
 		    else if(!strcasecmp("LOG_DEBUG", stoks[1]))
 		    {
-			op_data->syslog_priority |= LOG_DEBUG;
+			op_data->priority |= LOG_DEBUG;
 			snprintf(op_data->syslog_tx_priority,16,"%s","LOG_DEBUG");
 		    }
 		    else
@@ -1621,13 +1694,13 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
 			LogMessage("[%s()]: Unknown log_priority defined [%s], using \"LOG_INFO\" as default \n",
 				   __FUNCTION__,
 				   stoks[1]);
-			op_data->syslog_priority |= LOG_INFO;
+			op_data->priority |= LOG_INFO;
 		    }
 		}
 		else
 		{
 		    LogMessage("No default log_priority defined, using LOG_INFO as default \n");
-		    op_data->syslog_priority |= LOG_INFO;
+		    op_data->priority |= LOG_INFO;
 		}
 	    }
 	    else
@@ -1648,9 +1721,10 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
 	FatalError("You must specify a sensor name\n");
     }
 
-    if(op_data->syslog_priority == 0)
+    if(op_data->priority == 0)
     {
-	op_data->syslog_priority =  LOG_INFO | LOG_USER;
+	op_data->facility =  LOG_INFO;
+	op_data->priority =  LOG_USER;
 	snprintf(op_data->syslog_tx_facility,16,"%s","LOG_USER");
 	snprintf(op_data->syslog_tx_priority,16,"%s","LOG_INFO");
     }
@@ -1919,7 +1993,7 @@ int NetSend(OpSyslog_Data *op_data)
     
     if(op_data->local_logging == 1)
     {
-	syslog(op_data->syslog_priority,
+	syslog(op_data->priority,
 	       "%s",
 	       op_data->payload);
 	return 0;

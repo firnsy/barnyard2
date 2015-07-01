@@ -22,3 +22,4 @@ src/output-plugins/libspo.a
 src/sfutil/libsfutil.a
 src/rbutil/librbutil.a
 stamp-h1
+*Makefile.in

@@ -133,12 +133,15 @@ static const size_t initial_enrich_with_buf_len = 1024;
 #endif
 
 #ifdef RB_EXTRADATA
-#define FIELDS_EXTRADATA ",sha256,file_size,file_hostname,file_uri"
+#define FIELDS_EXTRADATA ",sha256,file_size,file_hostname,file_uri,email_sender,email_destinations" //email_headers not included
 #define X_RB_EXTRADATA \
     _X(SHA256,"sha256","sha256",stringFormat,"-") \
     _X(FILE_SIZE,"file_size","file_size",stringFormat,"-") \
     _X(FILE_HOSTNAME,"file_hostname","file_hostname",stringFormat,"-") \
-    _X(FILE_URI,"file_uri","file_uri",stringFormat,"-")
+    _X(FILE_URI,"file_uri","file_uri",stringFormat,"-") \
+    _X(EMAIL_SENDER,"email_sender","email_sender",stringFormat,"-") \
+    _X(EMAIL_DESTINATIONS,"email_destinations","email_destinations",stringFormat,"-")
+    //_X(EMAIL_HEADERS,"email_headers","email_headers",stringFormat,"-")
 #else
 #define FIELDS_EXTRADATA
 #define X_RB_EXTRADATA
@@ -1190,7 +1193,7 @@ static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement, 
             }
             break;
         case FILE_URI:
-            if (event_info == EVENT_INFO_FILE_URI)
+            if (event_info == EVENT_INFO_FILE_NAME)
             {
                 str = (char *)(U2ExtraData+1);
                 len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
@@ -1205,6 +1208,32 @@ static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement, 
                 KafkaLog_Write(kafka, str, len);
             }
             break;
+        case EMAIL_SENDER:
+            if (event_info == EVENT_INFO_FILE_MAILFROM)
+            {
+                str = (char *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                KafkaLog_Write(kafka, str, len);
+            }
+            break;
+        case EMAIL_DESTINATIONS:
+            if (event_info == EVENT_INFO_FILE_RCPTTO)
+            {
+                str = (char *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                KafkaLog_Write(kafka, str, len);
+            }
+            break;
+        /*
+        case EMAIL_HEADERS:
+            if (event_info == EVENT_INFO_FILE_MAILHEADERS)
+            {
+                str = (char *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                KafkaLog_Write(kafka, str, len);
+            }
+            break;
+        */
         default:
             LogMessage("WARNING: printElementExtraDataBlob(): JSON Element ID inconsistent (%d)\n", templateElement->id);
             break;
@@ -1381,6 +1410,9 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case FILE_SIZE:
         case FILE_URI:
         case FILE_HOSTNAME:
+        case EMAIL_SENDER:
+        case EMAIL_DESTINATIONS:
+        //case EMAIL_HEADERS:
             if (event != NULL)
                 printElementExtraData(event, event_type, templateElement, kafka);
             break;

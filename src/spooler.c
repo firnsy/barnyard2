@@ -639,6 +639,9 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
                     ArchiveFile(spooler->filepath, BcArchiveDir());
 
                 /* close (ie. destroy and cleanup) the spooler so we can rotate */
+#ifdef RB_EXTRADATA
+                spoolerFireLastEvent(spooler);
+#endif
                 UnRegisterSpooler(spooler);
                 spoolerClose(spooler);
                 spooler = NULL;

@@ -290,11 +290,13 @@ typedef struct _AlertJSONData
 #endif
 #ifdef HAVE_LIBRDKAFKA
     struct {
+        int                    do_poll;
         char *brokers,*topic;
         rd_kafka_t            *rk;
         rd_kafka_conf_t       *rk_conf;
         rd_kafka_topic_t      *rkt;
         rd_kafka_topic_conf_t *rkt_conf;
+        pthread_t              poll_thread;
     } kafka;
 #endif
 } AlertJSONData;
@@ -738,7 +740,7 @@ static void KafkaMsgDelivered (rd_kafka_t *rk,
     RefcntPrintbuf *rprintbuf = msg_opaque;
     
     DEBUG_WRAP(if(RPRINTBUF_MAGIC!=rprintbuf->magic)
-        FatalError("msg_delivered:Not valid magic"));
+        FatalError("msg_delivered: Not valid magic"));
 
     if (unlikely(error_code))
         ErrorMessage("rdkafka Message delivery failed: %s\n",rd_kafka_err2str(error_code));
@@ -746,6 +748,17 @@ static void KafkaMsgDelivered (rd_kafka_t *rk,
         LogMessage("rdkafka Message delivered (%zd bytes)\n", len);
 
     DecRefcntPrintbuf(rprintbuf);
+}
+
+static void *KafkaPollFuncion(void *vjsonData)
+{
+    AlertJSONData *jsonData = vjsonData;
+    while(rd_atomic_add(&jsonData->kafka.do_poll,0))
+    {
+        rd_kafka_poll(jsonData->kafka.rk,500);
+    }
+
+    return NULL;
 }
 
 static void AlertJsonKafkaDelayedInit (AlertJSONData *this)
@@ -773,6 +786,15 @@ static void AlertJsonKafkaDelayedInit (AlertJSONData *this)
 
     if(NULL==this->kafka.rkt)
         FatalError("It was not possible create a kafka topic %s\n",this->kafka.topic);
+
+    rd_atomic_add(&this->kafka.do_poll,1);
+    const int rc = pthread_create(&this->kafka.poll_thread, NULL,
+                          KafkaPollFuncion, this);
+
+    if(rc != 0)
+    {
+        FatalError("Couln't create kafka poll thread");
+    }
 }
 #endif
 
@@ -788,6 +810,13 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
 #ifdef HAVE_LIBRDKAFKA
         if(data->kafka.rk)
         {
+            rd_atomic_sub(&data->kafka.do_poll,1);
+            const int join_rc = pthread_join(data->kafka.poll_thread,NULL);
+            if(0 != join_rc)
+            {
+                ErrorMessage("Couldn't join poll_thread (%d)",join_rc);
+            }
+
             while (rd_kafka_outq_len(data->kafka.rk) > 0)
             {
                 rd_kafka_poll(data->kafka.rk, 100);

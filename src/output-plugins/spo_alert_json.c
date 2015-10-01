@@ -793,7 +793,10 @@ static void AlertJsonKafkaDelayedInit (AlertJSONData *this)
 
     if(rc != 0)
     {
-        FatalError("Couln't create kafka poll thread");
+        char errbuf[512];
+
+        strerror_r(errno,errbuf,sizeof(errbuf));
+        FatalError("Couln't create kafka poll thread: %s",errbuf);
     }
 }
 #endif
@@ -2027,6 +2030,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSO
 #ifdef HAVE_LIBRDKAFKA
     if(unlikely(NULL == jsonData->kafka.rk && NULL != jsonData->kafka.brokers))
     {
+        /* Still not initialized */
         AlertJsonKafkaDelayedInit(jsonData);
     }
 
@@ -2044,8 +2048,9 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSO
                   * msg_opaque. */
                  rprintbuf);
 
-        if(produce_rc < 0) {
-            ErrorMessage("alert_json: Failed to produce message: %s",
+        if(produce_rc < 0)
+        {
+            ErrorMessage("alert_json: Failed to produce kafka message: %s",
                 rd_kafka_err2str(rd_kafka_errno2err(errno)));
             DecRefcntPrintbuf(rprintbuf);
         }

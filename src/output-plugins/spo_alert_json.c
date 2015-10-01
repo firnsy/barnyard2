@@ -25,11 +25,13 @@
  *
  * Purpose: output plugin for json alerting
  *
- * Arguments: [alert_file]+kafka://<broker>:<port>@<topic>
+ * Arguments: [alert_file]+[kafka://<broker>:<port>@<topic>] [http://<host>:<port>/<url>]
  *
  * Effect:
  *
- * Alerts are sended to a kafka broker, using the port and topic given, plus to a alert file (if given).
+ * Alerts are sended to:
+ *    * kafka broker, using the port and topic given, plus to a alert file (if given).
+ *    * HTTP host, using http:// ot https:// version
  *
  * Comments: Allows use of json alerts with other output plugin types.
  * See doc/README.alert_json to more details
@@ -83,6 +85,10 @@
 
 #ifdef HAVE_LIBRDKAFKA
 #include <librdkafka/rdkafka.h>
+#endif
+
+#ifdef HAVE_LIBRBHTTP
+#include <librbhttp/librb-http.h>
 #endif
 
 #include <librd/rd.h>
@@ -157,6 +163,8 @@ static const size_t initial_enrich_with_buf_len = 1024;
 #define LOG_BUFFER    (30*K_BYTES)
 
 #define KAFKA_PROT "kafka://"
+#define HTTP_PROT  "http://"
+#define HTTPS_PROT "https://"
 //#define KAFKA_TOPIC "rb_ips"
 #define FILENAME_KAFKA_SEPARATOR '+'
 #define BROKER_TOPIC_SEPARATOR   '@'
@@ -298,6 +306,14 @@ typedef struct _AlertJSONData
         rd_kafka_topic_conf_t *rkt_conf;
         pthread_t              poll_thread;
     } kafka;
+#endif
+#ifdef HAVE_LIBRBHTTP
+    struct {
+        int                    do_poll;
+        pthread_t              poll_thread;
+        const char *url;
+        struct rb_http_handler_s *handler;
+    } http;
 #endif
 } AlertJSONData;
 
@@ -498,6 +514,14 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
             RB_IF_CLEAN(kafka_str,kafka_str = SnortStrdup(tok),"%s(%i) param setted twice\n",tok,i);
 #else
             FatalError("alert_json: This barnyard was build with no librdkafka support.");
+#endif
+        }
+        else if(!strncasecmp(tok, HTTP_PROT,strlen(HTTP_PROT)) || !strncasecmp(tok,HTTPS_PROT,strlen(HTTP_PROT)))
+        {
+#ifdef HAVE_LIBRBHTTP
+            RB_IF_CLEAN(data->http.url,data->http.url = SnortStrdup(tok),"%s(%i) param setted twice\n",tok,i);
+#else
+            FatalError("alert_json: This barnyard was build with no http support.");
 #endif
         }
         else if ( !strncasecmp(tok, "default", strlen("default")) && !data->jsonargs)
@@ -798,6 +822,70 @@ static void AlertJsonKafkaDelayedInit (AlertJSONData *this)
         strerror_r(errno,errbuf,sizeof(errbuf));
         FatalError("Couln't create kafka poll thread: %s",errbuf);
     }
+}
+#endif
+
+#ifdef HAVE_LIBRBHTTP
+static void HttpMsgDelivered(struct rb_http_handler_s * rb_http_handler,
+                           int status_code,
+                           const char * status_code_str,
+                           char * buff,size_t len,
+                           void * msg_opaque)
+{
+    RefcntPrintbuf *rprintbuf = msg_opaque;
+
+    DEBUG_WRAP(if(RPRINTBUF_MAGIC!=rprintbuf->magic)
+        FatalError("msg_delivered: Not valid magic"));
+
+    if (unlikely(status_code))
+        ErrorMessage("http Message delivery failed: (%d)%s\n",status_code,status_code_str);
+    else if (unlikely(BcLogVerbose()))
+        LogMessage("http Message delivered (%zd bytes)\n", len);
+
+    DecRefcntPrintbuf(rprintbuf);
+}
+
+void *HttpPollFuncion(void *vjsonData) {
+    AlertJSONData *jsonData = vjsonData;
+
+    while(rd_atomic_add(&jsonData->http.do_poll,0))
+    {
+        rb_http_get_reports (jsonData->http.handler,
+                              HttpMsgDelivered, 500);
+    }
+
+    return NULL;
+}
+
+static void AlertJsonHTTPDelayedInit (AlertJSONData *this)
+{
+    char errstr[256];
+
+    if(!this->http.url)
+    {
+        FatalError("%s called with NULL==this->http.url\n",
+            __FUNCTION__);
+    }
+
+    this->http.handler = rb_http_handler (this->http.url, 10, 10000, errstr, sizeof(errstr));
+
+    if(NULL==this->http.handler)
+    {
+        FatalError("Failed to create new HTTP producer: %s\n",errstr);
+    }
+
+    rd_atomic_add(&this->http.do_poll,1);
+    const int rc = pthread_create(&this->http.poll_thread, NULL,
+                          HttpPollFuncion, this);
+
+    if(rc != 0)
+    {
+        char errbuf[512];
+
+        strerror_r(errno,errbuf,sizeof(errbuf));
+        FatalError("Couln't create http poll thread: %s",errbuf);
+    }
+
 }
 #endif
 
@@ -2056,5 +2144,25 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSO
         }
     }
 #endif
-}
 
+#ifdef HAVE_LIBRBHTTP
+    if(unlikely(NULL == jsonData->http.handler && NULL != jsonData->http.url))
+    {
+        /* Still not initialized */
+        AlertJsonHTTPDelayedInit(jsonData);
+    }
+
+    if(NULL != jsonData->http.handler)
+    {
+        rb_http_produce (jsonData->http.handler,
+            printbuf->buf,printbuf->bpos, 0 /* No flags */,rprintbuf);
+
+        if(0)
+        {
+            ErrorMessage("alert_json: Failed to produce HTTP message: %s",
+                rd_kafka_err2str(rd_kafka_errno2err(errno)));
+            DecRefcntPrintbuf(rprintbuf);
+        }
+    }
+#endif
+}

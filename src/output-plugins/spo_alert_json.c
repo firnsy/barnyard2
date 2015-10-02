@@ -924,14 +924,24 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
         }
 #endif
 
+#ifdef HAVE_GEOIP
         if(data->gi)
+        {
             GeoIP_delete(data->gi);
+        }
         if(data->gi_org)
+        {
             GeoIP_delete(data->gi_org);
+        }
         if(data->gi6)
+        {
             GeoIP_delete(data->gi6);
+        }
         if(data->gi6_org)
+        {
             GeoIP_delete(data->gi6_org);
+        }
+#endif // HAVE_GEOIP
 
         free(data->jsonargs);
         freeNumberStrAssocList(data->hosts);
@@ -944,11 +954,6 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
             free(iter);
         }
 
-
-        #ifdef HAVE_GEOIP
-        if(data->gi) GeoIP_delete(data->gi);
-        if(data->gi_org) GeoIP_delete(data->gi_org);
-        #endif // GWO_IP
         /* free memory from SpoJSONData */
         free(data);
     }

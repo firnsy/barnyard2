@@ -622,7 +622,6 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     /* DFEFAULT VALUES */
     if ( !data->jsonargs ) data->jsonargs = SnortStrdup(DEFAULT_JSON);
     if ( !filename ) filename = ProcessFileOption(barnyard2_conf_for_parsing, DEFAULT_FILE);
-    if ( !kafka_str ) kafka_str = SnortStrdup(DEFAULT_KAFKA_BROKER);
     
     /* names-str assoc */
     if(hostsListPath) FillHostsList(hostsListPath,&data->hosts,HOSTS);

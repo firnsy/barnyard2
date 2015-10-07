@@ -141,10 +141,23 @@ static void LogFull (Packet *p, void *event, uint32_t event_type, void *arg)
     // Start the log with [Snort Log] text
     TextLog_Puts(data->log, "[Snort Log] ");
 
+    if (barnyard2_conf->hostname)
+    {
+        TextLog_Print(data->log, "%s ", barnyard2_conf->hostname);
+    }
+    else
+    {
+        TextLog_Puts(data->log, "hostname");
+    }
+
     // Print interface (if asked for)
     if (BcAlertInterface())
     {
-        TextLog_Print(data->log, "<%s> ", PRINT_INTERFACE(barnyard2_conf->interface));
+        TextLog_Print(data->log, ":%s ", PRINT_INTERFACE(barnyard2_conf->interface));
+    }
+    else
+    {
+        TextLog_Puts(data->log, ":interface ");
     }
 
     // Print the gen:sig:rev data
@@ -413,14 +426,17 @@ static void LogFullCleanup (int signal, void *arg, const char* msg)
 
     DEBUG_WRAP(DebugMessage(DEBUG_LOG, "%s\n", msg););
 
-    /* free memory from SpoLogFullData */
     if (data->log)
+    {
         TextLog_Term(data->log);
+    }
     
     memset(data->encoded_buffer, '\0', MAX_QUERY_LENGTH);
 
     if (data)
+    {
         free(data);
+    }
     
     return;
 }

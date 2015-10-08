@@ -1213,6 +1213,7 @@ void OpSyslog_Log(Packet *p, void *event, uint32_t event_type, void *arg)
     {
 	LogMessage("OpSyslog_Log(): Is currently unable to handle Event Type [%u] \n",
 		   event_type);
+        return;
     }
 
     syslogContext = (OpSyslog_Data *)arg;
@@ -1645,7 +1646,15 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
     /* Default */    
     if(op_data->sensor_name == NULL)
     {
-	FatalError("You must specify a sensor name\n");
+        // If barnyard2 config has hostname defined, use that
+        if (barnyard2_conf->hostname)
+        {
+            op_data->sensor_name = SnortStrdup(barnyard2_conf->hostname);
+        }
+        else
+        {
+            FatalError("You must specify a sensor name\n");
+        }
     }
 
     if(op_data->syslog_priority == 0)

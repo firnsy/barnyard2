@@ -1213,6 +1213,7 @@ void OpSyslog_Log(Packet *p, void *event, uint32_t event_type, void *arg)
     {
 	LogMessage("OpSyslog_Log(): Is currently unable to handle Event Type [%u] \n",
 		   event_type);
+        return;
     }
 
     syslogContext = (OpSyslog_Data *)arg;

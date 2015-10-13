@@ -243,7 +243,7 @@ static void logKeyValueHandler (Packet *p, void *orig_event, uint32_t event_type
         else
             LogTimeStamp(data->log, p);
 
-        if (barnyard2_conf->hostname)
+        if (barnyard2_conf->hostname != NULL)
             TextLog_Print(data->log, "%s ", barnyard2_conf->hostname);
         else
             TextLog_Puts(data->log, "hostname ");
@@ -251,7 +251,14 @@ static void logKeyValueHandler (Packet *p, void *orig_event, uint32_t event_type
         TextLog_Print(data->log, "barnyard[%d]: ", data->pid);
     }
     else
+    {
         TextLog_Print(data->log, "\%barnyard2 timestamp=%d ", t);
+
+        if (barnyard2_conf->hostname != NULL)
+            TextLog_Print(data->log, "hostname=%s ", barnyard2_conf->hostname);
+        else
+            TextLog_Puts(data->log, "hostname=sensor ");
+    }
 
     TextLog_Print(data->log, "id=\"%lu:%lu:%lu\" ", (unsigned long) ntohl(event->generator_id), (unsigned long) ntohl(event->signature_id), (unsigned long) ntohl(event->signature_revision));
 

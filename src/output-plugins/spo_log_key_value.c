@@ -178,8 +178,6 @@ static LogKeyValueData *logKeyValueParseArgs (char *args)
                     data->encoding = ENCODING_ASCII;
                 else if (!strcasecmp("hex", subtoks[1]))
                     data->encoding = ENCODING_HEX;
-                else if (!strcasecmp("base64", subtoks[1]))
-                    data->encoding = ENCODING_BASE64;
                 else
                     FatalError("log_key_value: Unknown encoding type \"%s\"\n", subtoks[1]);
             }
@@ -293,9 +291,6 @@ static void logKeyValueHandler (Packet *p, void *orig_event, uint32_t event_type
             {
                 case ENCODING_HEX:
                     packet_data = fasthex(p->data, p->dsize);
-                    break;
-                case ENCODING_BASE64:
-                    packet_data = base64(p->data, p->dsize);
                     break;
                 case ENCODING_ASCII:
                     packet_data = ascii(p->data, p->dsize);

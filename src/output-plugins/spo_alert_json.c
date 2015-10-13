@@ -89,6 +89,8 @@
 
 #ifdef HAVE_LIBRBHTTP
 #include <librbhttp/librb-http.h>
+#define MAX_HTTP_DEFAULT_CONECTIONS 10
+#define MAX_HTTP_DEFAULT_QUEUED_MESSAGES 10000
 #endif
 
 #include <librd/rd.h>
@@ -309,6 +311,8 @@ typedef struct _AlertJSONData
 #endif
 #ifdef HAVE_LIBRBHTTP
     struct {
+        size_t max_connections;
+        size_t max_queued_messages;
         int                    do_poll;
         pthread_t              poll_thread;
         const char *url;
@@ -497,6 +501,11 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     data->kafka.rkt_conf = rd_kafka_topic_conf_new();
 #endif
 
+#ifdef HAVE_LIBRBHTTP
+    data->http.max_connections     = MAX_HTTP_DEFAULT_CONECTIONS;
+    data->http.max_queued_messages = MAX_HTTP_DEFAULT_QUEUED_MESSAGES;
+#endif
+
     for (i = 0; i < num_toks; i++)
     {
         const char* tok = toks[i];
@@ -581,6 +590,27 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
             FatalError("alert_json: Cannot parse %s(%i): %s: Does not have librdkafka\n",
                 file_name, file_line, tok);
             #endif
+        }
+        else if(!strncasecmp(tok,"http.",strlen("http.")))
+        {
+#ifndef HAVE_LIBRBHTTP
+            FatalError("alert_json: This plugin was not build using HTTP extensions");
+#else
+            char *end=NULL;
+            if(!strncmp(tok,"http.max_connections=",strlen("http.max_connections=")))
+            {
+                data->http.max_connections = strtoul(tok+strlen("http.max_connections="),&end,0);
+            }
+            else if (!strncmp(tok,"http.max_queued_messages=",strlen("http.max_queued_messages=")))
+            {
+                data->http.max_queued_messages = strtoul(tok+strlen("http.max_queued_messages="),&end,0);
+            }
+
+            if(NULL == end || *end != '\0')
+            {
+                FatalError("alert_json: Cannot parse HTTP %s parameter: Invalid value",tok);
+            }
+#endif
         }
         else if(!strncasecmp(tok,"eth_vendors=",strlen("eth_vendors=")))
         {
@@ -866,7 +896,8 @@ static void AlertJsonHTTPDelayedInit (AlertJSONData *this)
             __FUNCTION__);
     }
 
-    this->http.handler = rb_http_handler (this->http.url, 10, 10000, errstr, sizeof(errstr));
+    this->http.handler = rb_http_handler (this->http.url, this->http.max_connections,
+        this->http.max_queued_messages, errstr, sizeof(errstr));
 
     if(NULL==this->http.handler)
     {

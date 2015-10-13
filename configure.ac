@@ -16,10 +16,10 @@ ADD_WERROR="no"
 # Test for -Werror and sed it out for now since some of the auto tests,
 # for example AC_CHECK_LIB, will fail because of
 # warning: conflicting types for built-in function <func>
-if eval "echo $CFLAGS | grep -e -Werror"; then
-    CFLAGS=`echo $CFLAGS | sed -e "s/-Werror//g"`
-    ADD_WERROR="yes"
-fi
+#if eval "echo $CFLAGS | grep -e -Werror"; then
+#    CFLAGS=`echo $CFLAGS | sed -e "s/-Werror//g"`
+#    ADD_WERROR="yes"
+#fi
 
 # Disable annoying practice of recursively re-running the autotools
 AM_MAINTAINER_MODE

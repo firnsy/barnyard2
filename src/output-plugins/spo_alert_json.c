@@ -311,8 +311,11 @@ typedef struct _AlertJSONData
 #endif
 #ifdef HAVE_LIBRBHTTP
     struct {
-        size_t max_connections;
-        size_t max_queued_messages;
+        long max_connections;
+        long max_queued_messages;
+        long conn_timeout;
+        long req_timeout;
+        long verbose;
         int                    do_poll;
         pthread_t              poll_thread;
         const char *url;
@@ -596,19 +599,32 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
 #ifndef HAVE_LIBRBHTTP
             FatalError("alert_json: This plugin was not build using HTTP extensions");
 #else
+            /// @TODO use a function
             char *end=NULL;
             if(!strncmp(tok,"http.max_connections=",strlen("http.max_connections=")))
             {
-                data->http.max_connections = strtoul(tok+strlen("http.max_connections="),&end,0);
+                data->http.max_connections = strtol(tok+strlen("http.max_connections="),&end,0);
             }
             else if (!strncmp(tok,"http.max_queued_messages=",strlen("http.max_queued_messages=")))
             {
-                data->http.max_queued_messages = strtoul(tok+strlen("http.max_queued_messages="),&end,0);
+                data->http.max_queued_messages = strtol(tok+strlen("http.max_queued_messages="),&end,0);
+            }
+            else if (!strncmp(tok,"http.conn_timeout=",strlen("http.conn_timeout=")))
+            {
+                data->http.conn_timeout = strtol(tok+strlen("http.conn_timeout="),&end,0);
+            }
+            else if (!strncmp(tok,"http.req_timeout=",strlen("http.req_timeout=")))
+            {
+                data->http.req_timeout = strtol(tok+strlen("http.req_timeout="),&end,0);
+            }
+            else if (!strncmp(tok,"http.verbose=",strlen("http.verbose=")))
+            {
+                data->http.verbose = strtol(tok+strlen("http.verbose="),&end,0);
             }
 
             if(NULL == end || *end != '\0')
             {
-                FatalError("alert_json: Cannot parse HTTP %s parameter: Invalid value",tok);
+                FatalError("alert_json: Cannot parse HTTP %s parameter: Invalid value\n",tok);
             }
 #endif
         }
@@ -856,10 +872,11 @@ static void AlertJsonKafkaDelayedInit (AlertJSONData *this)
 
 #ifdef HAVE_LIBRBHTTP
 static void HttpMsgDelivered(struct rb_http_handler_s * rb_http_handler,
-                           int status_code,
-                           const char * status_code_str,
-                           char * buff,size_t len,
-                           void * msg_opaque)
+                            int status_code,
+                            long http_code,
+                            const char * status_code_str,
+                            char * buff,size_t len,
+                            void * msg_opaque)
 {
     RefcntPrintbuf *rprintbuf = msg_opaque;
 
@@ -867,9 +884,17 @@ static void HttpMsgDelivered(struct rb_http_handler_s * rb_http_handler,
         FatalError("msg_delivered: Not valid magic"));
 
     if (unlikely(status_code))
+    {
         ErrorMessage("http Message delivery failed: (%d)%s\n",status_code,status_code_str);
+    }
+    else if(unlikely(http_code != 200))
+    {
+        ErrorMessage("alert_json: HTTP server returned %ld code\n",http_code);
+    }
     else if (unlikely(BcLogVerbose()))
+    {
         LogMessage("http Message delivered (%zd bytes)\n", len);
+    }
 
     DecRefcntPrintbuf(rprintbuf);
 }
@@ -886,8 +911,27 @@ void *HttpPollFuncion(void *vjsonData) {
     return NULL;
 }
 
+static void HTTPHandlerSetLongOpt(struct rb_http_handler_s *handler, 
+    const char *key,long val)
+{
+    char errstr[BUFSIZ];
+    char valbuf[BUFSIZ];
+    
+    snprintf(valbuf,sizeof(valbuf),"%ld",val);
+
+    const int rc = rb_http_handler_set_opt(handler,key,valbuf,errstr,
+        sizeof(errstr));
+
+    if(rc != 0)
+    {
+        FatalError("alert_json: Couldn't set option %s to %ld: %s\n",
+            key, val, errstr);
+    }
+}
+
 static void AlertJsonHTTPDelayedInit (AlertJSONData *this)
 {
+
     char errstr[256];
 
     if(!this->http.url)
@@ -896,8 +940,20 @@ static void AlertJsonHTTPDelayedInit (AlertJSONData *this)
             __FUNCTION__);
     }
 
-    this->http.handler = rb_http_handler (this->http.url, this->http.max_connections,
-        this->http.max_queued_messages, errstr, sizeof(errstr));
+    this->http.handler = rb_http_handler_create (this->http.url, 
+        errstr, sizeof(errstr));
+
+    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_MAX_TOTAL_CONNECTIONS", 
+        this->http.max_connections);
+    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_TIMEOUT", 
+        this->http.req_timeout);
+    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_CONNTTIMEOUT", 
+        this->http.conn_timeout);
+    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_VERBOSE", 
+        this->http.verbose);
+    HTTPHandlerSetLongOpt(this->http.handler, "RB_HTTP_MAX_MESSAGES", 
+        this->http.max_queued_messages);
+
 
     if(NULL==this->http.handler)
     {
@@ -2189,13 +2245,16 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSO
 
     if(NULL != jsonData->http.handler)
     {
-        rb_http_produce (jsonData->http.handler,
-            printbuf->buf,printbuf->bpos, 0 /* No flags */,rprintbuf);
+        char err[BUFSIZ];
 
-        if(0)
+        const int rc = rb_http_produce (jsonData->http.handler,
+            printbuf->buf,printbuf->bpos, 0 /* No flags */,err,sizeof(err),
+            rprintbuf);
+
+        if(rc != 0)
         {
             ErrorMessage("alert_json: Failed to produce HTTP message: %s",
-                rd_kafka_err2str(rd_kafka_errno2err(errno)));
+                err);
             DecRefcntPrintbuf(rprintbuf);
         }
     }

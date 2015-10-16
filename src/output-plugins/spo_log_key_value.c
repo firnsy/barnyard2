@@ -1,5 +1,7 @@
 /*
 ** Copyright (C) 2015 Colin Grady (@colingrady)
+** Copyright (C) 2002-2009 Sourcefire, Inc.
+** Copyright (C) 2002 Martin Roesch <roesch@sourcefire.com>
 **
 ** This program is free software; you can redistribute it and/or modify
 ** it under the terms of the GNU General Public License Version 2 as
@@ -80,7 +82,7 @@ static void logKeyValueHandler (Packet *, void *, uint32_t, void *);
 static void logKeyValueExit (int, void *);
 static void logKeyValueRestart (int, void *);
 static void logKeyValueCleanup (int, void *, const char *);
-
+char *logKeyValueAscii (const u_char *, int);
 
 
 void logKeyValueSetup (void)
@@ -300,7 +302,7 @@ static void logKeyValueHandler (Packet *p, void *orig_event, uint32_t event_type
                     packet_data = fasthex(p->data, p->dsize);
                     break;
                 case ENCODING_ASCII:
-                    packet_data = ascii(p->data, p->dsize);
+                    packet_data = logKeyValueAscii(p->data, p->dsize);
                     break;
             }
 
@@ -348,4 +350,51 @@ static void logKeyValueCleanup (int signal, void *arg, const char *msg)
     }
 }
 
+
+char *logKeyValueAscii (const u_char *xdata, int length)
+{
+    char *d_ptr, *ret_val;
+    int i, count = 0;
+    int size;
+
+    if (xdata == NULL)
+        return NULL;
+
+    for (i = 0; i < length; i++)
+    {
+        if (xdata[i] == '"')
+            count += 6;      /* &quot; */
+    }
+
+    size = length + count + 1;
+    ret_val = (char *) calloc(1, size);
+
+    if (ret_val == NULL)
+    {
+        LogMessage("log_key_value: logKeyValueAscii(): Out of memory!\n");
+        return NULL;
+    }
+
+    d_ptr = ret_val;
+
+    for (i = 0; i < length; i++)
+    {
+        if ((xdata[i] > 0x1F) && (xdata[i] < 0x7F))
+        {
+            if(xdata[i] == '"')
+            {
+                SnortStrncpy(d_ptr, "&quot;", size - (d_ptr - ret_val));
+                d_ptr += 5;
+            }
+            else
+                *d_ptr++ = xdata[i];
+        }
+        else
+            *d_ptr++ = '.';
+    }
+
+    *d_ptr++ = '\0';
+
+    return ret_val;
+}
 

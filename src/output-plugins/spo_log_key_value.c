@@ -262,6 +262,9 @@ static void logKeyValueHandler (Packet *p, void *orig_event, uint32_t event_type
             TextLog_Puts(data->log, "hostname=sensor ");
     }
 
+    if (BcAlertInterface())
+        TextLog_Print(data->log, "iface=%s ", PRINT_INTERFACE(barnyard2_conf->interface));
+
     TextLog_Print(data->log, "id=\"%lu:%lu:%lu\" ", (unsigned long) ntohl(event->generator_id), (unsigned long) ntohl(event->signature_id), (unsigned long) ntohl(event->signature_revision));
 
     sn = GetSigByGidSid(ntohl(event->generator_id), ntohl(event->signature_id), ntohl(event->signature_revision));
@@ -279,9 +282,6 @@ static void logKeyValueHandler (Packet *p, void *orig_event, uint32_t event_type
         TextLog_Print(data->log, "class=\"%s\" priority=%d ", cn->name, cn->priority);
     else
         TextLog_Print(data->log, "class=%d priority=%d ", ntohl(event->classification_id), ntohl(event->priority_id));
-
-    if (BcAlertInterface())
-        TextLog_Print(data->log, "iface=%s ", PRINT_INTERFACE(barnyard2_conf->interface));
 
     if (IPH_IS_VALID(p))
     {

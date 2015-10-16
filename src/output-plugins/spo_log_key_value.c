@@ -213,10 +213,6 @@ static void logKeyValueHandler (Packet *p, void *orig_event, uint32_t event_type
     SigNode *sn;
     ClassType *cn;
     char *packet_data;
-    char timestamp[200];
-    int localzone;
-    time_t t;
-    struct tm *lt;
 
     // If there's no packet data, no need to continue
     if (p == NULL)
@@ -228,14 +224,18 @@ static void logKeyValueHandler (Packet *p, void *orig_event, uint32_t event_type
         return;
     }
 
-    localzone = barnyard2_conf->thiszone;
-    if (BcOutputUseUtc())
-        localzone = 0;
-
-    t = ntohl(event->event_second) + localzone;
-
     if (data->like_syslog)
     {
+        char timestamp[20];
+        int localzone;
+        time_t t;
+        struct tm *lt;
+
+        localzone = barnyard2_conf->thiszone;
+        if (BcOutputUseUtc())
+            localzone = 0;
+
+        t = ntohl(event->event_second) + localzone;
         lt = gmtime(&t);
 
         if (strftime(timestamp, sizeof(timestamp), "%h %e %T", lt))
@@ -246,13 +246,13 @@ static void logKeyValueHandler (Packet *p, void *orig_event, uint32_t event_type
         if (barnyard2_conf->hostname != NULL)
             TextLog_Print(data->log, "%s ", barnyard2_conf->hostname);
         else
-            TextLog_Puts(data->log, "hostname ");
+            TextLog_Puts(data->log, "sensor ");
 
         TextLog_Print(data->log, "barnyard[%d]: ", data->pid);
     }
     else
     {
-        TextLog_Print(data->log, "\%barnyard2 timestamp=%d ", t);
+        TextLog_Print(data->log, "\%barnyard2 timestamp=%d ", ntohl(event->event_second));
 
         if (barnyard2_conf->hostname != NULL)
             TextLog_Print(data->log, "hostname=%s ", barnyard2_conf->hostname);

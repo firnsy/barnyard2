@@ -384,7 +384,7 @@ char *logKeyValueAscii (const u_char *xdata, int length)
             if(xdata[i] == '"')
             {
                 SnortStrncpy(d_ptr, "&quot;", size - (d_ptr - ret_val));
-                d_ptr += 5;
+                d_ptr += 6;
             }
             else
                 *d_ptr++ = xdata[i];

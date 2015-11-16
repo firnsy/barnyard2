@@ -491,7 +491,7 @@ AC_ARG_ENABLE(prelude,
 [  --enable-prelude         Enable Prelude Hybrid IDS support],
        enable_prelude="$enableval", enable_prelude="no")
 if test "x$enable_prelude" = "xyes"; then
-    AM_PATH_LIBPRELUDE(0.9.6, use_prelude="yes", use_prelude="no", yesversion)
+    AM_PATH_LIBPRELUDE(0.9.6, use_prelude="yes", use_prelude="no", yes)
     if test "$use_prelude" = "yes"; then
         LDFLAGS="${LDFLAGS} ${LIBPRELUDE_LDFLAGS}"
         LIBS="$LIBS ${LIBPRELUDE_LIBS}"

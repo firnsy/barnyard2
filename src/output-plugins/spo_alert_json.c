@@ -100,8 +100,6 @@
 
 static const size_t initial_enrich_with_buf_len = 1024;
 
-// Send object_name or not.
-// Note: Always including ,sensor_name,domain_name,group_name,src_net_name,src_as_name,dst_net_name,dst_as_name
 //#define SEND_NAMES
 
 #define DEFAULT_JSON_0 "timestamp,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,\

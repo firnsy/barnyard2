@@ -100,16 +100,7 @@
 
 static const size_t initial_enrich_with_buf_len = 1024;
 
-//#define SEND_NAMES
-
-#define DEFAULT_JSON_0 "timestamp,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,\
-    l4_proto,src,src_net,src_net_name,src_as,src_as_name,dst,dst_net,dst_net_name,dst_as,dst_as_name,\
-    l4_srcport,l4_dstport,ethsrc,ethdst,ethlen,ethlength_range,\
-    arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,\
-    tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
-
 #ifdef HAVE_GEOIP
-#define FIELDS_GEOIP ",src_country,dst_country,src_country_code,dst_country_code" /* link with previous string */
 #define X_RB_GEOIP \
     _X(SRC_COUNTRY,"src_country","src_country",stringFormat,"N/A") \
     _X(DST_COUNTRY,"dst_country","dst_country",stringFormat,"N/A") \
@@ -120,28 +111,22 @@ static const size_t initial_enrich_with_buf_len = 1024;
     _X(SRC_AS_NAME,"src_as_name","src_as_name",stringFormat,"N/A") \
     _X(DST_AS_NAME,"dst_as_name","dst_as_name",stringFormat,"N/A")
 #else
-#define FIELDS_GEOIP 
 #define X_RB_GEOIP
 #endif
 
 #ifdef HAVE_RB_MAC_VENDORS
-#define FIELDS_MAC_VENDORS ",ethsrc_vendor,ethdst_vendor"
 #define X_RB_MAC_VENDORS \
     _X(ETHSRC_VENDOR,"ethsrc_vendor","ethsrc_vendor",stringFormat,"-") \
     _X(ETHDST_VENDOR,"ethdst_vendor","ethdst_vendor",stringFormat,"-")
 #else
-#define FIELDS_MAC_VENDORS
 #define X_RB_MAC_VENDORS
 #endif
 
 #ifdef SEND_NAMES
-#define FIELDS_PROTO_NAMES ",l4_proto_name,src_name,dst_name,l4_srcport_name,l4_dstport_name,vlan_name"
 #else
-#define FIELDS_PROTO_NAMES
 #endif
 
 #ifdef RB_EXTRADATA
-#define FIELDS_EXTRADATA ",sha256,file_size,file_hostname,file_uri,email_sender,email_destinations" //email_headers not included
 #define X_RB_EXTRADATA \
     _X(SHA256,"sha256","sha256",stringFormat,"-") \
     _X(FILE_SIZE,"file_size","file_size",stringFormat,"-") \
@@ -151,11 +136,8 @@ static const size_t initial_enrich_with_buf_len = 1024;
     _X(EMAIL_DESTINATIONS,"email_destinations","email_destinations",stringFormat,"-")
     //_X(EMAIL_HEADERS,"email_headers","email_headers",stringFormat,"-")
 #else
-#define FIELDS_EXTRADATA
 #define X_RB_EXTRADATA
 #endif
-
-#define DEFAULT_JSON DEFAULT_JSON_0 FIELDS_GEOIP FIELDS_MAC_VENDORS FIELDS_PROTO_NAMES FIELDS_EXTRADATA
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"
@@ -165,7 +147,6 @@ static const size_t initial_enrich_with_buf_len = 1024;
 #define KAFKA_PROT "kafka://"
 #define HTTP_PROT  "http://"
 #define HTTPS_PROT "https://"
-//#define KAFKA_TOPIC "rb_ips"
 #define FILENAME_KAFKA_SEPARATOR '+'
 #define BROKER_TOPIC_SEPARATOR   '@'
 
@@ -241,6 +222,14 @@ typedef enum{
     X_FUNCTION_TEMPLATE
     #undef _X
 }TEMPLATE_ID;
+
+static const char DEFAULT_JSON0[] =
+    #define _X(a,b,c,d,e) "," b
+    X_FUNCTION_TEMPLATE
+    #undef _X
+    ;
+
+static const char *DEFAULT_JSON = DEFAULT_JSON0+1;  // Not getting first comma
 
 typedef enum{stringFormat,numericFormat} JsonPrintFormat;
 

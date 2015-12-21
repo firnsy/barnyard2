@@ -42,21 +42,6 @@
 #include "config.h"
 #endif
 
-#include <sys/types.h>
-#include <stdio.h>
-#include <stdlib.h>
-#ifndef WIN32
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#endif /* !WIN32 */
-
-#ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif
-
-#include "decode.h"
-#include "plugbase.h"
 #include "parser.h"
 #include "debug.h"
 #include "mstring.h"
@@ -71,13 +56,15 @@
 #include "rbutil/rb_numstrpair_list.h"
 #include "rbutil/rb_pointers.h"
 #include "rbutil/rb_unified2.h"
-#include "errno.h"
-#include "signal.h"
-#include "log_text.h"
 
 #ifdef HAVE_RB_MAC_VENDORS
 #include "rb_mac_vendors.h"
 #endif
+
+#include <errno.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <math.h>
 
 #ifdef HAVE_GEOIP
 #include "GeoIP.h"
@@ -96,9 +83,6 @@
 #include <librd/rd.h>
 #include <rbutil/rb_printbuf.h>
 
-#include "math.h"
-
-static const size_t initial_enrich_with_buf_len = 1024;
 
 #ifdef HAVE_GEOIP
 #define X_RB_GEOIP \
@@ -122,10 +106,6 @@ static const size_t initial_enrich_with_buf_len = 1024;
 #define X_RB_MAC_VENDORS
 #endif
 
-#ifdef SEND_NAMES
-#else
-#endif
-
 #ifdef RB_EXTRADATA
 #define X_RB_EXTRADATA \
     _X(SHA256,"sha256","sha256",stringFormat,"-") \
@@ -141,8 +121,6 @@ static const size_t initial_enrich_with_buf_len = 1024;
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"
-#define DEFAULT_LIMIT (128*M_BYTES)
-#define LOG_BUFFER    (30*K_BYTES)
 
 #define KAFKA_PROT "kafka://"
 #define HTTP_PROT  "http://"
@@ -216,7 +194,6 @@ static const size_t initial_enrich_with_buf_len = 1024;
     X_RB_GEOIP \
     _X(TEMPLATE_END_ID,"","",numericFormat,"0")
 
-/* If you change some of this, remember to change printElementWithTemplate too */
 typedef enum{
     #define _X(a,b,c,d,e) a,
     X_FUNCTION_TEMPLATE

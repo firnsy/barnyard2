@@ -134,7 +134,6 @@
 #define X_FUNCTION_TEMPLATE \
     _X(TIMESTAMP,"timestamp","timestamp",numericFormat,"0") \
     _X(SENSOR_ID_SNORT,"sensor_id_snort","sensor_id_snort",numericFormat,"0") \
-    _X(TYPE,"type","type",stringFormat,"-") \
     _X(ACTION,"action","action",stringFormat,"-") \
     _X(SIG_GENERATOR,"sig_generator","sig_generator",numericFormat,"0") \
     _X(SIG_ID,"sig_id","sig_id",numericFormat,"0") \
@@ -161,7 +160,6 @@
     _X(UDPLENGTH,"udplength","udplength",numericFormat,"0") \
     _X(ETHLENGTH,"ethlen","ethlength",numericFormat,"0") \
     _X(ETHLENGTH_RANGE,"ethlength_range","ethlength_range",stringFormat,"0") \
-    _X(TRHEADER,"trheader","trheader",stringFormat,"-") \
     _X(SRCPORT,"l4_srcport","src_port",numericFormat,"0") \
     _X(SRCPORT_NAME,"l4_srcport_name","src_port_name",stringFormat,"-") \
     _X(DSTPORT,"l4_dstport","dst_port",numericFormat,"0") \

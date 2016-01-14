@@ -217,10 +217,16 @@ typedef struct{
     char * defaultValue;
 }  AlertJSONTemplateElement;
 
-typedef struct _TemplateElementsList{
+typedef struct _TemplateElement{
     AlertJSONTemplateElement * templateElement;
-    struct _TemplateElementsList * next;
-} TemplateElementsList;
+    TAILQ_ENTRY(_TemplateElement) qentry;
+} TemplateElement;
+
+#define OutputTemplate TAILQ_HEAD(,_TemplateElement)
+#define output_template_init TAILQ_INIT
+#define output_template_append(t,elm) TAILQ_INSERT_TAIL(t,elm,qentry)
+#define output_template_first(t) TAILQ_FIRST(t)
+#define output_template_foreach(elm,t) TAILQ_FOREACH(elm,t,qentry)
 
 static const uint64_t RPRINTBUF_MAGIC = 0x1ba1c1ba1c1ba1c;
 
@@ -243,7 +249,7 @@ typedef struct _AlertJSONData
 {
     RefcntPrintbuf *curr_printbuf;
     char * jsonargs;
-    TemplateElementsList * outputTemplate;
+    OutputTemplate output_template;
     Number_str_assoc * hosts, *nets, *services, *protocols, *vlans;
     char *enrich_with;
 #ifdef HAVE_GEOIP
@@ -636,16 +642,24 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     mSplitFree(&toks, num_toks);
     toks = mSplit(data->jsonargs, ",", 128, &num_toks, 0);
 
+    output_template_init(&data->output_template);
+
     for(i=0;i<num_toks;++i){
         int j;
         for(j=0;;++j){
             if(template[j].id==TEMPLATE_END_ID)
                 FatalError("alert_json: Cannot parse template element %s\n",toks[i]);
             if(!strcmp(template[j].templateName,toks[i])){
-                TemplateElementsList ** templateIterator = &data->outputTemplate;
-                while(*templateIterator!=NULL) templateIterator=&(*templateIterator)->next;
-                *templateIterator = SnortAlloc(sizeof(TemplateElementsList));
-                (*templateIterator)->templateElement = &template[j];
+                TemplateElement *elm = SnortAlloc(sizeof(elm[0]));
+                if (NULL != elm)
+                {
+                    elm->templateElement = &template[j];
+                    output_template_append(&data->output_template,elm);
+                }
+                else
+                {
+                    FatalError("alert_json: Cannot allocate template element (out of memory?)\n");
+                }
                 break;
             }
         }
@@ -935,7 +949,7 @@ static void AlertJsonHTTPDelayedInit (AlertJSONData *this)
 static void AlertJSONCleanup(int signal, void *arg, const char* msg)
 {
     AlertJSONData *data = (AlertJSONData *)arg;
-    TemplateElementsList *iter,*aux;
+    TemplateElement *template_element = NULL;
     /* close alert file */
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"%s\n", msg););
 
@@ -993,9 +1007,9 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
         freeNumberStrAssocList(data->services);
         freeNumberStrAssocList(data->protocols);
         freeNumberStrAssocList(data->vlans);
-        for(iter=data->outputTemplate;iter;iter=aux){
-            aux = iter->next;
-            free(iter);
+        while((template_element = output_template_first(&data->output_template)))
+        {
+            free(template_element);
         }
 
         /* free memory from SpoJSONData */
@@ -2108,7 +2122,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
  */
 static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSONData * jsonData)
 {
-    TemplateElementsList * iter;
+    TemplateElement * iter;
 
     RefcntPrintbuf *rprintbuf = calloc(1,sizeof(*rprintbuf));
     if(NULL == rprintbuf) {
@@ -2130,11 +2144,13 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSO
 
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Logging JSON Alert data\n"););
     printbuf_memappend_fast_str(printbuf,"{");
-    for(iter=jsonData->outputTemplate;iter;iter=iter->next)
+    output_template_foreach(iter,&jsonData->output_template)
     {
         const int initial_pos = printbuf->bpos;
-        if(iter!=jsonData->outputTemplate)
+        if (iter!=output_template_first(&jsonData->output_template))
+        {
             printbuf_memappend_fast_str(printbuf,JSON_FIELDS_SEPARATOR);
+        }
 
         printbuf_memappend_fast_str(printbuf,"\"");
         printbuf_memappend_fast_str(printbuf,iter->templateElement->jsonName);

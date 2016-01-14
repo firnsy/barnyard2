@@ -65,6 +65,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <math.h>
+#include <sys/queue.h>
 
 #ifdef HAVE_GEOIP
 #include "GeoIP.h"
@@ -221,11 +222,6 @@ typedef struct _TemplateElementsList{
     struct _TemplateElementsList * next;
 } TemplateElementsList;
 
-typedef struct _AlertJSONConfig{
-    char *type;
-    struct _AlertJSONConfig *next;
-} AlertJSONConfig;
-
 static const uint64_t RPRINTBUF_MAGIC = 0x1ba1c1ba1c1ba1c;
 
 typedef struct _RefcntPrintbuf {
@@ -248,7 +244,6 @@ typedef struct _AlertJSONData
     RefcntPrintbuf *curr_printbuf;
     char * jsonargs;
     TemplateElementsList * outputTemplate;
-    AlertJSONConfig *config;
     Number_str_assoc * hosts, *nets, *services, *protocols, *vlans;
     char *enrich_with;
 #ifdef HAVE_GEOIP

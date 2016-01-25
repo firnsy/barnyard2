@@ -114,7 +114,8 @@
     _X(FILE_HOSTNAME,"file_hostname","file_hostname",stringFormat,"-") \
     _X(FILE_URI,"file_uri","file_uri",stringFormat,"-") \
     _X(EMAIL_SENDER,"email_sender","email_sender",stringFormat,"-") \
-    _X(EMAIL_DESTINATIONS,"email_destinations","email_destinations",stringFormat,"-")
+    _X(EMAIL_DESTINATIONS,"email_destinations","email_destinations",stringFormat,"-") \
+    _X(FTP_USER,"ftp_user","ftp_user",stringFormat,"-")
     //_X(EMAIL_HEADERS,"email_headers","email_headers",stringFormat,"-")
 #else
 #define X_RB_EXTRADATA
@@ -1513,6 +1514,17 @@ static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement,
                 printbuf_memappend_fast(printbuf, str, len);
             }
             break;
+
+        case FTP_USER:
+            if (event_info == EVENT_INFO_FTP_USER)
+            {
+                str = (char *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                printbuf_memappend_fast(printbuf, str, len);
+            }
+            break;
+
+
         /*
         case EMAIL_HEADERS:
             if (event_info == EVENT_INFO_FILE_MAILHEADERS)
@@ -1704,6 +1716,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case FILE_HOSTNAME:
         case EMAIL_SENDER:
         case EMAIL_DESTINATIONS:
+        case FTP_USER:
         //case EMAIL_HEADERS:
             if (event != NULL)
                 printElementExtraData(event, event_type, templateElement, printbuf);

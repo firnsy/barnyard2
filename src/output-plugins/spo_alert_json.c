@@ -115,7 +115,9 @@
     _X(FILE_URI,"file_uri","file_uri",stringFormat,"-") \
     _X(EMAIL_SENDER,"email_sender","email_sender",stringFormat,"-") \
     _X(EMAIL_DESTINATIONS,"email_destinations","email_destinations",stringFormat,"-") \
-    _X(FTP_USER,"ftp_user","ftp_user",stringFormat,"-")
+    _X(FTP_USER,"ftp_user","ftp_user",stringFormat,"-") \
+    _X(SMB_UID,"smb_uid","smb_uid", numericFormat, "0") \
+    _X(SMB_UPLOAD,"smb_upload","smb_upload",numericFormat,"-")
     //_X(EMAIL_HEADERS,"email_headers","email_headers",stringFormat,"-")
 #else
 #define X_RB_EXTRADATA
@@ -1523,7 +1525,35 @@ static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement,
                 printbuf_memappend_fast(printbuf, str, len);
             }
             break;
+        case SMB_UID:
+            if (event_info == EVENT_INFO_SMB_UID) {
+                {
+                char buf[sizeof "00"];
+                const size_t buflen = sizeof buf;
+                uint16_t uid = ntohs(*(uint16_t *)(U2ExtraData+1));
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                printbuf_memappend_fast_str(printbuf, itoa10(uid, buf, buflen));
+                }
+            }
+            break;
+        case SMB_UPLOAD:
+            if (event_info == EVENT_INFO_SMB_IS_UPLOAD) {
+                {
+                const char * true_str = "true";
+                const char * false_str = "false";
+                char buf[sizeof "0"];
+                const size_t buflen = sizeof buf;
+                uint8_t uid = *((uint8_t *)(U2ExtraData+1));
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
 
+                itoa10(uid, buf, buflen);
+                if (strcmp(buf, "0") == 0)
+                    printbuf_memappend_fast(printbuf, false_str, strlen(false_str));
+                else
+                    printbuf_memappend_fast(printbuf, true_str, strlen(true_str));
+                }
+            }
+            break;
 
         /*
         case EMAIL_HEADERS:
@@ -1717,6 +1747,8 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case EMAIL_SENDER:
         case EMAIL_DESTINATIONS:
         case FTP_USER:
+        case SMB_UID:
+        case SMB_UPLOAD:
         //case EMAIL_HEADERS:
             if (event != NULL)
                 printElementExtraData(event, event_type, templateElement, printbuf);

@@ -195,7 +195,9 @@ typedef enum _EventInfoEnum
 #else
     EVENT_INFO_GZIP_DATA,
 #endif
-    EVENT_INFO_FTP_USER
+    EVENT_INFO_FTP_USER,         /* 21 */
+    EVENT_INFO_SMB_UID,          /* 22 */
+    EVENT_INFO_SMB_IS_UPLOAD,    /* 23 */
 }EventInfoEnum;
 
 typedef enum _EventDataType

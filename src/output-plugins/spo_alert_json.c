@@ -76,7 +76,7 @@
 #endif
 
 #ifdef HAVE_LIBRBHTTP
-#include <librbhttp/librb-http.h>
+#include <librbhttp/rb_http_handler.h>
 #define MAX_HTTP_DEFAULT_CONECTIONS 10
 #define MAX_HTTP_DEFAULT_QUEUED_MESSAGES 10000
 #endif
@@ -917,17 +917,20 @@ static void AlertJsonHTTPDelayedInit (AlertJSONData *this)
     this->http.handler = rb_http_handler_create (this->http.url,
         errstr, sizeof(errstr));
 
-    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_MAX_TOTAL_CONNECTIONS",
-        this->http.max_connections);
+    HTTPHandlerSetLongOpt(this->http.handler, "RB_HTTP_CONNECTIONS",
+                          this->http.max_connections);
     HTTPHandlerSetLongOpt(this->http.handler, "HTTP_TIMEOUT",
-        this->http.req_timeout);
+                          this->http.req_timeout);
     HTTPHandlerSetLongOpt(this->http.handler, "HTTP_CONNTTIMEOUT",
-        this->http.conn_timeout);
+                          this->http.conn_timeout);
     HTTPHandlerSetLongOpt(this->http.handler, "HTTP_VERBOSE",
-        this->http.verbose);
+                          this->http.verbose);
     HTTPHandlerSetLongOpt(this->http.handler, "RB_HTTP_MAX_MESSAGES",
-        this->http.max_queued_messages);
+                          this->http.max_queued_messages);
+    HTTPHandlerSetLongOpt(this->http.handler, "RB_HTTP_MODE",
+                          1);
 
+    rb_http_handler_run(this->http.handler);
 
     if(NULL==this->http.handler)
     {

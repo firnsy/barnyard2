@@ -13550,12 +13550,12 @@ fi
 
 
 if test "x$enable_rbhttp" = "x$enableval"; then
-  for ac_header in librbhttp/librb-http.h
+  for ac_header in librbhttp/rb_http_handler.h
 do :
-  ac_fn_c_check_header_mongrel "$LINENO" "librbhttp/librb-http.h" "ac_cv_header_librbhttp_librb_http_h" "$ac_includes_default"
-if test "x$ac_cv_header_librbhttp_librb_http_h" = xyes; then :
+  ac_fn_c_check_header_mongrel "$LINENO" "librbhttp/rb_http_handler.h" "ac_cv_header_librbhttp_rb_http_handler_h" "$ac_includes_default"
+if test "x$ac_cv_header_librbhttp_rb_http_handler_h" = xyes; then :
   cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBRBHTTP_LIBRB_HTTP_H 1
+#define HAVE_LIBRBHTTP_RB_HTTP_HANDLER_H 1
 _ACEOF
 
 else

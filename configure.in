@@ -252,7 +252,7 @@ AC_ARG_ENABLE(rb-http,
        enable_rbhttp="$enableval", enable_rbhttp="no")
 
 if test "x$enable_rbhttp" = "x$enableval"; then
-  AC_CHECK_HEADERS([librbhttp/librb-http.h],[],
+  AC_CHECK_HEADERS([librbhttp/rb_http_handler.h],[],
       [
         echo "Error: redBorder HTTP headers not found."
         exit 1

@@ -1,0 +1,326 @@
+/* config.h.in.  Generated from configure.in by autoheader.  */
+
+/* Define if building universal (internal helper macro) */
+#undef AC_APPLE_UNIVERSAL_BUILD
+
+/* Define if AIX */
+#undef AIX
+
+/* Define if broken SIOCGIFMTU */
+#undef BROKEN_SIOCGIFMTU
+
+/* Define if BSDi */
+#undef BSDI
+
+/* Define if CYGWIN */
+#undef CYGWIN
+
+/* Define if errlist is predefined */
+#undef ERRLIST_PREDEFINED
+
+/* Define if FreeBSD */
+#undef FREEBSD
+
+/* Define to 1 if you have the <dlfcn.h> header file. */
+#undef HAVE_DLFCN_H
+
+/* Have MaxMind GeoIP */
+#undef HAVE_GEOIP
+
+/* Define to 1 if you have the <GeoIP.h> header file. */
+#undef HAVE_GEOIP_H
+
+/* Define to 1 if the system has the type `int16_t'. */
+#undef HAVE_INT16_T
+
+/* Define to 1 if the system has the type `int32_t'. */
+#undef HAVE_INT32_T
+
+/* Define to 1 if the system has the type `int64_t'. */
+#undef HAVE_INT64_T
+
+/* Define to 1 if the system has the type `int8_t'. */
+#undef HAVE_INT8_T
+
+/* Define to 1 if you have the <inttypes.h> header file. */
+#undef HAVE_INTTYPES_H
+
+/* Define to 1 if you have the `crypto' library (-lcrypto). */
+#undef HAVE_LIBCRYPTO
+
+/* Define to 1 if you have the `curl' library (-lcurl). */
+#undef HAVE_LIBCURL
+
+/* Define to 1 if you have the `GeoIP' library (-lGeoIP). */
+#undef HAVE_LIBGEOIP
+
+/* Define to 1 if you have the `json' library (-ljson). */
+#undef HAVE_LIBJSON
+
+/* Define to 1 if you have the `m' library (-lm). */
+#undef HAVE_LIBM
+
+/* Define to 1 if you have the `nsl' library (-lnsl). */
+#undef HAVE_LIBNSL
+
+/* Define to 1 if you have the `pcap' library (-lpcap). */
+#undef HAVE_LIBPCAP
+
+/* Define to 1 if you have the `pfring' library (-lpfring). */
+#undef HAVE_LIBPFRING
+
+/* Define to 1 if you have the `pq' library (-lpq). */
+#undef HAVE_LIBPQ
+
+/* Define whether Prelude support is enabled */
+#undef HAVE_LIBPRELUDE
+
+/* Define to 1 if you have the `rbhttp' library (-lrbhttp). */
+#undef HAVE_LIBRBHTTP
+
+/* Define to 1 if you have the <librbhttp/rb_http_handler.h> header file. */
+#undef HAVE_LIBRBHTTP_RB_HTTP_HANDLER_H
+
+/* Define to 1 if you have the `rb_mac_vendors' library (-lrb_mac_vendors). */
+#undef HAVE_LIBRB_MAC_VENDORS
+
+/* Define to 1 if you have the `rd' library (-lrd). */
+#undef HAVE_LIBRD
+
+/* Define to 1 if you have the `rdkafka' library (-lrdkafka). */
+#undef HAVE_LIBRDKAFKA
+
+/* Define to 1 if you have the <librdkafka/rdkafka.h> header file. */
+#undef HAVE_LIBRDKAFKA_RDKAFKA_H
+
+/* Define to 1 if you have the <librd/rd.h> header file. */
+#undef HAVE_LIBRD_RD_H
+
+/* Define to 1 if you have the `socket' library (-lsocket). */
+#undef HAVE_LIBSOCKET
+
+/* Define to 1 if you have the `websockets' library (-lwebsockets). */
+#undef HAVE_LIBWEBSOCKETS
+
+/* Define to 1 if you have the `wpcap' library (-lwpcap). */
+#undef HAVE_LIBWPCAP
+
+/* Define to 1 if you have the `z' library (-lz). */
+#undef HAVE_LIBZ
+
+/* Define whether linuxthreads is being used */
+#undef HAVE_LINUXTHREADS
+
+/* Define to 1 if you have the <math.h> header file. */
+#undef HAVE_MATH_H
+
+/* Define to 1 if you have the <memory.h> header file. */
+#undef HAVE_MEMORY_H
+
+/* Define to 1 if you have the <paths.h> header file. */
+#undef HAVE_PATHS_H
+
+/* Define to 1 if you have the <pcap.h> header file. */
+#undef HAVE_PCAP_H
+
+/* Define to 1 if you have the <pfring.h> header file. */
+#undef HAVE_PFRING_H
+
+/* Define if PQping exists. */
+#undef HAVE_PQPING
+
+/* Have redborder mac vendors library */
+#undef HAVE_RB_MAC_VENDORS
+
+/* Define to 1 if you have the <rb_mac_vendors.h> header file. */
+#undef HAVE_RB_MAC_VENDORS_H
+
+/* Define to 1 if you have the `snprintf' function. */
+#undef HAVE_SNPRINTF
+
+/* Define to 1 if you have the <stdint.h> header file. */
+#undef HAVE_STDINT_H
+
+/* Define to 1 if you have the <stdlib.h> header file. */
+#undef HAVE_STDLIB_H
+
+/* Define to 1 if you have the `strerror' function. */
+#undef HAVE_STRERROR
+
+/* Define to 1 if you have the <strings.h> header file. */
+#undef HAVE_STRINGS_H
+
+/* Define to 1 if you have the <string.h> header file. */
+#undef HAVE_STRING_H
+
+/* Define to 1 if you have the `strlcat' function. */
+#undef HAVE_STRLCAT
+
+/* Define to 1 if you have the `strlcpy' function. */
+#undef HAVE_STRLCPY
+
+/* Define to 1 if you have the `strtoul' function. */
+#undef HAVE_STRTOUL
+
+/* Define to 1 if you have the <sys/sockio.h> header file. */
+#undef HAVE_SYS_SOCKIO_H
+
+/* Define to 1 if you have the <sys/stat.h> header file. */
+#undef HAVE_SYS_STAT_H
+
+/* Define to 1 if you have the <sys/types.h> header file. */
+#undef HAVE_SYS_TYPES_H
+
+/* Define to 1 if the system has the type `uint16_t'. */
+#undef HAVE_UINT16_T
+
+/* Define to 1 if the system has the type `uint32_t'. */
+#undef HAVE_UINT32_T
+
+/* Define to 1 if the system has the type `uint64_t'. */
+#undef HAVE_UINT64_T
+
+/* Define to 1 if the system has the type `uint8_t'. */
+#undef HAVE_UINT8_T
+
+/* Define to 1 if you have the <unistd.h> header file. */
+#undef HAVE_UNISTD_H
+
+/* Define to 1 if the system has the type `u_int16_t'. */
+#undef HAVE_U_INT16_T
+
+/* Define to 1 if the system has the type `u_int32_t'. */
+#undef HAVE_U_INT32_T
+
+/* Define to 1 if the system has the type `u_int64_t'. */
+#undef HAVE_U_INT64_T
+
+/* Define to 1 if the system has the type `u_int8_t'. */
+#undef HAVE_U_INT8_T
+
+/* Define to 1 if you have the `vsnprintf' function. */
+#undef HAVE_VSNPRINTF
+
+/* Define to 1 if you have the `vswprintf' function. */
+#undef HAVE_VSWPRINTF
+
+/* Define to 1 if you have the <wchar.h> header file. */
+#undef HAVE_WCHAR_H
+
+/* Define to 1 if you have the `wprintf' function. */
+#undef HAVE_WPRINTF
+
+/* Define if the compiler understands __FUNCTION__. */
+#undef HAVE___FUNCTION__
+
+/* Define if the compiler understands __func__. */
+#undef HAVE___func__
+
+/* Define if HP-UX 10 or 11 */
+#undef HPUX
+
+/* For INADDR_NONE definition */
+#undef INADDR_NONE
+
+/* Define if Irix 6 */
+#undef IRIX
+
+/* Define if Linux */
+#undef LINUX
+
+/* Define to the sub-directory in which libtool stores uninstalled libraries.
+   */
+#undef LT_OBJDIR
+
+/* Define if MacOS */
+#undef MACOS
+
+/* For MySQL versions 5.0.13 and greater */
+#undef MYSQL_HAS_OPT_RECONNECT
+
+/* For MySQL versions 5.0.13 to 5.0.18 */
+#undef MYSQL_HAS_OPT_RECONNECT_BUG
+
+/* Define if OpenBSD < 2.3 */
+#undef OPENBSD
+
+/* Define if Tru64 */
+#undef OSF1
+
+/* Name of package */
+#undef PACKAGE
+
+/* Define to the address where bug reports for this package should be sent. */
+#undef PACKAGE_BUGREPORT
+
+/* Define to the full name of this package. */
+#undef PACKAGE_NAME
+
+/* Define to the full name and version of this package. */
+#undef PACKAGE_STRING
+
+/* Define to the one symbol short name of this package. */
+#undef PACKAGE_TARNAME
+
+/* Define to the home page for this package. */
+#undef PACKAGE_URL
+
+/* Define to the version of this package. */
+#undef PACKAGE_VERSION
+
+/* Define if pcap timeout is ignored */
+#undef PCAP_TIMEOUT_IGNORED
+
+/* Define whether application use libtool >= 2.0 */
+#undef PRELUDE_APPLICATION_USE_LIBTOOL2
+
+/* ExtraData collection */
+#undef RB_EXTRADATA
+
+/* The size of `char', as computed by sizeof. */
+#undef SIZEOF_CHAR
+
+/* The size of `int', as computed by sizeof. */
+#undef SIZEOF_INT
+
+/* The size of `long int', as computed by sizeof. */
+#undef SIZEOF_LONG_INT
+
+/* The size of `long long int', as computed by sizeof. */
+#undef SIZEOF_LONG_LONG_INT
+
+/* The size of `short', as computed by sizeof. */
+#undef SIZEOF_SHORT
+
+/* The size of `unsigned int', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED_INT
+
+/* The size of `unsigned long int', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED_LONG_INT
+
+/* The size of `unsigned long long int', as computed by sizeof. */
+#undef SIZEOF_UNSIGNED_LONG_LONG_INT
+
+/* Define if Solaris */
+#undef SOLARIS
+
+/* For sparc v9 with %time register */
+#undef SPARCV9
+
+/* Define to 1 if you have the ANSI C header files. */
+#undef STDC_HEADERS
+
+/* Define if SunOS */
+#undef SUNOS
+
+/* Version number of package */
+#undef VERSION
+
+/* Define if words are big endian */
+#undef WORDS_BIGENDIAN
+
+/* Define if words must align */
+#undef WORDS_MUSTALIGN
+
+/* Define __FUNCTION__ as required. */
+#undef __FUNCTION__

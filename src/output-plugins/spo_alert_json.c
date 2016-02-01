@@ -371,7 +371,7 @@ static void AlertJSONInit(char *args)
 #ifdef HAVE_LIBRDKAFKA
 
 /* Extracted from Magnus Edenhill's kafkacat */
-static rd_kafka_conf_res_t 
+static rd_kafka_conf_res_t
 rdkafka_add_attr_to_config(rd_kafka_conf_t *rk_conf,rd_kafka_topic_conf_t *topic_conf,
                     const char *name,const char *val,char *errstr,size_t errstr_size){
     if (!strcmp(name, "list") ||
@@ -396,7 +396,7 @@ rdkafka_add_attr_to_config(rd_kafka_conf_t *rk_conf,rd_kafka_topic_conf_t *topic
     return res;
 }
 
-static rd_kafka_conf_res_t 
+static rd_kafka_conf_res_t
 rdkafka_add_str_to_config(rd_kafka_conf_t *rk_conf, rd_kafka_topic_conf_t *rkt_conf,
             const char *_keyval, char *errstr,size_t errstr_size){
 
@@ -634,7 +634,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     /* DFEFAULT VALUES */
     if ( !data->jsonargs ) data->jsonargs = SnortStrdup(DEFAULT_JSON);
     if ( !filename ) filename = ProcessFileOption(barnyard2_conf_for_parsing, DEFAULT_FILE);
-    
+
     /* names-str assoc */
     if(hostsListPath) FillHostsList(hostsListPath,&data->hosts,HOSTS);
     if(networksPath) FillHostsList(networksPath,&data->nets,NETWORKS);
@@ -750,8 +750,8 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         data->kafka.topic = SnortStrdup(at_char+1);
 
         /*
-         * In DaemonMode(), kafka must start in another function, because, in daemon mode, Barnyard2Main will execute this 
-         * function, will do a fork() and then, in the child process, will call RealAlertJSON, that will not be able to 
+         * In DaemonMode(), kafka must start in another function, because, in daemon mode, Barnyard2Main will execute this
+         * function, will do a fork() and then, in the child process, will call RealAlertJSON, that will not be able to
          * send kafka data */
 
         free(kafka_str);
@@ -781,7 +781,7 @@ static void KafkaMsgDelivered (rd_kafka_t *rk,
                void *opaque, void *msg_opaque)
 {
     RefcntPrintbuf *rprintbuf = msg_opaque;
-    
+
     DEBUG_WRAP(if(RPRINTBUF_MAGIC!=rprintbuf->magic)
         FatalError("msg_delivered: Not valid magic"));
 
@@ -822,7 +822,7 @@ static void AlertJsonKafkaDelayedInit (AlertJSONData *this)
     if(NULL==this->kafka.rk)
         FatalError("Failed to create new producer: %s\n",errstr);
 
-    if (rd_kafka_brokers_add(this->kafka.rk, this->kafka.brokers) == 0) 
+    if (rd_kafka_brokers_add(this->kafka.rk, this->kafka.brokers) == 0)
         FatalError("Kafka: No valid brokers specified in %s\n",this->kafka.brokers);
 
     this->kafka.rkt = rd_kafka_topic_new(this->kafka.rk, this->kafka.topic, this->kafka.rkt_conf);
@@ -885,12 +885,12 @@ void *HttpPollFuncion(void *vjsonData) {
     return NULL;
 }
 
-static void HTTPHandlerSetLongOpt(struct rb_http_handler_s *handler, 
+static void HTTPHandlerSetLongOpt(struct rb_http_handler_s *handler,
     const char *key,long val)
 {
     char errstr[BUFSIZ];
     char valbuf[BUFSIZ];
-    
+
     snprintf(valbuf,sizeof(valbuf),"%ld",val);
 
     const int rc = rb_http_handler_set_opt(handler,key,valbuf,errstr,
@@ -914,18 +914,18 @@ static void AlertJsonHTTPDelayedInit (AlertJSONData *this)
             __FUNCTION__);
     }
 
-    this->http.handler = rb_http_handler_create (this->http.url, 
+    this->http.handler = rb_http_handler_create (this->http.url,
         errstr, sizeof(errstr));
 
-    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_MAX_TOTAL_CONNECTIONS", 
+    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_MAX_TOTAL_CONNECTIONS",
         this->http.max_connections);
-    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_TIMEOUT", 
+    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_TIMEOUT",
         this->http.req_timeout);
-    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_CONNTTIMEOUT", 
+    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_CONNTTIMEOUT",
         this->http.conn_timeout);
-    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_VERBOSE", 
+    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_VERBOSE",
         this->http.verbose);
-    HTTPHandlerSetLongOpt(this->http.handler, "RB_HTTP_MAX_MESSAGES", 
+    HTTPHandlerSetLongOpt(this->http.handler, "RB_HTTP_MAX_MESSAGES",
         this->http.max_queued_messages);
 
 
@@ -1041,14 +1041,14 @@ static void AlertJSON(Packet *p, void *event, uint32_t event_type, void *arg)
  * Function: C++ version 0.4 char* style "itoa", Written by Lukás Chmela. (Modified)
  *
  * Purpose: Fast itoa conversion. snprintf is slow.
- * 
+ *
  * Arguments:   value => Number.
  *             result => Where to save result
  *               base => Number base.
  *
  * Return: result
  * TODO: Return writed buffer lenght.
- * 
+ *
  */
 char* _itoa(uint64_t value, char* result, int base, size_t bufsize) {
     // check that the base if valid
@@ -1156,7 +1156,7 @@ static int extract_ip0(sfip_t *ip,const void *_event, uint32_t event_type, Packe
     case UNIFIED2_PACKET:
         // Does not have information in the event -> trying to get it from the packet
         return extract_ip_from_packet(ip,p,srcdst_req);
-        
+
 
     case UNIFIED2_IDS_EVENT:
     case UNIFIED2_IDS_EVENT_VLAN:
@@ -1171,7 +1171,7 @@ static int extract_ip0(sfip_t *ip,const void *_event, uint32_t event_type, Packe
             {
                 ipv4 = ((Unified2IDSEvent *)_event)->ip_destination;
             }
-            
+
             const int rc = sfip_set_raw(ip,&ipv4,AF_INET);
             if(p && rc != SFIP_SUCCESS)
                 return extract_ip_from_packet(ip,p,srcdst_req);
@@ -1449,7 +1449,7 @@ static char *extract_AS(AlertJSONData *jsonData,const sfip_t *ip)
 #endif
 
 #ifdef RB_EXTRADATA
-static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement, 
+static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement,
     struct printbuf *printbuf, Unified2ExtraData *U2ExtraData)
 {
     uint32_t    event_info;     /* type in Unified2 Event */
@@ -1573,7 +1573,7 @@ static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement,
     return 0;
 }
 
-static int printElementExtraData(void *event, uint32_t event_type, 
+static int printElementExtraData(void *event, uint32_t event_type,
     AlertJSONTemplateElement *templateElement, struct printbuf *printbuf)
 {
     uint32_t                event_data_type;        /* datatype in Unified2 Event*/
@@ -1632,7 +1632,7 @@ static int printElementExtraData(void *event, uint32_t event_type,
  * Returns: 0 if nothing writed to jsonData. !=0 otherwise.
  *
  */
-static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type, 
+static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         AlertJSONData *jsonData, AlertJSONTemplateElement *templateElement,
         struct printbuf *printbuf)
 {
@@ -1710,7 +1710,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             if(event != NULL){
                 const int priority_id = ntohl(((Unified2EventCommon *)event)->priority_id);
                 const char *prio_name = NULL;
-                if(priority_id < sizeof(priority_name)/sizeof(priority_name[0])) 
+                if(priority_id < sizeof(priority_name)/sizeof(priority_name[0]))
                     prio_name = priority_name[priority_id];
                 printbuf_memappend_fast_str(printbuf,prio_name ? prio_name : templateElement->defaultValue);
             }
@@ -1933,7 +1933,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case SRCPORT_NAME:
         case DSTPORT_NAME:
             {
-                const uint16_t port = templateElement->id==SRCPORT_NAME? 
+                const uint16_t port = templateElement->id==SRCPORT_NAME?
                     extract_src_port(event, event_type, p)
                     :extract_dst_port(event, event_type, p);
                 Number_str_assoc * service_name_asoc = SearchNumberStr(port,jsonData->services);
@@ -1951,7 +1951,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case SRCPORT:
         case DSTPORT:
             {
-                const uint16_t port = templateElement->id==SRCPORT? 
+                const uint16_t port = templateElement->id==SRCPORT?
                     extract_src_port(event, event_type, p)
                     :extract_dst_port(event, event_type, p);
 
@@ -2083,7 +2083,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
                 printbuf_memappend_fast_str(printbuf,itoa10(GET_IPH_TTL(p),buf,bufLen));
             break;
 
-        case TOS: 
+        case TOS:
             if(p && IPH_IS_VALID(p))
                 printbuf_memappend_fast_str(printbuf,itoa10(GET_IPH_TOS(p),buf,bufLen));
             break;

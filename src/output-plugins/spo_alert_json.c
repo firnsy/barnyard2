@@ -978,13 +978,12 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
 
             if(data->kafka.rkt)
             {
-                // @TODO
-                // rdkafka_topic_destroy(data->kafka.rkt);
+                 rd_kafka_topic_destroy(data->kafka.rkt);
             }
 
             rd_kafka_destroy(data->kafka.rk);
-            // @TODO
-            // rd_kafka_wait_destroyed();
+            while(rd_kafka_wait_destroyed(1000) == -1);
+
         }
 #endif
 

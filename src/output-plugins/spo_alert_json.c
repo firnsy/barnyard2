@@ -1013,8 +1013,10 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
         freeNumberStrAssocList(data->services);
         freeNumberStrAssocList(data->protocols);
         freeNumberStrAssocList(data->vlans);
-        while((template_element = output_template_first(&data->output_template)))
-        {
+
+        while(!TAILQ_EMPTY(&data->output_template)) {
+            template_element = output_template_first(&data->output_template);
+            TAILQ_REMOVE(&data->output_template, template_element, qentry);
             free(template_element);
         }
 

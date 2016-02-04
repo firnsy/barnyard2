@@ -1007,6 +1007,10 @@ static void AlertJSONCleanup(int signal, void *arg, const char* msg)
         }
 #endif // HAVE_GEOIP
 
+#ifdef HAVE_RB_MAC_VENDORS
+        if(data->eth_vendors_db)
+            rb_destroy_mac_vendor_db(data->eth_vendors_db);
+#endif
         free(data->jsonargs);
         freeNumberStrAssocList(data->hosts);
         freeNumberStrAssocList(data->nets);

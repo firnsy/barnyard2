@@ -1513,7 +1513,10 @@ static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement,
             {
                 str = (char *)(U2ExtraData+1);
                 len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
-                printbuf_memappend_fast(printbuf, str, len);
+                if (len >1 && str[0]=='<' && str[len-1] == '>')
+                    printbuf_memappend_fast(printbuf, str+1, len-2);
+                else
+                    printbuf_memappend_fast(printbuf, str, len);
             }
             break;
         case EMAIL_DESTINATIONS:

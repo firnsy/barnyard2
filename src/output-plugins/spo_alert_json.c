@@ -1457,6 +1457,22 @@ static char *extract_AS(AlertJSONData *jsonData,const sfip_t *ip)
 #endif
 
 #ifdef RB_EXTRADATA
+/*
+ * Function: printMail(const char *, struct printbuf *)
+ *
+ * Purpose: Write an Unified2 extradata mail in printbuf
+ *
+ * Arguments:     mail => mail <test@test.com>
+ *            printbuf => printed mail with no <,>
+ * Returns: printed characters.
+ */
+static void printMail(const char *mail,int len, struct printbuf *printbuf) {
+    if (len >1 && mail[0]=='<' && mail[len-1] == '>')
+        printbuf_memappend_fast(printbuf, mail+1, len-2);
+    else
+        printbuf_memappend_fast(printbuf, mail, len);
+}
+
 static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement,
     struct printbuf *printbuf, Unified2ExtraData *U2ExtraData)
 {
@@ -1511,12 +1527,9 @@ static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement,
         case EMAIL_SENDER:
             if (event_info == EVENT_INFO_FILE_MAILFROM)
             {
-                str = (char *)(U2ExtraData+1);
+                str = (U2ExtraData+1);
                 len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
-                if (len >1 && str[0]=='<' && str[len-1] == '>')
-                    printbuf_memappend_fast(printbuf, str+1, len-2);
-                else
-                    printbuf_memappend_fast(printbuf, str, len);
+                printMail(str,len,printbuf);
             }
             break;
         case EMAIL_DESTINATIONS:

@@ -1527,7 +1527,7 @@ static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement,
         case EMAIL_SENDER:
             if (event_info == EVENT_INFO_FILE_MAILFROM)
             {
-                str = (U2ExtraData+1);
+                str = (char *)(U2ExtraData+1);
                 len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
                 printMail(str,len,printbuf);
             }
@@ -1535,45 +1535,34 @@ static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement,
         case EMAIL_DESTINATIONS:
             if (event_info == EVENT_INFO_FILE_RCPTTO)
             {
-                const char delimiter[6] = ">,<";
-                int with_comma = 0;
-                char *substring;
-                int cursor = 0;
-                int str_len = 0;
-                int size_email = 0;
-
-                str = (char *)(U2ExtraData+1);
+                str = (const char *)(U2ExtraData+1);
                 len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+
+                /*
+                 * str is:
+                 *   <rcpt1@redborder.net>,<rcpt2@redborder.net>,<rcpt3@redborder.net>
+                 * need it in json way
+                 *   ["rcpt1@redborder.net","rcpt2@redborder.net","rcpt3@redborder.net"]
+                 */
 
                 printbuf_memappend_fast(printbuf, "[", 1);
 
-                if (len >1 && str[0]=='<') {
-                       substring = strstr(str, delimiter);
-                       cursor = 1;
-                }
+                const char *cursor = str;
+                while(cursor)
+                {
+                    const char *end = memchr(cursor,',',len);
+                    if (cursor != str)
+                    {
+                        printbuf_memappend_fast_str(printbuf, ",");
+                    }
 
-                str_len = strlen(str);
+                    int mail_len = end ? end - cursor : len - (cursor - str);
 
-                while (substring != NULL) {
-                    if (with_comma != 0)
-                        printbuf_memappend_fast(printbuf, ",", strlen(","));
+                    printbuf_memappend_fast_str(printbuf, "\\\"");
+                    printMail(cursor, mail_len, printbuf);
+                    printbuf_memappend_fast_str(printbuf, "\\\"");
 
-                    size_email = str_len - strlen(substring) - cursor;
-                    printbuf_memappend_fast(printbuf, (const char *)"\\\"", strlen("\\\""));
-                    printbuf_memappend_fast(printbuf, (const char *)str + cursor, size_email);
-                    printbuf_memappend_fast(printbuf, (const char *)"\\\"", strlen("\\\""));
-                    cursor = cursor + size_email + 3;
-                    with_comma = 1;
-                    substring = strstr(str + cursor, delimiter);
-                }
-
-                if ((cursor < str_len) && str[cursor -1]=='<' && str[str_len - 1] == '>') {
-                    size_email = str_len - cursor;
-                    if (with_comma != 0)
-                        printbuf_memappend_fast(printbuf, ",", strlen(","));
-                    printbuf_memappend_fast(printbuf, (const char *)"\\\"", strlen("\\\""));
-                    printbuf_memappend_fast(printbuf, (const char *)str + cursor, size_email);
-                    printbuf_memappend_fast(printbuf, (const char *)"\\\"", strlen("\\\""));
+                    cursor = end ? end + 1 : NULL;
                 }
 
                 printbuf_memappend_fast(printbuf, "]", 1);

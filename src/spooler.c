@@ -537,7 +537,6 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
             spoolerFireLastEvent(spooler);
             AlarmClear();
         }
-        else
 #endif
         /* act according to current spooler state */
         switch(spooler->state)

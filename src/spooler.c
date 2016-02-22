@@ -743,58 +743,67 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
     /* check if it's packet */
     if (type == UNIFIED2_PACKET)
     {
+#ifdef RB_EXTRADATA
+        if (spooler->record.data != NULL)
+        {
+            /* convert event id once */
+            uint32_t event_id = ntohl(((Unified2Packet *)spooler->record.data)->event_id);
+
+            /* check if there is a previously cached event that matches this event id */
+            ernCache = spoolerEventCacheGetByEventID(spooler, event_id);
+
+            datalink = ntohl(((Unified2Packet *)spooler->record.data)->linktype);
+
+            /* if the packet and cached event share the same id */
+            if (ernCache != NULL)
+            {
+                /* add the packet into the cached event */
+                switch (ernCache->type)
+                {
+                    case UNIFIED2_IDS_EVENT:
+                        /* if there is no previous packet */
+                        if (((Unified2IDSEvent_legacy_WithPED *)ernCache->data)->packet == NULL)
+                            ((Unified2IDSEvent_legacy_WithPED *)ernCache->data)->packet = spoolerAllocateFirstPacket(spooler);
+                        /* when != NULL there is a previous packet cached with the event. do nothing here. */
+                        break;
+                    case UNIFIED2_IDS_EVENT_MPLS:
+                    case UNIFIED2_IDS_EVENT_VLAN:
+                        /* if there is no previous packet */
+                        if (((Unified2IDSEvent_WithPED *)ernCache->data)->packet == NULL)
+                            ((Unified2IDSEvent_WithPED *)ernCache->data)->packet = spoolerAllocateFirstPacket(spooler);
+                        /* when != NULL there is a previous packet cached with the event. do nothing here. */
+                        break;
+                    case UNIFIED2_IDS_EVENT_IPV6:
+                        /* if there is no previous packet */
+                        if (((Unified2IDSEventIPv6_legacy_WithPED *)ernCache->data)->packet == NULL)
+                            ((Unified2IDSEventIPv6_legacy_WithPED *)ernCache->data)->packet = spoolerAllocateFirstPacket(spooler);
+                        /* when != NULL there is a previous packet cached with the event. do nothing here. */
+                        break;
+                    case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+                    case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+                        /* if there is no previous packet */
+                        if (((Unified2IDSEventIPv6_WithPED *)ernCache->data)->packet == NULL)
+                            ((Unified2IDSEventIPv6_WithPED *)ernCache->data)->packet = spoolerAllocateFirstPacket(spooler);
+                        /* when != NULL there is a previous packet cached with the event. do nothing here. */
+                        break;
+                    default:
+                        LogMessage("WARNING: spoolerProcessRecord(): type inconsistent (%d)\n", ernCache->type);
+                    break;
+                }
+            }
+            //else
+            //{
+                // We are assuming that a packet record will never show up before an event record does
+                // This hypothetical case should be taken into account after testings
+            //}
+        }
+#else
         /* convert event id once */
         uint32_t event_id = ntohl(((Unified2Packet *)spooler->record.data)->event_id);
 
         /* check if there is a previously cached event that matches this event id */
         ernCache = spoolerEventCacheGetByEventID(spooler, event_id);
 
-#ifdef RB_EXTRADATA
-        datalink = ntohl(((Unified2Packet *)spooler->record.data)->linktype);
-
-        /* if the packet and cached event share the same id */
-        if (ernCache != NULL)
-        {
-            /* add the packet into the cached event */
-            switch (ernCache->type)
-            {
-                case UNIFIED2_IDS_EVENT:
-                    /* if there is no previous packet */
-                    if (((Unified2IDSEvent_legacy_WithPED *)ernCache->data)->packet == NULL)
-                        ((Unified2IDSEvent_legacy_WithPED *)ernCache->data)->packet = spoolerAllocateFirstPacket(spooler);
-                    /* when != NULL there is a previous packet cached with the event. do nothing here. */
-                    break;
-                case UNIFIED2_IDS_EVENT_MPLS:
-                case UNIFIED2_IDS_EVENT_VLAN:
-                    /* if there is no previous packet */
-                    if (((Unified2IDSEvent_WithPED *)ernCache->data)->packet == NULL)
-                        ((Unified2IDSEvent_WithPED *)ernCache->data)->packet = spoolerAllocateFirstPacket(spooler);
-                    /* when != NULL there is a previous packet cached with the event. do nothing here. */
-                    break;
-                case UNIFIED2_IDS_EVENT_IPV6:
-                    /* if there is no previous packet */
-                    if (((Unified2IDSEventIPv6_legacy_WithPED *)ernCache->data)->packet == NULL)
-                        ((Unified2IDSEventIPv6_legacy_WithPED *)ernCache->data)->packet = spoolerAllocateFirstPacket(spooler);
-                    /* when != NULL there is a previous packet cached with the event. do nothing here. */
-                    break;
-                case UNIFIED2_IDS_EVENT_IPV6_MPLS:
-                case UNIFIED2_IDS_EVENT_IPV6_VLAN:
-                    /* if there is no previous packet */
-                    if (((Unified2IDSEventIPv6_WithPED *)ernCache->data)->packet == NULL)
-                        ((Unified2IDSEventIPv6_WithPED *)ernCache->data)->packet = spoolerAllocateFirstPacket(spooler);
-                    /* when != NULL there is a previous packet cached with the event. do nothing here. */
-                    break;
-                default:
-                    LogMessage("WARNING: spoolerProcessRecord(): type inconsistent (%d)\n", ernCache->type);
-                break;
-            }
-        }
-        //else
-        //{
-            // We are assuming that a packet record will never show up before an event record does
-            // This hypothetical case should be taken into account after testings
-        //}
-#else
         /* allocate space for the packet and construct the packet header */
         spooler->record.pkt = SnortAlloc(sizeof(Packet));
 
@@ -917,24 +926,27 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
     else if (type == UNIFIED2_EXTRA_DATA)
     {
 #ifdef RB_EXTRADATA
-        /* convert event id once */
-        uint32_t event_id = ntohl(((Unified2ExtraData *)(((Unified2ExtraDataHdr *)spooler->record.data)+1))->event_id);
-
-        /* check if there is a previously cached event that matches this event id */
-        ernCache = spoolerEventCacheGetByEventID(spooler, event_id);
-
-        /* if the packet and cached event share the same id */
-        if ( ernCache != NULL )
+        if (spooler->record.data != NULL)
         {
-            /* include extra data record */
-            spoolerExtraDataCachePush(spooler, type, spooler->record.data, ernCache);
-            spooler->record.data = NULL;
+            /* convert event id once */
+            uint32_t event_id = ntohl(((Unified2ExtraData *)(((Unified2ExtraDataHdr *)spooler->record.data)+1))->event_id);
+
+            /* check if there is a previously cached event that matches this event id */
+            ernCache = spoolerEventCacheGetByEventID(spooler, event_id);
+
+            /* if the packet and cached event share the same id */
+            if ( ernCache != NULL )
+            {
+                /* include extra data record */
+                spoolerExtraDataCachePush(spooler, type, spooler->record.data, ernCache);
+                spooler->record.data = NULL;
+            }
+            //else
+            //{
+                // We are assuming that an extra data record will never show up before an event record does
+                // This hypothetical case should be taken into account after testings
+            //}
         }
-        //else
-        //{
-            // We are assuming that an extra data record will never show up before an event record does
-            // This hypothetical case should be taken into account after testings
-        //}
 #endif
 
         /* waldo operations occur after the output plugins are called */
@@ -1415,6 +1427,8 @@ static int spoolerCallOutputPluginsByERN(EventRecordNode *ern)
     int ret;
 
     if (ern == NULL)
+        ret = 0;
+    else if (ern->data == NULL)
         ret = 0;
     else
     {

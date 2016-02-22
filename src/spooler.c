@@ -69,6 +69,11 @@ static int spoolerExtraDataCachePush(Spooler *, uint32_t, void *, EventRecordNod
 static void spoolerFireLastEvent(Spooler *);
 static int spoolerCallOutputPluginsByERN (EventRecordNode *);
 static int spoolerExtraDataCacheClean(EventRecordNode *ern);
+static void spoolerPrint(Spooler *, int);
+static void spoolerPrintRecord(Spooler *, int);
+static void spoolerPrintERN(EventRecordNode *, int);
+static void spoolerPrintEDRN(ExtraDataRecordNode *, int);
+static void spoolerPrintU2ED (Unified2ExtraData *, const char *);
 #endif
 
 /* Find the next spool file timestamp extension with a value equal to or 
@@ -1561,5 +1566,375 @@ static int spoolerExtraDataCacheClean(EventRecordNode *ern)
     }
 
     return 0;
+}
+
+/*
+    Print a formated output of spooler
+    printType:
+        0: No print.
+        1: Print.
+        2: Full print.
+*/
+static void spoolerPrint(Spooler *spooler, int printType)
+{
+    EventRecordNode *ern;
+
+    if (spooler == NULL)
+    {
+        LogMessage("spoolerPrint(): spooler is NULL\n");
+        return;
+    }
+
+    switch (printType)
+    {
+        case 0:
+            LogMessage ("spoolerPrint(): No print\n");
+            break;
+        case 1:
+        case 2:
+            LogMessage ("spoolerPrint(): Print\n");
+            LogMessage ("fd (file descriptor): %d\n", spooler->fd);
+            LogMessage ("filepath: %s\n", spooler->filepath);
+            LogMessage ("timestamp: %u\n", (unsigned int) spooler->timestamp);
+            LogMessage ("state: %u\n", spooler->state);
+            LogMessage ("offset: %u\n", spooler->offset);
+            LogMessage ("record_idx: %u\n", spooler->record_idx);
+            LogMessage ("magic: %u\n", spooler->magic);
+            LogMessage ("header (header of input file): 0x%lu\n", (long unsigned int) spooler->header);
+
+            // Print current record and related ERN if exists
+            LogMessage ("[Current Record]\n");
+            spoolerPrintRecord(spooler, printType);
+
+            // Print every ERN
+            LogMessage ("events_cached: %u\n", spooler->events_cached);
+            if (printType == 2)
+            {
+                LogMessage ("[ERN from spooler->event_cache]\n");
+                TAILQ_FOREACH(ern, &spooler->event_cache, entry)
+                {
+                    LogMessage ("ern->data->event_id: %u\n", ntohl(((Unified2EventCommon *)ern->data)->event_id));
+                    spoolerPrintERN(ern, printType);
+                }
+            }
+
+            LogMessage ("packets_cached: %u\n", spooler->packets_cached);
+
+            break;
+    }
+    LogMessage ("\n");
+}
+
+static void spoolerPrintRecord(Spooler *spooler, int printType)
+{
+    uint32_t type;
+    uint32_t event_id = -1;
+    EventRecordNode *ern;
+
+    if (spooler->record.header != NULL)
+    {
+        type = ntohl(((Unified2RecordHeader *)spooler->record.header)->type);
+        switch (type)
+        {
+            case UNIFIED2_PACKET:
+                LogMessage ("  spooler->record.header->type = %u (UNIFIED2_PACKET)\n", type);
+                break;
+            case UNIFIED2_IDS_EVENT:
+            case UNIFIED2_IDS_EVENT_IPV6:
+            case UNIFIED2_IDS_EVENT_MPLS:
+            case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+            case UNIFIED2_IDS_EVENT_VLAN:
+            case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+                LogMessage ("  spooler->record.header->type = %u (UNIFIED2_IDS_EVENT*)\n", type);
+                break;
+            case UNIFIED2_EXTRA_DATA:
+                LogMessage ("  spooler->record.header->type = %u (UNIFIED2_EXTRA_DATA)\n", type);
+                break;
+            default:
+                LogMessage ("  spooler->record.header->type = %u (Unknown)\n", type);
+                return; // revisar si el return es lo mejor
+        }
+    }
+    else
+        LogMessage ("  spooler->record.header is NULL\n");
+
+    if (spooler->record.data != NULL)
+    {
+        switch (type)
+        {
+            case UNIFIED2_PACKET:
+            case UNIFIED2_IDS_EVENT:
+            case UNIFIED2_IDS_EVENT_IPV6:
+            case UNIFIED2_IDS_EVENT_MPLS:
+            case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+            case UNIFIED2_IDS_EVENT_VLAN:
+            case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+                event_id = ntohl(((Unified2EventCommon *)spooler->record.data)->event_id);
+                LogMessage ("  spooler->record.data->event_id = %u\n", event_id);
+                break;
+            case UNIFIED2_EXTRA_DATA:
+                event_id = ntohl(((Unified2ExtraData *)(((Unified2ExtraDataHdr *)spooler->record.data)+1))->event_id);
+                LogMessage ("  spooler->record.data->event_id = %u\n", event_id);
+                spoolerPrintU2ED((Unified2ExtraData *)(((Unified2ExtraDataHdr *)spooler->record.data)+1), "record.data");
+                break;
+            default:
+                event_id = 0;
+                LogMessage ("  spooler->record.data->event_id could not be catched\n");
+        }
+    }
+    else
+        LogMessage ("  spooler->record.data is NULL\n");
+
+    if (spooler->record.pkt != NULL)
+    {
+        LogMessage ("  spooler->record.pkt: [");
+        uint16_t i;
+        uint16_t max = 16; // packet payload bytes to print
+        max = spooler->record.pkt->dsize>max?max:spooler->record.pkt->dsize;
+        if(spooler->record.pkt && spooler->record.pkt->dsize>0){
+            for(i=0;i<max;++i)
+                LogMessage ("%x",spooler->record.pkt->data[i]);
+        }else{
+            LogMessage ("NULL");
+        }
+        LogMessage ("]\n");
+    }
+    else
+        LogMessage ("  spooler->record.pkt is NULL\n");
+
+
+    if (event_id > 0)
+    {
+        ern = spoolerEventCacheGetByEventID(spooler, event_id);
+        LogMessage ("[ERN of this Record]\n");
+        spoolerPrintERN(ern, printType);
+    }
+}
+
+static void spoolerPrintERN(EventRecordNode *ern, int printType)
+{
+    ExtraDataRecordCache *edrc;
+    ExtraDataRecordNode *edrn, *edrn_next;
+    Packet *p = NULL;
+
+    if (ern != NULL)
+    {
+        switch (ern->type)
+        {
+            case UNIFIED2_IDS_EVENT:
+                LogMessage ("  ern->type = %u (UNIFIED2_IDS_EVENT)\n", ern->type);
+                break;
+            case UNIFIED2_IDS_EVENT_MPLS:
+            case UNIFIED2_IDS_EVENT_VLAN:
+                LogMessage ("  ern->type = %u (UNIFIED2_IDS_EVENT_MPLS/VLAN)\n", ern->type);
+                break;
+            case UNIFIED2_IDS_EVENT_IPV6:
+                LogMessage ("  ern->type = %u (UNIFIED2_IDS_EVENT_IPV6)\n", ern->type);
+                break;
+            case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+            case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+                LogMessage ("  ern->type = %u (UNIFIED2_IDS_EVENT_IPV6_MPLS/VLAN)\n", ern->type);
+                break;
+            default:
+                LogMessage("  ern->type = %u (Unknown)\n", ern->type);
+                break;
+        }
+
+        if (ern->data != NULL)
+        {
+            switch (ern->type)
+            {
+                case UNIFIED2_IDS_EVENT:
+                    p = (Packet *) ((Unified2IDSEvent_legacy_WithPED *)ern->data)->packet;
+                    edrc = &((Unified2IDSEvent_legacy_WithPED *)(ern->data))->extra_data_cache;
+                    break;
+                case UNIFIED2_IDS_EVENT_MPLS:
+                case UNIFIED2_IDS_EVENT_VLAN:
+                    p = (Packet *) ((Unified2IDSEvent_WithPED *)ern->data)->packet;
+                    edrc = &((Unified2IDSEvent_WithPED *)(ern->data))->extra_data_cache;
+                    break;
+                case UNIFIED2_IDS_EVENT_IPV6:
+                    p = (Packet *) ((Unified2IDSEventIPv6_legacy_WithPED *)ern->data)->packet;
+                    edrc = &((Unified2IDSEventIPv6_legacy_WithPED *)(ern->data))->extra_data_cache;
+                    break;
+                case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+                case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+                    p = (Packet *) ((Unified2IDSEventIPv6_WithPED *)ern->data)->packet;
+                    edrc = &((Unified2IDSEventIPv6_WithPED *)(ern->data))->extra_data_cache;
+                    break;
+                default:
+                    p = NULL;
+                    edrc = NULL;
+                    break;
+            }
+
+            if (p != NULL)
+            {
+                LogMessage ("  ern->data->packet: [");
+                uint16_t i;
+                uint16_t max = 16; // packet payload bytes to print
+                max = p->dsize>max?max:p->dsize;
+                if(p && p->dsize>0){
+                    for(i=0;i<max;++i)
+                        LogMessage ("%x",p->data[i]);
+                }else{
+                    LogMessage ("NULL");
+                }
+                LogMessage ("]\n");
+            }
+            else
+                LogMessage ("  ern->data->packet is NULL\n");
+
+            if (edrc != NULL)
+            {
+                if (!TAILQ_EMPTY(edrc))
+                {
+                    LogMessage ("  [EDRN from ern->data->extra_data_cache]\n");
+                    TAILQ_FOREACH_SAFE(edrn, edrn_next, edrc, entry)
+                    {
+                        spoolerPrintEDRN(edrn, printType);
+                    }
+                }
+            }
+            else
+                LogMessage ("  ern->data->extra_data_cache is NULL\n");
+        }
+        else
+            LogMessage ("  ern->data is NULL\n");
+
+        LogMessage("  ern->used = %u\n", ern->used);
+    }
+    else
+        LogMessage ("  ern is NULL\n");
+}
+
+static void spoolerPrintEDRN(ExtraDataRecordNode *edrn, int printType)
+{
+    if (edrn != NULL)
+    {
+        switch (edrn->type)
+        {
+            case UNIFIED2_IDS_EVENT:
+                LogMessage ("  WRONG! edrn->type = %u (UNIFIED2_IDS_EVENT)\n", edrn->type);
+                break;
+            case UNIFIED2_IDS_EVENT_MPLS:
+            case UNIFIED2_IDS_EVENT_VLAN:
+                LogMessage ("  WRONG! edrn->type = %u (UNIFIED2_IDS_EVENT_MPLS/VLAN)\n", edrn->type);
+                break;
+            case UNIFIED2_IDS_EVENT_IPV6:
+                LogMessage ("  WRONG! edrn->type = %u (UNIFIED2_IDS_EVENT_IPV6)\n", edrn->type);
+                break;
+            case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+            case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+                LogMessage ("  WRONG! edrn->type = %u (UNIFIED2_IDS_EVENT_IPV6_MPLS/VLAN)\n", edrn->type);
+                break;
+            case UNIFIED2_EXTRA_DATA:
+                LogMessage ("  edrn->type = %u (UNIFIED2_EXTRA_DATA)\n", edrn->type);
+                break;
+            default:
+                LogMessage("  edrn->type = %u (Unknown)\n", edrn->type);
+                break;
+        }
+
+        if (edrn->data != NULL)
+            spoolerPrintU2ED((Unified2ExtraData *)(((Unified2ExtraDataHdr *)edrn->data)+1), "edrn->data");
+        else
+            LogMessage ("    edrn->data is NULL\n");
+
+        LogMessage("    edrn->used = %u\n", edrn->used);
+    }
+    else
+        LogMessage ("    edrn is NULL\n");
+}
+
+static void spoolerPrintU2ED (Unified2ExtraData *U2ExtraData, const char *source)
+{
+    uint32_t type;
+    uint32_t data_type;
+    uint32_t blob_length;
+    const uint8_t *sha_str;
+    const char *str;
+    int len;
+    uint16_t smb_uid;
+
+    type = ntohl(U2ExtraData->type); // data->type
+    data_type = ntohl(U2ExtraData->data_type); // data->data_type
+    blob_length = ntohl(U2ExtraData->blob_length); // data->blob_length
+
+    switch (type)
+    {
+        case EVENT_INFO_FILE_SHA256:
+            LogMessage ("    %s->type: %u (EVENT_INFO_FILE_SHA256)\n", source, type);
+            LogMessage ("    %s->sha256: [", source);
+            sha_str = (uint8_t *)(U2ExtraData+1);
+            len = (int) (blob_length - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+            uint16_t i;
+            if(sha_str && len>0)
+                for(i=0; i<len; ++i)
+                    LogMessage("%x",sha_str[i]);
+            else
+                LogMessage("NULL");
+            LogMessage("]\n");
+            break;
+        case EVENT_INFO_FILE_SIZE:
+            LogMessage ("    %s->type: %u (EVENT_INFO_FILE_SIZE)\n", source, type);
+            str = (char *)(U2ExtraData+1);
+            len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+            LogMessage("    %s->file_size: %s\n", source, str);
+            break;
+        case EVENT_INFO_FILE_NAME:
+            LogMessage ("    %s->type: %u (EVENT_INFO_FILE_NAME)\n", source, type);
+            str = (char *)(U2ExtraData+1);
+            len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+            LogMessage("    %s->file_name: %s\n", source, str);
+            break;
+        case EVENT_INFO_FILE_HOSTNAME:
+            LogMessage ("    %s->type: %u (EVENT_INFO_FILE_HOSTNAME)\n", source, type);
+            str = (char *)(U2ExtraData+1);
+            len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+            LogMessage("    %s->file_hostname: %s\n", source, str);
+            break;
+        case EVENT_INFO_FILE_MAILFROM:
+            LogMessage ("    %s->type: %u (EVENT_INFO_FILE_MAILFROM)\n", source, type);
+            str = (char *)(U2ExtraData+1);
+            len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+            LogMessage("    %s->email_sender: %s\n", source, str);
+            break;
+        case EVENT_INFO_FILE_RCPTTO:
+            LogMessage ("    %s->type: %u (EVENT_INFO_FILE_RCPTTO)\n", source, type);
+            str = (char *)(U2ExtraData+1);
+            len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+            LogMessage("    %s->email_destinations: %s\n", source, str);
+            break;
+        case EVENT_INFO_FILE_EMAIL_HDRS:
+            LogMessage ("    %s->type: %u (EVENT_INFO_FILE_EMAIL_HDRS)\n", source, type);
+            str = (char *)(U2ExtraData+1);
+            len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+            LogMessage("    %s->email_headers: %s\n", source, str);
+            break;
+        case EVENT_INFO_FTP_USER:
+            LogMessage ("    %s->type: %u (EVENT_INFO_FTP_USER)\n", source, type);
+            str = (char *)(U2ExtraData+1);
+            len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+            LogMessage("    %s->ftp_user: %s\n", source, str);
+            break;
+        case EVENT_INFO_SMB_UID:
+            LogMessage ("    %s->type: %u (EVENT_INFO_SMB_UID)\n", source, type);
+            smb_uid = ntohs(*(uint16_t *)(U2ExtraData+1));
+            len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+            LogMessage ("    %s->smb_uid: %u", source, smb_uid);
+            break;
+        case EVENT_INFO_SMB_IS_UPLOAD:
+            LogMessage ("    %s->type: %u (EVENT_INFO_SMB_IS_UPLOAD)\n", source, type);
+            smb_uid = ntohs(*(uint16_t *)(U2ExtraData+1));
+            len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+            if (smb_uid == 0)
+                LogMessage ("    %s->smb_upload: false", source);
+            else
+                LogMessage ("    %s->smb_upload: true", source);
+            break;
+        default:
+            break;
+    }
 }
 #endif

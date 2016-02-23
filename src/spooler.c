@@ -74,6 +74,8 @@ static void spoolerPrintRecord(Spooler *, int);
 static void spoolerPrintERN(EventRecordNode *, int);
 static void spoolerPrintEDRN(ExtraDataRecordNode *, int);
 static void spoolerPrintU2ED (Unified2ExtraData *, const char *);
+static void spoolerPrintRecordPacket(Spooler *);
+static void spoolerPrintERNPacket(EventRecordNode *);
 #endif
 
 /* Find the next spool file timestamp extension with a value equal to or 
@@ -1950,5 +1952,113 @@ static void spoolerPrintU2ED (Unified2ExtraData *U2ExtraData, const char *source
         default:
             break;
     }
+}
+
+static void spoolerPrintRecordPacket(Spooler *spooler)
+{
+    uint32_t type;
+    uint32_t event_id = -1;
+    EventRecordNode *ern;
+
+    if (spooler->record.header != NULL)
+    {
+        type = ntohl(((Unified2RecordHeader *)spooler->record.header)->type);
+        if (type == UNIFIED2_PACKET)
+            LogMessage ("  spooler->record.header->type = %u (UNIFIED2_PACKET)\n", type);
+    }
+    else
+        LogMessage ("  spooler->record.header is NULL\n");
+
+    if (type == UNIFIED2_PACKET)
+    {
+        if (spooler->record.data != NULL)
+        {
+            event_id = ntohl(((Unified2EventCommon *)spooler->record.data)->event_id);
+            LogMessage ("  spooler->record.data->event_id = %u\n", event_id);
+        }
+        else
+            LogMessage ("  spooler->record.data is NULL\n");
+
+        /* Packets are never allocated in spooler->record.pkt
+        if (spooler->record.pkt != NULL)
+        {
+            LogMessage ("  (0x%x) ern->data->packet: (0x%x) [",
+                spooler->record.pkt, &(spooler->record.pkt->data[0]));
+            uint16_t i;
+            uint16_t max = 16; // packet payload bytes to print
+            max = spooler->record.pkt->dsize>max?max:spooler->record.pkt->dsize;
+            if(spooler->record.pkt && spooler->record.pkt->dsize>0){
+                for(i=0;i<max;++i)
+                    LogMessage ("%x",spooler->record.pkt->data[i]);
+            }else{
+                LogMessage ("NULL");
+            }
+            LogMessage ("]\n");
+        }
+        else
+            LogMessage ("  spooler->record.pkt is NULL\n");
+        //*/
+
+        if (event_id > 0)
+        {
+            ern = spoolerEventCacheGetByEventID(spooler, event_id);
+            spoolerPrintERNPacket(ern);
+        }
+    }
+}
+
+static void spoolerPrintERNPacket(EventRecordNode *ern)
+{
+    Packet *p = NULL;
+
+    if (ern != NULL)
+    {
+        if (ern->data != NULL)
+        {
+            switch (ern->type)
+            {
+                case UNIFIED2_IDS_EVENT:
+                    p = (Packet *) ((Unified2IDSEvent_legacy_WithPED *)ern->data)->packet;
+                    break;
+                case UNIFIED2_IDS_EVENT_MPLS:
+                case UNIFIED2_IDS_EVENT_VLAN:
+                    p = (Packet *) ((Unified2IDSEvent_WithPED *)ern->data)->packet;
+                    break;
+                case UNIFIED2_IDS_EVENT_IPV6:
+                    p = (Packet *) ((Unified2IDSEventIPv6_legacy_WithPED *)ern->data)->packet;
+                    break;
+                case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+                case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+                    p = (Packet *) ((Unified2IDSEventIPv6_WithPED *)ern->data)->packet;
+                    break;
+                default:
+                    p = NULL;
+                    break;
+            }
+
+            if (p != NULL)
+            {
+                LogMessage ("  (0x%x) ern->data->packet: (0x%x) [", p, &(p->data[0]));
+                uint16_t i;
+                uint16_t max = 16; // packet payload bytes to print
+                max = p->dsize>max?max:p->dsize;
+                if(p && p->dsize>0){
+                    for(i=0;i<max;++i)
+                        LogMessage ("%x",p->data[i]);
+                }else{
+                    LogMessage ("NULL");
+                }
+                LogMessage ("]\n");
+            }
+            else
+                LogMessage ("  ern->data->packet is NULL\n");
+        }
+        else
+            LogMessage ("  ern->data is NULL\n");
+
+        //LogMessage("  ern->used = %u\n", ern->used);
+    }
+    else
+        LogMessage ("  ern is NULL\n");
 }
 #endif

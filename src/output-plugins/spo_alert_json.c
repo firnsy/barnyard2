@@ -1457,6 +1457,58 @@ static char *extract_AS(AlertJSONData *jsonData,const sfip_t *ip)
 #endif
 
 #ifdef RB_EXTRADATA
+/*
+ * Function: printMail(const char *, int, struct printbuf *)
+ *
+ * Purpose: Write an Unified2 extradata mail in printbuf
+ *
+ * Arguments:     mail => mail <test@test.com>
+ *                 len => length of mail
+ *            printbuf => printed mail with no <,>
+ * Returns: printed characters.
+ */
+static void printMail(const char *mail,int len, struct printbuf *printbuf) {
+    if (len >1 && mail[0]=='<' && mail[len-1] == '>')
+        printbuf_memappend_fast(printbuf, mail+1, len-2);
+    else
+        printbuf_memappend_fast(printbuf, mail, len);
+}
+
+/*
+ * Function: printMultipleMails(const char *, struct printbuf *)
+ *
+ * Purpose: Write an Unified2 extradata mails in printbuf
+ *
+ * Arguments:    mails => mail "<test@test.com>,<test2@test.com>"
+ *                 len => length of mails string
+ *            printbuf => printed mail in ["test@test.com","test2@test.com"]
+ * Returns: printed characters.
+ */
+static void printMultipleMails(const char *mails,int len, struct printbuf *printbuf)
+{
+    printbuf_memappend_fast(printbuf, "[", 1);
+
+    const char *cursor = mails;
+    while(cursor)
+    {
+        const char *end = memchr(cursor,',',len);
+        if (cursor != mails)
+        {
+            printbuf_memappend_fast_str(printbuf, ",");
+        }
+
+        int mail_len = end ? end - cursor : len - (cursor - mails);
+
+        printbuf_memappend_fast_str(printbuf, "\\\"");
+        printMail(cursor, mail_len, printbuf);
+        printbuf_memappend_fast_str(printbuf, "\\\"");
+
+        cursor = end ? end + 1 : NULL;
+    }
+
+    printbuf_memappend_fast(printbuf, "]", 1);
+}
+
 static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement,
     struct printbuf *printbuf, Unified2ExtraData *U2ExtraData)
 {
@@ -1513,15 +1565,15 @@ static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement,
             {
                 str = (char *)(U2ExtraData+1);
                 len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
-                printbuf_memappend_fast(printbuf, str, len);
+                printMail(str,len,printbuf);
             }
             break;
         case EMAIL_DESTINATIONS:
             if (event_info == EVENT_INFO_FILE_RCPTTO)
             {
-                str = (char *)(U2ExtraData+1);
+                str = (const char *)(U2ExtraData+1);
                 len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
-                printbuf_memappend_fast(printbuf, str, len);
+                printMultipleMails(str,len,printbuf);
             }
             break;
 

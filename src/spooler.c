@@ -754,8 +754,6 @@ static void spoolerProcessRecord(Spooler *spooler, int fire_output)
             /* check if there is a previously cached event that matches this event id */
             ernCache = spoolerEventCacheGetByEventID(spooler, event_id);
 
-            datalink = ntohl(((Unified2Packet *)spooler->record.data)->linktype);
-
             /* if the packet and cached event share the same id */
             if (ernCache != NULL)
             {
@@ -1051,7 +1049,7 @@ static int spoolerEventCacheClean(Spooler *spooler)
 {
     EventRecordNode     *ernCurrent = NULL;
     EventRecordNode     *ernPrev = NULL;
-    
+
     if (spooler == NULL || TAILQ_EMPTY(&spooler->event_cache) )
         return 1;
     
@@ -1361,7 +1359,7 @@ static int spoolerExtraDataCachePush(Spooler *spooler, uint32_t type, void *data
 {
     ExtraDataRecordNode     *edrnNode;
     ExtraDataRecordCache    *edrc;
-edrc = &(((Unified2IDSEvent_WithPED *)(ern->data)))->extra_data_cache;
+
     DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Including extra data with cached event %lu\n",ntohl(((Unified2EventCommon *)data)->event_id)););
 
     /* allocate memory */
@@ -1390,13 +1388,13 @@ edrc = &(((Unified2IDSEvent_WithPED *)(ern->data)))->extra_data_cache;
                 edrc = &((Unified2IDSEventIPv6_WithPED *)(ern->data))->extra_data_cache;
                 break;
             default:
+                edrc = NULL;
                 LogMessage("WARNING: spoolerExtraDataCachePush(): type inconsistent (%d)\n", ern->type);
                 break;
         }
 
-    TAILQ_INSERT_HEAD(edrc, edrnNode, entry);
-    //((Unified2IDSEvent_WithExtra *)data)->extra_data_cached++;
-    //DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Cached extra data record: %d\n", ((Unified2IDSEvent_WithExtra *)data)->extra_data_cached););
+    if (edrc != NULL)
+        TAILQ_INSERT_HEAD(edrc, edrnNode, entry);
 
     return 0;
 }
@@ -1520,7 +1518,6 @@ static int spoolerExtraDataCacheClean(EventRecordNode *ern)
     ExtraDataRecordNode *edrn_next = NULL;
     ExtraDataRecordNode *edrn = NULL;
     ExtraDataRecordCache *edrc = NULL;
-    void *packet = NULL;
 
     if (ern == NULL)
     {
@@ -1532,21 +1529,37 @@ static int spoolerExtraDataCacheClean(EventRecordNode *ern)
     {
         case UNIFIED2_IDS_EVENT:
             edrc = &((Unified2IDSEvent_legacy_WithPED *)(ern->data))->extra_data_cache;
-            packet = (((Unified2IDSEvent_legacy_WithPED *)(ern->data))->packet);
+            if (((Unified2IDSEvent_legacy_WithPED *)(ern->data))->packet != NULL)
+            {
+                free(((Unified2IDSEvent_legacy_WithPED *)(ern->data))->packet);
+                ((Unified2IDSEvent_legacy_WithPED *)(ern->data))->packet = NULL;
+            }
             break;
         case UNIFIED2_IDS_EVENT_MPLS:
         case UNIFIED2_IDS_EVENT_VLAN:
             edrc = &((Unified2IDSEvent_WithPED *)(ern->data))->extra_data_cache;
-            packet = ((Unified2IDSEvent_WithPED *)(ern->data))->packet;
+            if (((Unified2IDSEvent_WithPED *)(ern->data))->packet != NULL)
+            {
+                free(((Unified2IDSEvent_WithPED *)(ern->data))->packet);
+                ((Unified2IDSEvent_WithPED *)(ern->data))->packet = NULL;
+            }
             break;
         case UNIFIED2_IDS_EVENT_IPV6:
             edrc = &((Unified2IDSEventIPv6_legacy_WithPED *)(ern->data))->extra_data_cache;
-            packet = ((Unified2IDSEventIPv6_legacy_WithPED *)(ern->data))->packet;
+            if (((Unified2IDSEventIPv6_legacy_WithPED *)(ern->data))->packet != NULL)
+            {
+                free(((Unified2IDSEventIPv6_legacy_WithPED *)(ern->data))->packet);
+                ((Unified2IDSEventIPv6_legacy_WithPED *)(ern->data))->packet = NULL;
+            }
             break;
         case UNIFIED2_IDS_EVENT_IPV6_MPLS:
         case UNIFIED2_IDS_EVENT_IPV6_VLAN:
             edrc = &((Unified2IDSEventIPv6_WithPED *)(ern->data))->extra_data_cache;
-            packet = ((Unified2IDSEventIPv6_WithPED *)(ern->data))->packet;
+            if (((Unified2IDSEventIPv6_WithPED *)(ern->data))->packet != NULL)
+            {
+                free(((Unified2IDSEventIPv6_WithPED *)(ern->data))->packet);
+                ((Unified2IDSEventIPv6_WithPED *)(ern->data))->packet = NULL;
+            }
             break;
         case UNIFIED2_PACKET:
         case UNIFIED2_EXTRA_DATA:
@@ -1554,12 +1567,6 @@ static int spoolerExtraDataCacheClean(EventRecordNode *ern)
         default:
             LogMessage("WARNING: spoolerExtraDataCacheClean(): type inconsistent (%d)\n", ern->type);
             break;
-    }
-
-    if (packet)
-    {
-        free(packet);
-        packet = NULL;
     }
 
     if (edrc == NULL || TAILQ_EMPTY(edrc))

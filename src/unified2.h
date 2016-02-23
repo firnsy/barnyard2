@@ -100,7 +100,6 @@ typedef struct _Unified2IDSEvent_WithPED
     Unified2IDSEvent        event;
     void                    *packet;
     ExtraDataRecordCache    extra_data_cache;
-    //uint32_t                extra_data_cached;
 }Unified2IDSEvent_WithPED;
 #endif
 
@@ -135,7 +134,6 @@ typedef struct _Unified2IDSEventIPv6_WithPED
     Unified2IDSEventIPv6    event;
     void                    *packet;
     ExtraDataRecordCache    extra_data_cache; //linked list of concurrent extra data records
-    //uint32_t                extra_data_cached;
 }Unified2IDSEventIPv6_WithPED;
 #endif
 
@@ -192,12 +190,12 @@ typedef enum _EventInfoEnum
     EVENT_INFO_FILE_MAILFROM,   /* 18 */
     EVENT_INFO_FILE_RCPTTO,     /* 19 */
     EVENT_INFO_FILE_EMAIL_HDRS,  /* 20 */
-#else
-    EVENT_INFO_GZIP_DATA,
-#endif
     EVENT_INFO_FTP_USER,         /* 21 */
     EVENT_INFO_SMB_UID,          /* 22 */
     EVENT_INFO_SMB_IS_UPLOAD,    /* 23 */
+#else
+    EVENT_INFO_GZIP_DATA
+#endif
 }EventInfoEnum;
 
 typedef enum _EventDataType
@@ -239,10 +237,9 @@ typedef struct Unified2IDSEvent_legacy
 #ifdef RB_EXTRADATA
 typedef struct _Unified2IDSEvent_legacy_WithPED
 {
-    Unified2IDSEventIPv6    event;
+    Unified2IDSEvent_legacy event;
     void                    *packet;
     ExtraDataRecordCache    extra_data_cache; //linked list of concurrent extra data records
-    //uint32_t                extra_data_cached;
 }Unified2IDSEvent_legacy_WithPED;
 #endif
 
@@ -271,10 +268,9 @@ typedef struct Unified2IDSEventIPv6_legacy
 #ifdef RB_EXTRADATA
 typedef struct _Unified2IDSEventIPv6_legacy_WithPED
 {
-    Unified2IDSEventIPv6    event;
-    void                    *packet;
-    ExtraDataRecordCache    extra_data_cache; //linked list of concurrent extra data records
-    //uint32_t                extra_data_cached;
+    Unified2IDSEventIPv6_legacy event;
+    void                        *packet;
+    ExtraDataRecordCache        extra_data_cache; //linked list of concurrent extra data records
 }Unified2IDSEventIPv6_legacy_WithPED;
 #endif
 

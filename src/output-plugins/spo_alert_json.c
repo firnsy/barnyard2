@@ -116,7 +116,7 @@
 #ifdef RB_EXTRADATA
 #define X_RB_EXTRADATA \
     _X(SHA256,"sha256","sha256",stringFormat,"-") \
-    _X(FILE_SIZE,"file_size","file_size",stringFormat,"-") \
+    _X(FILE_SIZE,"file_size","file_size",numericFormat,"-") \
     _X(FILE_HOSTNAME,"file_hostname","file_hostname",stringFormat,"-") \
     _X(FILE_URI,"file_uri","file_uri",stringFormat,"-") \
     _X(EMAIL_SENDER,"email_sender","email_sender",stringFormat,"-") \

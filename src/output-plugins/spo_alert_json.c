@@ -79,6 +79,12 @@
 #include <librbhttp/rb_http_handler.h>
 #define MAX_HTTP_DEFAULT_CONECTIONS 10
 #define MAX_HTTP_DEFAULT_QUEUED_MESSAGES 10000
+#define HTTP_DEFAULT_TIMEOUT 30000
+#define HTTP_DEFAULT_CONN_TIMEOUT 10000
+#define HTTP_DEFAULT_BATCH_TIMEOUT 1000
+#define HTTP_DEFAULT_VERBOSE 0
+#define HTTP_DEFAULT_MODE 1
+#define HTTP_DEFAULT_INSECURE 0
 #endif
 
 #include <librd/rd.h>
@@ -279,9 +285,12 @@ typedef struct _AlertJSONData
     struct {
         long max_connections;
         long max_queued_messages;
-        long conn_timeout;
         long req_timeout;
+        long conn_timeout;
+        long batch_timeout;
         long verbose;
+        long mode;
+        long insecure;
         int                    do_poll;
         pthread_t              poll_thread;
         const char *url;
@@ -473,6 +482,12 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
 #ifdef HAVE_LIBRBHTTP
     data->http.max_connections     = MAX_HTTP_DEFAULT_CONECTIONS;
     data->http.max_queued_messages = MAX_HTTP_DEFAULT_QUEUED_MESSAGES;
+    data->http.req_timeout         = HTTP_DEFAULT_TIMEOUT;
+    data->http.conn_timeout        = HTTP_DEFAULT_CONN_TIMEOUT;
+    data->http.batch_timeout       = HTTP_DEFAULT_BATCH_TIMEOUT;
+    data->http.verbose             = HTTP_DEFAULT_VERBOSE;
+    data->http.mode                = HTTP_DEFAULT_MODE;
+    data->http.insecure            = HTTP_DEFAULT_INSECURE;
 #endif
 
     for (i = 0; i < num_toks; i++)
@@ -567,6 +582,10 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
 #else
             /// @TODO use a function
             char *end=NULL;
+            if(!strncmp(tok,"http.mode=",strlen("http.mode=")))
+            {
+                data->http.mode = strtol(tok+strlen("http.mode="),&end,0);
+            }
             if(!strncmp(tok,"http.max_connections=",strlen("http.max_connections=")))
             {
                 data->http.max_connections = strtol(tok+strlen("http.max_connections="),&end,0);
@@ -586,6 +605,14 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
             else if (!strncmp(tok,"http.verbose=",strlen("http.verbose=")))
             {
                 data->http.verbose = strtol(tok+strlen("http.verbose="),&end,0);
+            }
+            else if (!strncmp(tok,"http.insecure=",strlen("http.insecure=")))
+            {
+               data->http.insecure = strtol(tok+strlen("http.insecure="),&end,0);
+            }
+            else if (!strncmp(tok,"http.batch_timeout=",strlen("http.batch_timeout=")))
+            {
+               data->http.batch_timeout = strtol(tok+strlen("http.batch_timeout="),&end,0);
             }
 
             if(NULL == end || *end != '\0')
@@ -927,8 +954,12 @@ static void AlertJsonHTTPDelayedInit (AlertJSONData *this)
                           this->http.verbose);
     HTTPHandlerSetLongOpt(this->http.handler, "RB_HTTP_MAX_MESSAGES",
                           this->http.max_queued_messages);
+    HTTPHandlerSetLongOpt(this->http.handler, "RB_HTTP_BATCH_TIMEOUT",
+                          this->http.batch_timeout);
     HTTPHandlerSetLongOpt(this->http.handler, "RB_HTTP_MODE",
-                          1);
+                          this->http.mode);
+    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_INSECURE",
+                          this->http.insecure);
 
     rb_http_handler_run(this->http.handler);
 

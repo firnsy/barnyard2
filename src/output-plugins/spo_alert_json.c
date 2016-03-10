@@ -2362,7 +2362,7 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSO
 
         if(rc != 0)
         {
-            ErrorMessage("alert_json: Failed to produce HTTP message: %s",
+            ErrorMessage("alert_json: Failed to produce HTTP message: %s\n",
                 err);
             DecRefcntPrintbuf(rprintbuf);
         }

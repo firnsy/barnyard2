@@ -526,7 +526,14 @@ AC_ARG_WITH(mysql_libraries,
 	[  --with-mysql-libraries=DIR     MySQL library directory],
 	[with_mysql_libraries="$withval"; with_mysql="yes"],[with_mysql_libraries="no"])
 
-default_directory="/usr /usr/local"
+AC_DEFUN(AC_PROG_MYSQL_CONFIG, [AC_CHECK_PROG(MYSQL_CONFIG,mysql_config,yes)])
+AC_PROG_MYSQL_CONFIG
+if test x"${MYSQL_CONFIG}" == x"yes" ; then
+    default_directory="/usr /usr/local `mysql_config --variable=pkglibdir`"
+else
+    default_directory="/usr /usr/local"
+fi
+
 if test "x$with_mysql" != "xno"; then
   if test "x$with_mysql" = "xyes"; then
     if test "x$with_mysql_includes" != "xno"; then

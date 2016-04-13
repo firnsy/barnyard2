@@ -1,9 +1,8 @@
 /*****
 *
 * Copyright (C) 2005 PreludeIDS Technologies. All Rights Reserved.
-* Author: Yoann Vandoorselaere <yoann.v@prelude-ids.com>
-*
-* This file is part of the Snort program.
+* Authors: Yoann Vandoorselaere <yoann.v@prelude-ids.com>
+*          CSSI (Selim Menouar, Verene Houdebine)
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License Version 2 as
@@ -49,9 +48,9 @@
 #include "barnyard2.h"
 #include "ipv6_port.h"
 
-#define ANALYZER_CLASS "NIDS"
-#define ANALYZER_MODEL "Snort"
-#define ANALYZER_MANUFACTURER "http://www.snort.org"
+#define DEFAULT_ANALYZER_CLASS "NIDS"
+#define DEFAULT_ANALYZER_MODEL "Snort"
+#define DEFAULT_ANALYZER_MANUFACTURER "http://www.snort.org"
 #define ANALYZER_SID_URL "http://www.snort.org/pub-bin/sigs.cgi?sid="
 
 #define SNORT_MAX_OWNED_SID 1000000
@@ -64,7 +63,7 @@ static unsigned int mid_priority  = 2;
 static prelude_bool_t initialized = FALSE;
 
 
-static int setup_analyzer(idmef_analyzer_t *analyzer)
+static int setup_analyzer(idmef_analyzer_t *analyzer, const char *analyzer_model, const char *analyzer_class, const char *analyzer_manufacturer)
 {
         int ret;
         prelude_string_t *string;
@@ -72,17 +71,17 @@ static int setup_analyzer(idmef_analyzer_t *analyzer)
         ret = idmef_analyzer_new_model(analyzer, &string);
         if ( ret < 0 )
                 return ret;
-        prelude_string_set_constant(string, ANALYZER_MODEL);
+        prelude_string_set_constant(string, analyzer_model);
 
         ret = idmef_analyzer_new_class(analyzer, &string);
         if ( ret < 0 )
                 return ret;
-        prelude_string_set_constant(string, ANALYZER_CLASS);
+        prelude_string_set_constant(string, analyzer_class);
 
         ret = idmef_analyzer_new_manufacturer(analyzer, &string);
         if ( ret < 0 ) 
                 return ret;
-        prelude_string_set_constant(string, ANALYZER_MANUFACTURER);
+        prelude_string_set_constant(string, analyzer_manufacturer);
 
         ret = idmef_analyzer_new_version(analyzer, &string);
         if ( ret < 0 )
@@ -701,7 +700,7 @@ static void snort_alert_prelude_clean_exit(int signal, void *data)
 
 
 
-static void parse_args(char *args, char **profile)
+static void parse_args(char *args, char **analyzer_name, char **analyzer_model, char **analyzer_class, char **analyzer_manufacturer)
 {
         int i, tokens, ret;
         char **args_table, *value, *key;
@@ -716,12 +715,39 @@ static void parse_args(char *args, char **profile)
                 if ( ! value )
                         FatalError("spo_alert_prelude: missing value for keyword '%s'.\n", key);
                 
-                ret = strcasecmp("profile", key);
+                ret = strcasecmp("analyzer_name", key);
                 if ( ret == 0 ) {
-                        if ( *profile )
-                                free(*profile);
+                        if ( *analyzer_name )
+                                free(*analyzer_name);
                         
-                        *profile = strdup(value);
+                        *analyzer_name = strdup(value);
+                        continue;
+                }
+                
+                ret = strcasecmp("analyzer_model", key);
+                if ( ret == 0 ) {
+                        if ( *analyzer_model )
+                                free(*analyzer_model);
+                        
+                        *analyzer_model = strdup(value);
+                        continue;
+                }
+                
+                ret = strcasecmp("analyzer_class", key);
+                if ( ret == 0 ) {
+                        if ( *analyzer_class )
+                                free(*analyzer_class);
+                        
+                        *analyzer_class = strdup(value);
+                        continue;
+                }
+
+                ret = strcasecmp("analyzer_manufacturer", key);
+                if ( ret == 0 ) {
+                        if ( *analyzer_manufacturer )
+                                free(*analyzer_manufacturer);
+                        
+                        *analyzer_manufacturer = strdup(value);
                         continue;
                 }
                 
@@ -753,14 +779,17 @@ static void parse_args(char *args, char **profile)
 void AlertPreludeSetupAfterSetuid(void)
 {
         int ret;
-        char *profile = NULL;
+        char *analyzer_name = NULL;
+        char *analyzer_model = NULL;
+        char *analyzer_class = NULL;
+        char *analyzer_manufacturer = NULL;
         prelude_client_t *client;
         prelude_client_flags_t flags;
 
         if ( ! initialized )
                 return;
         
-        parse_args(init_args, &profile);
+        parse_args(init_args, &analyzer_name, &analyzer_model, &analyzer_class, &analyzer_manufacturer);
         free(init_args);
        
         ret = prelude_thread_init(NULL);
@@ -773,9 +802,9 @@ void AlertPreludeSetupAfterSetuid(void)
                 FatalError("%s: Unable to initialize the Prelude library: %s.\n",
                            prelude_strsource(ret), prelude_strerror(ret));
         
-        ret = prelude_client_new(&client, profile ? profile : DEFAULT_ANALYZER_NAME);
-        if ( profile )
-                free(profile);
+        ret = prelude_client_new(&client, analyzer_name ? analyzer_name : DEFAULT_ANALYZER_NAME);
+        if ( analyzer_name )
+                free(analyzer_name);
         
         if ( ret < 0 )
                 FatalError("%s: Unable to create a prelude client object: %s.\n",
@@ -789,9 +818,11 @@ void AlertPreludeSetupAfterSetuid(void)
                 FatalError("%s: Unable to set asynchronous send and timer: %s.\n",
                            prelude_strsource(ret), prelude_strerror(ret));
 
-        
-        setup_analyzer(prelude_client_get_analyzer(client));
-        
+        setup_analyzer(prelude_client_get_analyzer(client),
+                analyzer_model ? analyzer_model : DEFAULT_ANALYZER_MODEL,
+                analyzer_class ? analyzer_class : DEFAULT_ANALYZER_CLASS,
+                analyzer_manufacturer ? analyzer_manufacturer : DEFAULT_ANALYZER_MANUFACTURER);
+
         ret = prelude_client_start(client);
         if ( ret < 0 ) {
                 if ( prelude_client_is_setup_needed(ret) )

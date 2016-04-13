@@ -57,6 +57,7 @@ BuildRequires: libpcap1-devel
 %else
 BuildRequires: libpcap-devel
 %endif
+BuildRequires: libdnet-devel
 
 
 %description

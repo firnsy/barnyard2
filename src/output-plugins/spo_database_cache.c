@@ -1068,7 +1068,7 @@ u_int32_t ConvertSignatureCache(SigNode **iHead,MasterCache *iMasterCache,Databa
 	}
 	
 	//Do not allow duplicate to exist
-	if( (cacheSignatureLookup(&lookupNode,iMasterCache->cacheSignatureHead) == 0) )
+	if( BcUniqueMap() || (cacheSignatureLookup(&lookupNode,iMasterCache->cacheSignatureHead) == 0) )
 	{
 	    if( (TobjNode = SnortAlloc(sizeof(cacheSignatureObj))) == NULL)
 	    {

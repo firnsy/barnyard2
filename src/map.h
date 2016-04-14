@@ -126,7 +126,7 @@ ReferenceSystemNode * ReferenceSystemLookup(ReferenceSystemNode *, char *);
 ReferenceNode * AddReference(struct _Barnyard2Config *, ReferenceNode **, char *, char *);
 
 SigNode *GetSigByGidSid(uint32_t, uint32_t, uint32_t);
-SigNode *CreateSigNode(SigNode **,u_int8_t);
+SigNode *CreateSigNode(SigNode **, SigNode **, u_int8_t);
 
 ClassType * ClassTypeLookupByType(struct _Barnyard2Config *, char *);
 ClassType * ClassTypeLookupById(struct _Barnyard2Config *, int);

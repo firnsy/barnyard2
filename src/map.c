@@ -924,7 +924,7 @@ void ParseSidMapLine(Barnyard2Config *bc, char *data)
     
     /* Look if we have a brother inserted from sid map file */
     sig_lookup_continue:
-    if(SigLookup(sn,t_sn.generator,t_sn.id,SOURCE_SID_MSG,&sn))
+    if(!BcUniqueMap() && SigLookup(sn,t_sn.generator,t_sn.id,SOURCE_SID_MSG,&sn))
     {
 	if(t_sn.rev == sn->rev)
 	{
@@ -944,12 +944,11 @@ void ParseSidMapLine(Barnyard2Config *bc, char *data)
     }
     else
     {
-        if( (sn = CreateSigNode(BcGetSigNodeHead(),SOURCE_SID_MSG)) == NULL)
+        if( (sn = CreateSigNode(BcGetSigNodeHead(),BcGetSigNodeTail(),SOURCE_SID_MSG)) == NULL)
         {
             FatalError("[%s()], CreateSigNode() returned a NULL node, bailing \n",
                        __FUNCTION__);
         }
-
         memcpy(sn,&t_sn,sizeof(SigNode));
 
 	sn->source_file = SOURCE_SID_MSG;
@@ -1006,7 +1005,7 @@ SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid,u_int32_t revision)
     }
     
     /* create a default message since we didn't find any match */
-    sn = CreateSigNode(BcGetSigNodeHead(),SOURCE_GEN_RUNTIME);
+    sn = CreateSigNode(BcGetSigNodeHead(),BcGetSigNodeTail(),SOURCE_GEN_RUNTIME);
     sn->generator = gid;
     sn->id = sid;
     sn->rev = revision;
@@ -1018,7 +1017,7 @@ SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid,u_int32_t revision)
 
 
 
-SigNode *CreateSigNode(SigNode **head,const u_int8_t source_file)
+SigNode *CreateSigNode(SigNode **head,SigNode **tail,const u_int8_t source_file)
 {
     SigNode       *sn = NULL;
     
@@ -1027,18 +1026,16 @@ SigNode *CreateSigNode(SigNode **head,const u_int8_t source_file)
         *head = (SigNode *) SnortAlloc(sizeof(SigNode));
 	sn = *head;
 	sn->source_file = source_file;
+	*tail = *head;
         return *head;
     }
     else
     {
-        sn = *head;
-	
-        while (sn->next != NULL) 
-	    sn = sn->next;
-	
-        sn->next = (SigNode *) SnortAlloc(sizeof(SigNode));
-	sn->next->source_file = source_file;
-        return sn->next;
+	sn = (SigNode *) SnortAlloc(sizeof(SigNode));
+	sn->source_file = source_file;
+	(*tail)->next = sn;
+	*tail = sn;
+        return sn;
     }
     
     /* XXX */
@@ -1215,14 +1212,14 @@ void ParseGenMapLine(char *data)
     }
     else
     {
-	if(SigLookup((SigNode *)*BcGetSigNodeHead(),t_sn.generator,t_sn.id,SOURCE_GEN_MSG,&sn) == 0)
+	if(!BcUniqueMap() && SigLookup((SigNode *)*BcGetSigNodeHead(),t_sn.generator,t_sn.id,SOURCE_GEN_MSG,&sn) == 0)
 	{
-	    if( (sn = CreateSigNode(BcGetSigNodeHead(),SOURCE_GEN_MSG)) == NULL)
+	    if( (sn = CreateSigNode(BcGetSigNodeHead(),BcGetSigNodeTail(),SOURCE_GEN_MSG)) == NULL)
 	    {
 		FatalError("[%s()], CreateSigNode() returned a NULL node, bailing \n",
 			   __FUNCTION__);
 	    }
-	 
+
 	    memcpy(sn,&t_sn,sizeof(SigNode));
 	    
 	    sn->source_file = SOURCE_GEN_MSG;

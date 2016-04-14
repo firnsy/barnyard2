@@ -185,7 +185,7 @@ typedef enum _GetOptLongIds
     MAX_MPLS_LABELCHAIN_LEN,
     MPLS_PAYLOAD_TYPE,
 #endif
-
+    UNIQUE_MAP,
     GET_OPT_LONG_IDS_MAX
 } GetOptLongIds;
 
@@ -327,6 +327,7 @@ typedef struct _Barnyard2Config
     int data_flag;
     int obfuscation_flag;
     int alert_on_each_packet_in_stream_flag;
+    int unique_map;
     
     int	logtosyslog_flag;
     int	test_mode_flag;
@@ -394,6 +395,7 @@ typedef struct _Barnyard2Config
     ClassType *classifications;
     ReferenceSystemNode *references;
     SigNode *sigHead;  /* Signature list Head */
+    SigNode *sigTail;  /* Signature list Tail */
     
     /* plugin active flags*/
     InputConfig *input_configs;
@@ -622,6 +624,11 @@ static INLINE int BcLogSyslog(void)
     return barnyard2_conf->logging_flags & LOGGING_FLAG__SYSLOG;
 }
 
+static INLINE int BcUniqueMap(void)
+{
+    return barnyard2_conf->unique_map;
+}
+
 static INLINE int BcAlertOnEachPacketInStream(void)
 {
     return barnyard2_conf->alert_on_each_packet_in_stream_flag;
@@ -762,6 +769,10 @@ static INLINE short BcSidMapVersion(void)
 static INLINE SigNode ** BcGetSigNodeHead(void)
 {
     return &barnyard2_conf->sigHead;
+}
+static INLINE SigNode ** BcGetSigNodeTail(void)
+{
+    return &barnyard2_conf->sigTail;
 }
 
 static INLINE Barnyard2Config * BcGetConfig(void)

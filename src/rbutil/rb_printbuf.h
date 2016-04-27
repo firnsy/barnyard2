@@ -50,6 +50,10 @@ do {                                                         \
   } else {  printbuf_memappend(p, (bufptr), bufsize); }      \
 } while (0)
 
+/* Same as printbuf_memappend, buf it will escape JSON chars ('\', '"', and
+  control codes <U+0020) */
+int printbuf_memappend_escaped(struct printbuf *p, const char *buf, int size);
+
 #define printbuf_memappend_fast_str(p, bufptr) printbuf_memappend_fast(p, bufptr, strlen(bufptr))
 
 static size_t printbuf_memappend_fast_n16(struct printbuf *kafka_line_buffer,const unsigned char value)

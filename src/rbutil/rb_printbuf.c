@@ -106,6 +106,50 @@ int printbuf_memappend(struct printbuf *p, const char *buf, int size)
   return size;
 }
 
+int printbuf_memappend_escaped(struct printbuf *p, const char *buf, int size)
+{
+	const int bsize = p->bpos;
+	/// @TODO we can avoid this copy if we don't use strcspn
+	char *aux_buf = calloc(size + 1,1);
+	if (NULL == aux_buf) {
+		return 0; /* We did our best! */
+	}
+
+	memcpy(aux_buf, buf, size);
+
+	static const char escape_this[] = "\\\""
+		"\x19\x18\x17\x16\x15\x14\x13\x12\x11\x10"
+		"\x09\x08\x07\x06\x05\x04\x03\x02\x01";
+	const char *cursor = aux_buf;
+	while (1) {
+		const size_t span = strcspn(cursor, escape_this);
+		printbuf_memappend_fast(p, cursor, span);
+		cursor += span;
+		if (!(cursor < aux_buf + size)) {
+			break;
+		}
+
+		/* We are in a character we need to escape */
+		printbuf_memappend_fast_str(p, "\\");
+		switch(cursor[0]) {
+		case '\\':
+		case '"':
+			printbuf_memappend_fast(p, cursor, 1);
+			break;
+		default: /* Control code */
+			printbuf_memappend_fast_str(p, "u00");
+			printbuf_memappend_fast_n16(p, cursor[0]);
+			break;
+		};
+		cursor++;
+	}
+
+	free(aux_buf);
+
+	return p->bpos - bsize;
+}
+
+
 int printbuf_memset(struct printbuf *pb, int offset, int charvalue, int len)
 {
 	int size_needed;

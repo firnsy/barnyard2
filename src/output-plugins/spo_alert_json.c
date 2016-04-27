@@ -1522,13 +1522,14 @@ static void printMultipleMails(const char *mails,int len, struct printbuf *print
     const char *cursor = mails;
     while(cursor)
     {
-        const char *end = memchr(cursor,',',len);
+        const size_t rest_of_mails = len - (cursor - mails);
+        const char *end = memchr(cursor,',',rest_of_mails);
         if (cursor != mails)
         {
             printbuf_memappend_fast_str(printbuf, ",");
         }
 
-        int mail_len = end ? end - cursor : len - (cursor - mails);
+        int mail_len = end ? end - cursor : rest_of_mails;
 
         printbuf_memappend_fast_str(printbuf, "\\\"");
         printMail(cursor, mail_len, printbuf);

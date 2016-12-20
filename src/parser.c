@@ -189,6 +189,7 @@ static const KeywordFunc barnyard2_conf_keywords[] =
 
 static const ConfigFunc config_opts[] =
 {
+    { CONFIG_OPT__UNIQUE_MAP, 0, 1, ConfigUniqueMap },
     { CONFIG_OPT__DISABLE_ALERT_ON_EACH_PACKET_IN_STREAM, 0, 1, ConfigDisableAlertOnEachPacketInStream },
     { CONFIG_OPT__EVENT_CACHE_SIZE, 0, 1, ConfigSetEventCacheSize },
     { CONFIG_OPT__ALERT_ON_EACH_PACKET_IN_STREAM, 0, 1, ConfigAlertOnEachPacketInStream },
@@ -1600,6 +1601,13 @@ void ConfigSetEventCacheSize(Barnyard2Config *bc, char *args)
     return;
 }
 
+void ConfigUniqueMap(Barnyard2Config *bc, char *args)
+{
+    if (bc == NULL)
+        return;
+
+    bc->unique_map = 1;
+}
 void ConfigDisableAlertOnEachPacketInStream(Barnyard2Config *bc, char *args)
 {
     if (bc == NULL)

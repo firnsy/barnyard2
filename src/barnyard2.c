@@ -184,6 +184,7 @@ static struct option long_options[] =
    {"event-cache-size", LONGOPT_ARG_REQUIRED, NULL, EVENT_CACHE_SIZE},
    {"alert-on-each-packet-in-stream", LONGOPT_ARG_NONE, NULL, ALERT_ON_EACH_PACKET_IN_STREAM},
    {"process-new-records-only", LONGOPT_ARG_NONE, NULL, 'n'},
+   {"unique-map", LONGOPT_ARG_NONE, NULL, UNIQUE_MAP},
 
 #ifdef MPLS
    {"max-mpls-labelchain-len", LONGOPT_ARG_REQUIRED, NULL, MAX_MPLS_LABELCHAIN_LEN},
@@ -519,6 +520,7 @@ static int ShowUsage(char *program_name)
 
     FPUTS_BOTH ("Longname options and their corresponding single char version\n");
     FPUTS_BOTH ("   --disable-alert-on-each-packet-in-stream  Alert once per event\n");
+    FPUTS_BOTH ("   --unique-map                      Don't check sid/gid maps for dupes (fast start)\n");
     FPUTS_BOTH ("   --event-cache-size <integer>      Set Spooler MAX event cache size \n");
     FPUTS_BOTH ("   --reference <file>                Same as -R\n");
     FPUTS_BOTH ("   --classification <file>           Same as -C\n");
@@ -682,6 +684,11 @@ static void ParseCmdLine(int argc, char **argv)
                 ConfigMplsPayloadType(bc, optarg);
                 break;
 #endif
+            case UNIQUE_MAP:
+                ConfigUniqueMap(bc, NULL);
+                break;
+
+
 
             case 'a':  /* use archive directory <x> */
                 ConfigArchiveDir(bc, optarg);
@@ -1811,6 +1818,8 @@ static Barnyard2Config * MergeBarnyard2Confs(Barnyard2Config *cmd_line, Barnyard
 	config_file->alert_on_each_packet_in_stream_flag = cmd_line->alert_on_each_packet_in_stream_flag;
     }
     
+    config_file->unique_map |= cmd_line->unique_map;
+
     config_file->process_new_records_only_flag = cmd_line->process_new_records_only_flag;
 
 #ifdef SUP_IP6

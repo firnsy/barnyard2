@@ -593,7 +593,7 @@ void AlertFWsamInit(char *args)
 #endif
 
     /* Set the preprocessor function into the function list */
-    AddFuncToOutputList(AlertFWsam, OUTPUT_TYPE__LOG, fwsamlist);
+    AddFuncToOutputList(AlertFWsam, OUTPUT_TYPE__ALERT, fwsamlist);
     AddFuncToCleanExitList(AlertFWsamCleanExitFunc, fwsamlist);
     AddFuncToRestartList(AlertFWsamRestartFunc, fwsamlist);
 }

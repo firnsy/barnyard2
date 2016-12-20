@@ -307,8 +307,6 @@ int OpSyslog_LogConfig(void *pSyslogContext)
     iSyslogContext =(OpSyslog_Data *)pSyslogContext;
     
     LogMessage("spo_syslog_full config:\n");
-    LogMessage("\tDetail Level: %s\n",
-	       iSyslogContext->detail == 1 ? "Full" : "Fast");
     
     if(iSyslogContext->local_logging == 0)
     {
@@ -1414,17 +1412,6 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
                     LogMessage("Argument Error in %s(%i): %s\n", file_name, 
                             file_line, index);
             }
-            else if(strcasecmp("detail", stoks[0]) == 0)
-            {
-                if(num_stoks > 1)
-                {
-                    if(strcasecmp("full", stoks[1]) == 0)
-                        op_data->detail = 1;
-                }
-                else 
-                    LogMessage("Argument Error in %s(%i): %s\n", file_name, 
-                            file_line, index);
-            }
 	    else if(strcasecmp("delimiters", stoks[0]) == 0)
             {
 		if(num_stoks >= 1)
@@ -1719,7 +1706,15 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
     /* Default */    
     if(op_data->sensor_name == NULL)
     {
-	FatalError("You must specify a sensor name\n");
+        // If barnyard2 config has hostname defined, use that
+        if (barnyard2_conf->hostname)
+        {
+            op_data->sensor_name = SnortStrdup(barnyard2_conf->hostname);
+        }
+        else
+        {
+            FatalError("You must specify a sensor name\n");
+        }
     }
 
     if(op_data->priority == 0)

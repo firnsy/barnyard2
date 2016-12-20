@@ -75,7 +75,6 @@ typedef struct _OpSyslog_Data
     
 
     u_int32_t port;
-    u_int16_t detail;
     u_int16_t proto;
 
     char delim;

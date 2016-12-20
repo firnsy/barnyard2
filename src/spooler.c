@@ -727,8 +727,6 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
 
         /* allocate space for the packet and construct the packet header */
         spooler->record.pkt = SnortAlloc(sizeof(Packet));
-        spooler->record.pkt->ip6_extensions = SnortAlloc(sizeof(IP6Option) * 1);
-
 
         pkth.caplen = ntohl(((Unified2Packet *)spooler->record.data)->packet_length);
         pkth.len = pkth.caplen;
@@ -800,7 +798,6 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
         }
 
         /* free the memory allocated in this function */
-        free(spooler->record.pkt->ip6_extensions);
         free(spooler->record.pkt);
         spooler->record.pkt = NULL;
 

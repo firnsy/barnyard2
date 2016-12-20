@@ -1719,7 +1719,15 @@ OpSyslog_Data *OpSyslog_ParseArgs(char *args)
     /* Default */    
     if(op_data->sensor_name == NULL)
     {
-	FatalError("You must specify a sensor name\n");
+        // If barnyard2 config has hostname defined, use that
+        if (barnyard2_conf->hostname)
+        {
+            op_data->sensor_name = SnortStrdup(barnyard2_conf->hostname);
+        }
+        else
+        {
+            FatalError("You must specify a sensor name\n");
+        }
     }
 
     if(op_data->priority == 0)

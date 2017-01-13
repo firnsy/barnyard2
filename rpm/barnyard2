@@ -9,7 +9,6 @@
 # processname: barnyard2
 # config: /etc/sysconfig/barnyard2
 # config: /etc/snort/barnyard.conf
-# pidfile: /var/lock/subsys/barnyard2.pid
 
 source /etc/rc.d/init.d/functions
 source /etc/sysconfig/network

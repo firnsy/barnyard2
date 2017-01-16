@@ -1,5 +1,4 @@
-# $Id$
-# Snort.org's SPEC file for Snort
+# Rpm build instructions for Barnyard2
 
 ################################################################
 # rpmbuild Package Options
@@ -101,7 +100,7 @@ Requires: %{name} = %{?epoch:%{epoch}:}%{version}-%{release}
 %description oracle
 barnyard2 binary compiled with Oracle support.
 
-EXPERIMENTAL!!  I don't have a way to test this, so let me know if it works!
+EXPERIMENTAL!!  I do not have a way to test this, so let me know if it works!
 ORACLE_HOME=%{OracleHome}
 
 %prep

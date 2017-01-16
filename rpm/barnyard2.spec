@@ -75,7 +75,7 @@ the last entry as listed in the waldo file.
 %package mysql
 Summary: barnyard2 with MySQL support
 Group: Applications/Internet
-Requires: %{name} = %{epoch}:%{version}-%{release}
+Requires: %{name} = %{?epoch:%{epoch}:}%{version}-%{release}
 %if %{mysql}
 Requires: mysql
 BuildRequires: mysql-devel
@@ -86,7 +86,7 @@ barnyard2 binary compiled with mysql support.
 %package postgresql
 Summary: barnyard2 with PostgreSQL support
 Group: Applications/Internet
-Requires: %{name} = %{epoch}:%{version}-%{release}
+Requires: %{name} = %{?epoch:%{epoch}:}%{version}-%{release}
 %if %{postgresql}
 Requires: postgresql
 BuildRequires: postgresql-devel
@@ -97,7 +97,7 @@ barnyard2 binary compiled with postgresql support.
 %package oracle
 Summary: barnyard2 with Oracle support
 Group: Applications/Internet
-Requires: %{name} = %{epoch}:%{version}-%{release}
+Requires: %{name} = %{?epoch:%{epoch}:}%{version}-%{release}
 %description oracle
 barnyard2 binary compiled with Oracle support.
 

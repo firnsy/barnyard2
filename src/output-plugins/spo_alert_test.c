@@ -169,6 +169,12 @@ void AlertTest(Packet *p, void *event, u_int32_t event_type, void *arg)
 
     if(event != NULL)
     {
+        if(BcOutputUseEventID())
+        {
+            fprintf(data->file, "(%lu)\t",
+                (unsigned long) ntohl(((Unified2EventCommon *)event)->event_id));
+        }
+
         fprintf(data->file, "%lu\t%lu\t%lu\t",
                 (unsigned long) ntohl(((Unified2EventCommon *)event)->generator_id),
                 (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_id),

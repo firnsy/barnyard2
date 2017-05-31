@@ -638,7 +638,8 @@ void DecodeMPLS(const uint8_t* pkt, const uint32_t len, Packet* p)
     int iRet = 0;
 
     pc.mpls++;
-    UpdateMPLSStats(&sfBase, len, Active_PacketWasDropped());
+    // I believe this is a Snort function
+    // UpdateMPLSStats(&sfBase, len, Active_PacketWasDropped());
     tmpMplsHdr = (uint32_t *) pkt;
     p->mpls = NULL;
 

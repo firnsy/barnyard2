@@ -541,6 +541,16 @@ void AlertSyslog(Packet *p, void *event, uint32_t event_type, void *arg)
 
 //        if(event != NULL)
 //        {
+            if(BcOutputUseEventID())
+            {
+                if( SnortSnprintf(event_data, STD_BUF, "(%lu) ", 
+                              (unsigned long) ntohl(((Unified2EventCommon *)event)->event_id)) != SNORT_SNPRINTF_SUCCESS )
+                    return ;
+
+                if( strlcat(event_string, event_data, SYSLOG_BUF) >= SYSLOG_BUF )
+                    return ;
+            }
+
             if( SnortSnprintf(event_data, STD_BUF, "[%lu:%lu:%lu] ",
                               (unsigned long) ntohl(((Unified2EventCommon *)event)->generator_id),
                               (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_id),

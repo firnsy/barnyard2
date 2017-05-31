@@ -106,6 +106,7 @@ Command line:
         -h <name>  Define the hostname <name>. For logging purposes only
         -i <if>    Define the interface <if>. For logging purposes only
         -I         Add Interface name to alert output
+        -j         Add Event ID to alert output
         -l <ld>    Log to directory <ld>
         -m <umask> Set umask = <umask>
         -O         Obfuscate the logged IP addresses

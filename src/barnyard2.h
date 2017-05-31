@@ -282,7 +282,8 @@ typedef enum _OutputFlag
     OUTPUT_FLAG__NO_TIMESTAMP      = 0x00000400,      /* --nostamps */
     OUTPUT_FLAG__ALERT_PKT_CNT     = 0x00000800,      /* -A packet-count */
     /* XXX XXX pv.outputVidInAlerts */
-    OUTPUT_FLAG__ALERT_VLAN        = 0x00001000       /* config include_vlan_in_alerts */
+    OUTPUT_FLAG__ALERT_VLAN        = 0x00001000,      /* config include_vlan_in_alerts */
+    OUTPUT_FLAG__ALERT_EVENTID     = 0x00002000       /* -j - include event id in alerts */
 
 } OutputFlag;
 
@@ -662,6 +663,11 @@ static INLINE int BcOutputIncludeYear(void)
 static INLINE int BcOutputUseUtc(void)
 {
     return barnyard2_conf->output_flags & OUTPUT_FLAG__USE_UTC;
+}
+
+static INLINE int BcOutputUseEventID(void)
+{
+    return barnyard2_conf->output_flags & OUTPUT_FLAG__ALERT_EVENTID;
 }
 
 static INLINE int BcOutputDataLink(void)

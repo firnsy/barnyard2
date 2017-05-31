@@ -181,6 +181,12 @@ static void AlertFast(Packet *p, void *event, uint32_t event_type, void *arg)
         TextLog_Puts(data->log, " [**] ");
 #endif
 
+        if(BcOutputUseEventID())
+        {
+            TextLog_Print(data->log, "(%lu) ",
+                (unsigned long) ntohl(((Unified2EventCommon *)event)->event_id));
+        }
+
         TextLog_Print(data->log, "[%lu:%lu:%lu] ",
                 (unsigned long) ntohl(((Unified2EventCommon *)event)->generator_id),
                 (unsigned long) ntohl(((Unified2EventCommon *)event)->signature_id),

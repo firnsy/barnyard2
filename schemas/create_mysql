@@ -147,7 +147,7 @@ CREATE TABLE opt    ( sid         INT      UNSIGNED NOT NULL,
 # Packet payload
 CREATE TABLE data   ( sid           INT      UNSIGNED NOT NULL,
                       cid           INT      UNSIGNED NOT NULL,
-                      data_payload  TEXT,
+                      data_payload  MEDIUMTEXT,
                       PRIMARY KEY (sid,cid));
 
 # encoding is a lookup table for storing encoding types

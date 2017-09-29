@@ -2521,14 +2521,14 @@ TransacRollback:
     {
 	/* XXX */
 	setTransactionCallFail(&data->dbRH[data->dbtype_id]);
-	FatalError("[dbProcessSignatureInformation()]: Failed, stoping processing \n");
+	FatalError("[dbProcessSignatureInformation()]: Failed, stopping processing \n");
     }
     
     if( dbProcessEventInformation(data,p,event,event_type,sig_id))
     {
 	/* XXX */
 	setTransactionCallFail(&data->dbRH[data->dbtype_id]);
-	FatalError("[dbProcessEventInformation()]: Failed, stoping processing \n");
+	FatalError("[dbProcessEventInformation()]: Failed, stopping processing \n");
     }
     
     

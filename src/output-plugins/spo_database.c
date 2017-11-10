@@ -2448,7 +2448,7 @@ void Database(Packet *p, void *event, uint32_t event_type, void *arg)
     
     if( event == NULL || p == NULL)
     {
-	LogMessage("WARNING database [%s()]: Called with Event[0x%x] Event Type [%u] (P)acket [0x%x], information has not been outputed. \n",
+	LogMessage("WARNING database [%s()]: Called with Event[0x%x] Event Type [%u] (P)acket [0x%x], information has not been outputted. \n",
 		   __FUNCTION__,
 		   event,
 		   event_type,
@@ -2521,14 +2521,14 @@ TransacRollback:
     {
 	/* XXX */
 	setTransactionCallFail(&data->dbRH[data->dbtype_id]);
-	FatalError("[dbProcessSignatureInformation()]: Failed, stoping processing \n");
+	FatalError("[dbProcessSignatureInformation()]: Failed, stopping processing \n");
     }
     
     if( dbProcessEventInformation(data,p,event,event_type,sig_id))
     {
 	/* XXX */
 	setTransactionCallFail(&data->dbRH[data->dbtype_id]);
-	FatalError("[dbProcessEventInformation()]: Failed, stoping processing \n");
+	FatalError("[dbProcessEventInformation()]: Failed, stopping processing \n");
     }
     
     

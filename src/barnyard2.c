@@ -1799,13 +1799,13 @@ static Barnyard2Config * MergeBarnyard2Confs(Barnyard2Config *cmd_line, Barnyard
     if( config_file->alert_on_each_packet_in_stream_flag == 0)
     {
 	LogMessage("[INFO]: Alerting on each packet in stream has been disabled by configuration file,\n"
-		   "\tevents will only be outputed for the first matching event/packet,\n"
+		   "\tevents will only be outputted for the first matching event/packet,\n"
 		   "\tfurther packets matching previous processed events will be ignored");
     }
     else if( cmd_line->alert_on_each_packet_in_stream_flag == 0 )
     {
 	LogMessage("[INFO]: Alerting on each packet in stream has been disabled by command line option,\n"
-		   "\tevents will only be outputed for the first matching event/packet,\n"
+		   "\tevents will only be outputted for the first matching event/packet,\n"
 		   "\tfurther packets matching previous processed events will be ignored");
 
 	config_file->alert_on_each_packet_in_stream_flag = cmd_line->alert_on_each_packet_in_stream_flag;

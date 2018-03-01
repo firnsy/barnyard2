@@ -518,7 +518,7 @@ void AlertCEF(Packet *p, void *event, u_int32_t event_type, void *arg)
         return;
     }
 
-    SnortSnprintf(cef_message, SYSLOG_BUF, "CEF:0|snort|barnyard2|%s", VERSION);
+    SnortSnprintf(cef_message, SYSLOG_BUF, "CEF:0|snort|barnyard2|%s|", VERSION);
 
     if(p && IPH_IS_VALID(p))
     {

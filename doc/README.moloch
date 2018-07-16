@@ -1,0 +1,95 @@
+
+------------------------------------------------------------------------------
+0. SUMMARY
+------------------------------------------------------------------------------
+
+The Moloch output plug-in enables Barnyard to tag sessions in Moloch
+
+See INSTALL for details about enabling this plug-in.
+
+------------------------------------------------------------------------------
+1. DESCRIPTION
+------------------------------------------------------------------------------
+
+This plug-in will add these tags to to the session(s) matching an alert, using
+the Moloch viewer's API :
+ - 'snort'                          : allow Moloch to filter efficiently.
+ - 'snort_sid:<gen_id>-<sig_id>'    : generator and signature ID
+ - 'snort_msg:<message>'            : if tag_message is configured
+
+Moloch can be several minutes late. If the session related to an alert is not
+yet indexed by Moloch, it will bufferize the tag data for latter (about 32B per
+alert, 64B if build with IPv6). This mechanism is also used during Moloch
+Viewer downtime or API failure.
+
+The plug-in will do its best to ensure no tag is lost, as long as a spool file
+is configured.
+On exit, it will write them to the spool file and it will load them back on
+startup. It is also used when the plug-in bufferizes too many tags.
+
+If no spool file is configured, it will try one last time to submit bufferized
+alerts before quitting, and unsubmitted tags will be lost.
+
+If the spool file have been created whith an obsolete file format, Barnyard
+will exit with an error. you can then delete the spool file and miss the
+pending alerts, or relaunch your previous version of Barnyard compatible with
+it, to consume it.
+
+------------------------------------------------------------------------------
+2. MOLOCH SETUP
+------------------------------------------------------------------------------
+
+To get this plug-in working you must have Moloch set up and configured
+properly. this plugin have been tested with Moloch 1.1.1 but should work with
+older versions.
+The Moloch node must be configured and several Barnyard instances can tag
+sessions from different capture nodes using the same Moloch viewer.
+The clock of the network capture node and the corresponding Snort IDS must be
+near-perfectly in sync, ideally on the same device.
+
+A user with minimal permissions should be configured for this plug-in. 'Enabled'
+is the only requirement.
+
+Optionnaly, you can add these rules to the [right-click] section (you may have
+to add the section) of your Moloch's config.ini, in order to add a link to the
+signature documentation in the 'snort_sig:X-Y' tag drop-down menu :
+SNORT_SNORT=url:https://snort.org/rule_docs/%REGEX%;name:Snort signature detail;fields:tags;regex:^snort_sid:([0-9]*-[0-9]{1,6})$
+SNORT_ET=url:http://doc.emergingthreats.net/%REGEX%;name:Emerging Threat signature detail;fields:tags;regex:^snort_sid:[0-9]*-(2[0-9]{6})$
+
+This is also possible tu use Moloch's WISE plug-in mechanism to add these rules
+
+Alerts can be filtered easily by adding a "Snort" view (Tags=="snort"). You can
+get a quick count per alert by displaying 'Tags' in the general section of the
+SPI View. You can get graphs of alerts by using "tags" as a key in SPI Graphs.
+
+------------------------------------------------------------------------------
+3. PLUGIN CONFIGURATION
+------------------------------------------------------------------------------
+
+The plug-in configuration is detailed in etc/barnyard2.conf
+
+------------------------------------------------------------------------------
+4. LIMITATIONS AND POSSIBLE IMPROVEMENTS
+------------------------------------------------------------------------------
+
+The plug-in has no way to identify the correct session for an alert if several
+matching sessions have been recorded. As a result, every matching sessions
+will be tagged (limited to about 100 sessions)
+
+The severity is not added to any tag at the moment but could easily be
+implemented.
+
+The plug-in can submit spooled tags only when a new tag is available, or when
+Barnyard exits or starts. Adding a periodic plug-in callback to Barnyard would
+allow this plug-in to retry sooner.
+
+While the plug-in submits a large ammount of bufferized/spooled tags, Barnyard
+will hang. this could be a problem when Barnyard exits. Implementing a signal
+callback would allow this plug-in to interrupt such long process and spool
+the remaining tags.
+
+If barnyard handle more than 6000 alerts per 10mn, there is a chance that this
+plug-in will not be able to submit them: the in-memory list will saturate and
+the tags will be dumped to the spool file before Moloch indexes the oldest
+ones. It will still submit them when the alert rate slows down or Barnyard
+restarts.

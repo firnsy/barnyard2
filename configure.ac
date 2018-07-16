@@ -1050,14 +1050,30 @@ AC_ARG_ENABLE(plugin-echidna,
        enable_plugin_echidna="$enableval", enable_plugin_echidna="no")
 if test "x$enable_plugin_echidna" = "xyes"; then
     AC_CHECK_LIB([crypto], [SHA256_Init], [], [AC_MSG_ERROR([SHA256_Init was not found in libcrypto])])
-    AC_CHECK_LIB([curl], [curl_easy_setopt], [], [AC_MSG_ERROR([curl_easy_setopt was not found in libcurl])])
     AC_CHECK_LIB([websockets], [libwebsocket_create_context], [], [AC_MSG_ERROR([libwebsocket_create_context was not found in libwebsockets])])
     AC_CHECK_LIB([json], [json_tokener_parse], [], [AC_MSG_ERROR([json_tokener_parse was not found in libjson])])
 
     CPPFLAGS="$CPPFLAGS -DENABLE_PLUGIN_ECHIDNA"
-    LIBS="$LIBS -lwebsockets -ljson -lcurl -lcrypto"
+    LIBS="$LIBS -lwebsockets -ljson -lcrypto"
+
+		addlibcurl="yes"
 fi
 
+AC_ARG_ENABLE(plugin-moloch,
+[  --enable-plugin-moloch           Enable moloch plugin],
+       enable_plugin_moloch="$enableval", enable_plugin_echidna="no")
+
+if test "x$enable_plugin_moloch" = "xyes"; then
+    AC_CHECK_LIB([json-c], [json_tokener_parse], [], [AC_MSG_ERROR([json_tokener_parse was not found in libjson])])
+    CPPFLAGS="$CPPFLAGS -DENABLE_PLUGIN_MOLOCH"
+    LIBS="$LIBS -ljson-c"
+		addlibcurl="yes"
+fi
+
+if test "x$addlibcurl" = "xyes"; then
+    AC_CHECK_LIB([curl], [curl_easy_setopt], [], [AC_MSG_ERROR([curl_easy_setopt was not found in libcurl])])
+    LIBS="$LIBS -lcurl"
+fi
 
 # let's make some fixes..
 

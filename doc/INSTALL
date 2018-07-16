@@ -55,6 +55,16 @@ are below. Detailed instructions will follow later.
     Support for Oracle databases, turn this on if you want to use ACID/BASE
     with Oracle.
 
+`--with-moloch'
+    Enable the Moloch output plugin. this adds a dependency to libcurl and
+    libjson-c.
+    these CPPFLAGS changes the verbosity when verbose is on:
+     -DMOLOCH_DEBUG_API : log API calls and responses.
+     -DMOLOCH_LOG_MATCHING_SESSIONS : log the sessions close to the matching
+       alert. sessions that wwould be tagged are logged with an asterix.
+       This adds another API call for each tag.
+     -DMOLOCH_LOG_MISSES : log the query used to search for sessions when
+       not found. used only for 'recent' sessions (<30mn)
 
 -------------------------------------------------------------------------------
 2. BASIC INSTALLATION

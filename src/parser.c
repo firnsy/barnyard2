@@ -2177,6 +2177,14 @@ void ConfigUtc(Barnyard2Config *bc, char *args)
     bc->output_flags |= OUTPUT_FLAG__USE_UTC;
 }
 
+void ConfigEventID(Barnyard2Config *bc, char *args)
+{
+    if (bc == NULL)
+        return;
+
+    bc->output_flags |= OUTPUT_FLAG__ALERT_EVENTID;
+}
+
 void ConfigVerbose(Barnyard2Config *bc, char *args)
 {
     if (bc == NULL)

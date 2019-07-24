@@ -57,6 +57,7 @@ BuildRequires: libpcap1-devel
 BuildRequires: libpcap-devel
 %endif
 BuildRequires: libdnet-devel
+BuildRequires: daq-devel
 
 
 %description

@@ -1,5 +1,4 @@
-# $Id$
-# Snort.org's SPEC file for Snort
+# Rpm build instructions for Barnyard2
 
 ################################################################
 # rpmbuild Package Options
@@ -44,7 +43,7 @@
 Summary: Snort Log Backend 
 Name: barnyard2
 Version: 1.14
-Source0: https://github.com/firnsy/barnyard2/archive/barnyard2-%{version}.tar.gz
+Source0: https://github.com/firnsy/barnyard2/archive/v2-%{version}.tar.gz
 Release: 1%{?dist}
 License: GPL
 Group: Applications/Internet
@@ -58,6 +57,7 @@ BuildRequires: libpcap1-devel
 BuildRequires: libpcap-devel
 %endif
 BuildRequires: libdnet-devel
+BuildRequires: daq-devel
 
 
 %description
@@ -75,7 +75,7 @@ the last entry as listed in the waldo file.
 %package mysql
 Summary: barnyard2 with MySQL support
 Group: Applications/Internet
-Requires: %{name} = %{epoch}:%{version}-%{release}
+Requires: %{name} = %{?epoch:%{epoch}:}%{version}-%{release}
 %if %{mysql}
 Requires: mysql
 BuildRequires: mysql-devel
@@ -86,7 +86,7 @@ barnyard2 binary compiled with mysql support.
 %package postgresql
 Summary: barnyard2 with PostgreSQL support
 Group: Applications/Internet
-Requires: %{name} = %{epoch}:%{version}-%{release}
+Requires: %{name} = %{?epoch:%{epoch}:}%{version}-%{release}
 %if %{postgresql}
 Requires: postgresql
 BuildRequires: postgresql-devel
@@ -97,15 +97,15 @@ barnyard2 binary compiled with postgresql support.
 %package oracle
 Summary: barnyard2 with Oracle support
 Group: Applications/Internet
-Requires: %{name} = %{epoch}:%{version}-%{release}
+Requires: %{name} = %{?epoch:%{epoch}:}%{version}-%{release}
 %description oracle
 barnyard2 binary compiled with Oracle support.
 
-EXPERIMENTAL!!  I don't have a way to test this, so let me know if it works!
+EXPERIMENTAL!!  I do not have a way to test this, so let me know if it works!
 ORACLE_HOME=%{OracleHome}
 
 %prep
-%setup -q
+%setup -q -n %{name}-2-%{version}
 
 
 %build

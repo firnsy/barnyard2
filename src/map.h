@@ -53,7 +53,7 @@
 #define URL_HEAD           "http://"
 #define NESSUS_URL_HEAD	   "http://cgi.nessus.org/plugins/dump.php3?id="
 
-#define BUFFER_SIZE  1024
+#define BUFFER_SIZE  2048
 
 
 #define SOURCE_SID_MSG     0x0001

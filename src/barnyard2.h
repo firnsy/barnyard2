@@ -1,5 +1,5 @@
 /*
-** Copyright (C) 2008-2012 Ian Firns (SecurixLive) <dev@securixlive.com>
+** Copyright (C) 2008-2013 Ian Firns (SecurixLive) <dev@securixlive.com>
 **
 ** Copyright (C) 2005-2009 Sourcefire, Inc.
 ** Copyright (C) 1998-2005 Martin Roesch <roesch@sourcefire.com>
@@ -60,10 +60,10 @@
 
 /*  D E F I N E S  ************************************************************/
 #define PROGRAM_NAME	"Barnyard"
-#define VER_MAJOR		"2"
-#define VER_MINOR		"1"
-#define VER_REVISION	"10"
-#define VER_BUILD		"310"
+#define VER_MAJOR	"2"
+#define VER_MINOR	"1"
+#define VER_REVISION	"14"
+#define VER_BUILD	"337"
 
 #define STD_BUF  1024
 
@@ -88,6 +88,15 @@
 #endif    
 
 #define TIMEBUF_SIZE    26
+
+
+#ifndef ULONG_MAX
+#  if __WORDSIZE == 64
+#   define ULONG_MAX    18446744073709551615UL
+#  else
+#   define ULONG_MAX    4294967295UL
+#  endif
+#endif
 
 #define DO_IP_CHECKSUMS		0x00000001
 #define DO_TCP_CHECKSUMS	0x00000002
@@ -120,6 +129,15 @@
 # define DEFAULT_MPLS_PAYLOADTYPE      MPLS_PAYLOADTYPE_IPV4
 # define DEFAULT_LABELCHAIN_LENGTH    -1
 #endif
+
+
+/* SIDMAP V2 */
+#define SIDMAPV1STRING "v1"
+#define SIDMAPV2STRING "v2"
+#define SIDMAPV1 0x01
+#define SIDMAPV2 0x02
+/* SIDMAP V2 */
+
 
 /* This macro helps to simplify the differences between Win32 and
    non-Win32 code when printing out the name of the interface */
@@ -159,7 +177,9 @@ typedef enum _GetOptLongIds
 
     DETECTION_SEARCH_METHOD,
     CONF_ERROR_OUT,
+    DISABLE_ALERT_ON_EACH_PACKET_IN_STREAM,
     ALERT_ON_EACH_PACKET_IN_STREAM,
+    EVENT_CACHE_SIZE,
 
 #ifdef MPLS
     MAX_MPLS_LABELCHAIN_LEN,
@@ -286,78 +306,49 @@ typedef struct _VarNode
 
 } VarNode;
 
+
 /* struct to contain the program variables and command line args */
 typedef struct _Barnyard2Config
 {
+/* Does not need cleanup */
     RunMode run_mode;
+    int checksums_mode;
+    char ignore_ports[0x10000];
     int run_mode_flags;
     int run_flags;
     int output_flags;
     int logging_flags;
-//    int log_tcpdump;
-//    int no_log;
-
-    VarEntry            *var_table;
-#ifdef SUP_IP6
-    vartable_t          *ip_vartable;
-#endif
-
-	/* staging - snort specific variables */
-	int					checksums_mode;
-	char				ignore_ports[0x10000];
-
-    /* general variables */
-    char				*config_file;           /* -c */
-    char				*config_dir;
-
-	char				*hostname;		        /* -h or config hostname */
-	char				*interface;		        /* -i or config interface */
-
-    char				*class_file;            /* -C or config class_map */
-    char				*sid_msg_file;          /* -S or config sid_map */
-    char				*gen_msg_file;          /* -G or config gen_map */
-    char				*reference_file;        /* -R or config reference_map */
-    char				*log_dir;               /* -l or config log_dir */
-    char				*orig_log_dir;          /* set in case of chroot */
-    char				*chroot_dir;            /* -t or config chroot */
-    uint8_t	    		verbose;                /* -v */
-    uint8_t		    	localtime;
-    char                *bpf_filter;            /* config bpf_filter */
-
-    int                 thiszone;
-
-    int					quiet_flag;
-    int					verbose_flag;
-	int					verbose_bytedump_flag;
-	int					show2hdr_flag;
-	int					char_data_flag;
-	int					data_flag;
-	int					obfuscation_flag;
-    int                 alert_on_each_packet_in_stream_flag;
-
-	int					logtosyslog_flag;
-	int					test_mode_flag;
-	
-	int					use_utc;
-	int					include_year;
-	
-    int					line_buffer_flag;
-    char				nostamp;
-
-
-    int                 user_id;
-    int                 group_id;
-    mode_t              file_mask;
-
+    int thiszone;
+    int	quiet_flag;
+    int	verbose_flag;
+    int	verbose_bytedump_flag;
+    int	show2hdr_flag;
+    int	char_data_flag;
+    int data_flag;
+    int obfuscation_flag;
+    int alert_on_each_packet_in_stream_flag;
+    
+    int	logtosyslog_flag;
+    int	test_mode_flag;
+    
+    int use_utc;
+    int include_year;
+    
+    int line_buffer_flag;
+    char nostamp;
+    int user_id;
+    int group_id;
+    mode_t file_mask;
+    
     /* -h and -B */
 #ifdef SUP_IP6
-	sfip_t				homenet;
-	sfip_t				obfuscation_net;
+    sfip_t homenet;
+    sfip_t obfuscation_net;
 #else
-	u_long				homenet;
-	u_long				netmask;
-	uint32_t			obfuscation_net;
-	uint32_t			obfuscation_mask;
+    u_long homenet;
+    u_long netmask;
+    uint32_t obfuscation_net;
+    uint32_t obfuscation_mask;
 #endif
 
 #ifdef MPLS
@@ -365,40 +356,70 @@ typedef struct _Barnyard2Config
     long int mpls_stack_depth;  /* --max_mpls_labelchain_len */
 #endif
 
-	/* batch mode options */
-    int					batch_mode_flag;
-	int					batch_total_files;
-	char				**batch_filelist;
+    /* batch mode options */
+    int batch_mode_flag;
+    int batch_total_files;
 
+    
     /* continual mode options */
-	int					process_new_records_only_flag;
-	Waldo				waldo;
-    char				*archive_dir;
-    int					daemon_flag;
-    int					daemon_restart_flag;
+    int process_new_records_only_flag;
+    Waldo waldo;
+
+    int	daemon_flag;
+    int daemon_restart_flag;
     
     /* runtime parameters */
     char pid_filename[STD_BUF];
     char pid_path[STD_BUF];     /* --pid-path or config pidpath */
-
-
     char pidfile_suffix[MAX_PIDFILE_SUFFIX+1]; /* room for a null */
     char create_pid_file;
     char nolock_pid_file;
-	int done_processing;
+    int done_processing;
     int restart_flag;
     int print_version;
     int usr_signal;
     int cant_hup_signal;
+    unsigned int event_cache_size;
+    uint8_t verbose;                /* -v */
+    uint8_t localtime;
 
+/* Need to be handled by Barnyard2ConfFree() */
+
+    VarEntry *var_table;
+#ifdef SUP_IP6
+    vartable_t *ip_vartable;
+#endif
+    SigSuppress_list *ssHead;
+    
     ClassType *classifications;
     ReferenceSystemNode *references;
-
+    SigNode *sigHead;  /* Signature list Head */
+    
     /* plugin active flags*/
-    InputConfig         *input_configs;
-    OutputConfig        *output_configs;
-
+    InputConfig *input_configs;
+    OutputConfig *output_configs;
     PluginSignalFuncNode *plugin_post_config_funcs;
+    
+    char *config_file;           /* -c */
+    char *config_dir;
+    char *hostname;             /* -h or config hostname */
+    char *interface;	        /* -i or config interface */
+    
+    char *class_file;          /* -C or config class_map */
+    char *sid_msg_file;        /* -S or config sid_map */
+    short sidmap_version;      /* Set by ReadSidFile () */
+    char *gen_msg_file;        /* -G or config gen_map */
+
+    char *reference_file;      /* -R or config reference_map */
+    char *log_dir;             /* -l or config log_dir */
+    char *orig_log_dir;        /* set in case of chroot */
+    char *chroot_dir;          /* -t or config chroot */
+
+    char *bpf_filter;          /* config bpf_filter */
+    char **batch_filelist;
+    char *archive_dir;
+
+    Spooler *spooler; /* Used to know if we need to call spoolerClose */
 
 } Barnyard2Config;
 
@@ -410,6 +431,7 @@ typedef struct _PacketCount
     uint64_t total_packets;
     uint64_t total_processed;
     uint64_t total_unknown;
+    uint64_t total_suppressed;
 
     uint64_t s5tcp1;
     uint64_t s5tcp2;
@@ -437,6 +459,7 @@ typedef struct _PacketCount
     uint64_t udisc;
     uint64_t tcp6;
     uint64_t udp6;
+    uint64_t teredo;
     uint64_t ipdisc;
     uint64_t icmpdisc;
     uint64_t embdip;
@@ -445,6 +468,7 @@ typedef struct _PacketCount
     uint64_t ethloopback;
 
     uint64_t invalid_checksums;
+    uint64_t bad_ttl;
 
 #ifdef GRE
     uint64_t ip4ip4;
@@ -489,7 +513,7 @@ typedef struct _PacketCount
   /* wireless statistics */
     uint64_t wifi_mgmt;
     uint64_t wifi_data;
-    uint64_t wifi_control; 
+    uint64_t wifi_control;
     uint64_t assoc_req;
     uint64_t assoc_resp;
     uint64_t reassoc_req;
@@ -518,7 +542,7 @@ typedef struct _PacketCount
 #endif  // NO_NON_ETHER_DECODER
 
 #ifdef MPLS
-    uint64_t mpls;    
+    uint64_t mpls;
 #endif
 } PacketCount;
 
@@ -549,15 +573,19 @@ extern int exit_signal;
 extern Barnyard2Config *barnyard2_conf_for_parsing;
 
 /*  P R O T O T Y P E S  ******************************************************/
+Barnyard2Config * Barnyard2ConfNew(void);
+
 int Barnyard2Main(int argc, char *argv[]);
 int Barnyard2Sleep(unsigned int);
+int SignalCheck(void);
+
 void CleanExit(int);
 void SigCantHupHandler(int signal);
 void FreeVarList(VarNode *);
-Barnyard2Config * Barnyard2ConfNew(void);
 void Barnyard2ConfFree(Barnyard2Config *);
 void CleanupPreprocessors(Barnyard2Config *);
 void CleanupPlugins(Barnyard2Config *);
+
 
 static INLINE int BcTestMode(void)
 {
@@ -723,5 +751,54 @@ static INLINE long int BcMplsPayloadType(void)
 {
     return barnyard2_conf->mpls_payload_type;
 }
+
 #endif
+
+static INLINE short BcSidMapVersion(void)
+{
+    return barnyard2_conf->sidmap_version;
+}
+
+static INLINE SigNode ** BcGetSigNodeHead(void)
+{
+    return &barnyard2_conf->sigHead;
+}
+
+static INLINE Barnyard2Config * BcGetConfig(void)
+{
+    return barnyard2_conf;
+}
+
+static INLINE char * BcGetSourceFile(u_int8_t source_file)
+{
+    switch(source_file)
+    {
+
+    case SOURCE_SID_MSG:
+       	return barnyard2_conf->sid_msg_file;
+	break;
+
+
+    case SOURCE_GEN_MSG:
+	return barnyard2_conf->gen_msg_file;
+	break;
+	
+    default:
+	return "UKNOWN FILE\n";
+	break;
+    }
+}
+
+static INLINE SigSuppress_list ** BCGetSigSuppressHead(void)
+{
+    return &barnyard2_conf->ssHead;
+}
+
+static INLINE void SigSuppressCount(void)
+{
+    pc.total_suppressed++;
+    return;
+}
+
+
 #endif  /* __BARNYARD2_H__ */

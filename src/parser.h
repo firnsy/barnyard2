@@ -43,6 +43,8 @@
 #define BARNYARD2_CONF_KEYWORD__VERSION              "version"
 
 /* Config options */
+#define CONFIG_OPT__DISABLE_ALERT_ON_EACH_PACKET_IN_STREAM  "disable_alert_on_each_packet_in_stream"
+#define CONFIG_OPT__EVENT_CACHE_SIZE                "event_cache_size"
 #define CONFIG_OPT__ALERT_ON_EACH_PACKET_IN_STREAM  "alert_on_each_packet_in_stream"
 #define CONFIG_OPT__ALERT_WITH_IFACE_NAME           "alert_with_interface_name"
 #define CONFIG_OPT__ARCHIVE_DIR                     "archivedir"
@@ -74,6 +76,7 @@
 #define CONFIG_OPT__UTC                             "utc"
 #define CONFIG_OPT__VERBOSE                         "verbose"
 #define CONFIG_OPT__WALDO_FILE                      "waldo_file"
+#define CONFIG_OPT__SIGSUPPRESS                     "sig_suppress"
 #ifdef MPLS
 # define CONFIG_OPT__MAX_MPLS_LABELCHAIN_LEN        "max_mpls_labelchain_len"
 # define CONFIG_OPT__MPLS_PAYLOAD_TYPE              "mpls_payload_type"
@@ -107,6 +110,7 @@ void ConfigureOutputPlugins(Barnyard2Config *);
 NORETURN void ParseError(const char *, ...);
 void ParseMessage(const char *, ...);
 
+void ConfigDisableAlertOnEachPacketInStream(Barnyard2Config *, char *);
 void ConfigAlertOnEachPacketInStream(Barnyard2Config *, char *);
 void ConfigAlertWithInterfaceName(Barnyard2Config *, char *);
 void ConfigArchiveDir(Barnyard2Config *, char *);
@@ -143,10 +147,14 @@ void ConfigUmask(Barnyard2Config *, char *);
 void ConfigUtc(Barnyard2Config *, char *);
 void ConfigVerbose(Barnyard2Config *, char *);
 void ConfigWaldoFile(Barnyard2Config *, char *);
+void ConfigSetEventCacheSize(Barnyard2Config *, char *);
 #ifdef MPLS
 void ConfigMaxMplsLabelChain(Barnyard2Config *, char *);
 void ConfigMplsPayloadType(Barnyard2Config *, char *);
 #endif
+void ConfigSigSuppress(Barnyard2Config *, char *);
+void DisplaySigSuppress(SigSuppress_list **);
+
 
 // use this so mSplit doesn't split IP lists (try c = ';')
 char* FixSeparators (char* rule, char c, const char* err);

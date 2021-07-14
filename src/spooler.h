@@ -1,6 +1,6 @@
 /* 
 **
-** Copyright (C) 2008-2012 Ian Firns (SecurixLive) <dev@securixlive.com>
+** Copyright (C) 2008-2013 Ian Firns (SecurixLive) <dev@securixlive.com>
 **
 ** This program is free software; you can redistribute it and/or modify
 ** it under the terms of the GNU General Public License Version 2 as
@@ -72,7 +72,10 @@ typedef struct _EventRecordNode
     uint32_t                type;   /* type of event stored */
     void                    *data;  /* unified2 event (eg IPv4, IPV6, MPLS, etc) */
     uint8_t                 used;   /* has the event be retrieved */
-    
+    uint32_t                time_used; /* time it has fired */
+    uint32_t                event_id;  /* extracted from event original */
+    uint32_t                event_second; /* extracted from event originale */
+
     struct _EventRecordNode *next;  /* reference to next event record */
 } EventRecordNode;
 
@@ -98,7 +101,7 @@ typedef struct _Spooler
     void                    *header;    // header of input file
 
     Record                  record;     // data of current Record
-
+    
     EventRecordNode         *event_cache; // linked list of cached events
     uint32_t                events_cached;
 
@@ -130,6 +133,12 @@ int ProcessBatch(const char *, const char *);
 int ProcessWaldoFile(const char *);
 
 int spoolerReadWaldo(Waldo *);
+void spoolerEventCacheFlush(Spooler *);
+void RegisterSpooler(Spooler *);
+void UnRegisterSpooler(Spooler *);
+
+int spoolerCloseWaldo(Waldo *);
+int spoolerClose(Spooler *);
 
 #endif /* __SPOOLER_H__ */
 

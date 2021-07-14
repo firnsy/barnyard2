@@ -1,0 +1,64 @@
+-=Barnyard2 Team=-
+<barnyard2-users@barnyard2-users@googlegroups.com>
+==================================================
+
+Barnyard2 support event suppression at the 
+spooler level using the configuration directive sig_suppress.
+
+Syntax:
+=======
+config sig_suppress: (GID):(SID)  
+
+Note:
+GID is optional and SID can be a single SID or a range (START)-(END) (see below).
+
+EX:
+=======
+config sig_suppress: 1:10 
+AND
+config sig_suppress: 10
+
+The above expressions ARE equivalent.
+
+config sig_suppress: 1:10
+AND
+config sig_suppress: 112:10
+
+The above expressions ARE NOT equivalent because one speficy gid 1 (alert) while the other speficy gid 112 (spp_arpspoof)
+
+config sig_suppress: 10-40 <= RANGE
+IS equivalent to
+    config sig_suppress: 1:10-40 <= RANGE
+AND ALSO equivalent to
+    config sig_suppress: 10,11,12,13,14,15,16....,38,39,40
+
+NOTE: single entries are less effective,especially if you have large lists.
+
+As the time of this writing, if you change the list you will need to restart the process (STOP/START) and not SIGHUP
+if you want the changes to be applied to event processing.
+
+If we define the following list (overlaping entries are ignored or replaced when a range covering them is encountered):
+config sig_suppress: 1:10,20,1:30,2:90-102
+config sig_suppress: 1:10,1:30-40,15,10-40,25
+config sig_suppress: 1:10,50-55,15,10-20,80,51-52,31-35
+config sig_suppress: 2:93,2:95,2:100-101,2:91-122,22-27,2008175,2657,2011766,9900009,2001972,2101623
+
+So with the example above the final list is the following:
+
+    +[ Signature Suppress list ]+
+    ----------------------------
+    -- Element type:[RANGE ] gid:[2] sid min:[90] sid max:[122]
+    -- Element type:[RANGE ] gid:[1] sid min:[30] sid max:[40]
+    -- Element type:[RANGE ] gid:[1] sid min:[50] sid max:[55]
+    -- Element type:[RANGE ] gid:[1] sid min:[10] sid max:[20]
+    -- Element type:[SINGLE] gid:[1] sid min:[80] sid max:[80]
+    -- Element type:[RANGE ] gid:[1] sid min:[22] sid max:[27]
+    -- Element type:[SINGLE] gid:[1] sid min:[2008175] sid max:[2008175]
+    -- Element type:[SINGLE] gid:[1] sid min:[2657] sid max:[2657]
+    -- Element type:[SINGLE] gid:[1] sid min:[2011766] sid max:[2011766]
+    -- Element type:[SINGLE] gid:[1] sid min:[9900009] sid max:[9900009]
+    -- Element type:[SINGLE] gid:[1] sid min:[2001972] sid max:[2001972]
+    -- Element type:[SINGLE] gid:[1] sid min:[2101623] sid max:[2101623]
+    ----------------------------
+    +[ Signature Suppress list ]+
+

@@ -1,6 +1,6 @@
 /* 
 **
-** Copyright (C) 2008-2012 Ian Firns (SecurixLive) <dev@securixlive.com>
+** Copyright (C) 2008-2013 Ian Firns (SecurixLive) <dev@securixlive.com>
 **
 ** This program is free software; you can redistribute it and/or modify
 ** it under the terms of the GNU General Public License Version 2 as
@@ -44,7 +44,6 @@
 
 #include <stdio.h>
 #include <sys/types.h>
-
 #include "sf_types.h"
 
 #define BUGTRAQ_URL_HEAD   "http://www.securityfocus.com/bid/"
@@ -55,6 +54,11 @@
 #define NESSUS_URL_HEAD	   "http://cgi.nessus.org/plugins/dump.php3?id="
 
 #define BUFFER_SIZE  1024
+
+
+#define SOURCE_SID_MSG     0x0001
+#define SOURCE_GEN_MSG     0x0002
+#define SOURCE_GEN_RUNTIME 0x0004
 
 struct _Barnyard2Config;
 
@@ -67,24 +71,12 @@ typedef struct _ReferenceSystemNode
 
 } ReferenceSystemNode;
 
-ReferenceSystemNode * ReferenceSystemAdd(ReferenceSystemNode **, char *, char *);
-ReferenceSystemNode * ReferenceSystemLookup(ReferenceSystemNode *, char *);
-
-int ReadReferenceFile(struct _Barnyard2Config *, const char *);
-void ParseReferenceSystemConfig(struct _Barnyard2Config *, char *args);
-
-void DeleteReferenceSystems(struct _Barnyard2Config *);
-
-
 typedef struct _ReferenceNode
 {
     char *id;
     ReferenceSystemNode *system;
     struct _ReferenceNode *next;
 } ReferenceNode;
-
-ReferenceNode * AddReference(struct _Barnyard2Config *, ReferenceNode **, char *, char *);
-void DeleteReferences(struct _Barnyard2Config *);
 
 
 typedef struct _ClassType
@@ -98,42 +90,66 @@ typedef struct _ClassType
 
 } ClassType;
 
-
 typedef struct _SigNode
 {
+    struct _SigNode		*next;
     uint32_t			generator;	/* generator ID */
-    uint32_t			id;			/* Snort ID */
+    uint32_t			id;		/* Snort ID */
     uint32_t			rev;		/* revision (for future expansion) */
     uint32_t			class_id;
-    uint32_t			priority;			
+    uint32_t			priority;	
+    u_int8_t                    source_file;     /* where was it parsed from */
+    char                        *classLiteral;  /* sid-msg.map v2 type only */
     char			*msg;		/* messages */
-    ClassType			*classType;
     ReferenceNode		*refs;		/* references (eg bugtraq) */
-    struct _SigNode		*next;
 
 } SigNode;
 
 
+#define SS_SINGLE 0x0001
+#define SS_RANGE  0x0002
+
+typedef struct _SigSuppress_list
+{
+    u_int8_t  ss_type;  /* Single or Range */
+    u_int8_t  flag;     /* Flagged for deletion */
+    unsigned long gid;  /* Generator id */
+    unsigned long ss_min; /* VAL for SS_SINGLE, MIN VAL for RANGE */
+    unsigned long ss_max; /* VAL for SS_SINGLE, MAX VAL for RANGE */
+    struct _SigSuppress_list *next;
+} SigSuppress_list;
+
+
+
+ReferenceSystemNode * ReferenceSystemAdd(ReferenceSystemNode **, char *, char *);
+ReferenceSystemNode * ReferenceSystemLookup(ReferenceSystemNode *, char *);
+ReferenceNode * AddReference(struct _Barnyard2Config *, ReferenceNode **, char *, char *);
+
+SigNode *GetSigByGidSid(uint32_t, uint32_t, uint32_t);
+SigNode *CreateSigNode(SigNode **,u_int8_t);
 
 ClassType * ClassTypeLookupByType(struct _Barnyard2Config *, char *);
 ClassType * ClassTypeLookupById(struct _Barnyard2Config *, int);
 
-int ReadClassificationFile(struct _Barnyard2Config *, const char *);
+int ReadReferenceFile(struct _Barnyard2Config *, const char *);
+int ReadClassificationFile(struct _Barnyard2Config *);
+int ReadSidFile(struct _Barnyard2Config *);
+int ReadGenFile(struct _Barnyard2Config *);
+int SignatureResolveClassification(ClassType *class,SigNode *sig,char *sid_map_file,char *classification_file);
+
+void DeleteReferenceSystems(struct _Barnyard2Config *);
+void DeleteReferences(struct _Barnyard2Config *);
+
+void ParseReferenceSystemConfig(struct _Barnyard2Config *, char *args);
 void ParseClassificationConfig(struct _Barnyard2Config *, char *args);
-
-void DeleteClassTypes();
-
-SigNode *GetSigByGidSid(uint32_t, uint32_t);
-
-int ReadSidFile(struct _Barnyard2Config *, const char *);
 void ParseSidMapLine(struct _Barnyard2Config *, char *);
-
-int ReadGenFile(struct _Barnyard2Config *, const char *);
 void ParseGenMapLine(char *);
 
-void DeleteSigNodes();
-
-SigNode *CreateSigNode(SigNode **);
+/* Destructors */
+void FreeSigNodes(SigNode **);
+void FreeClassifications(ClassType **);
+void FreeReferences(ReferenceSystemNode **);
+void FreeSigSuppression(SigSuppress_list **);
 
 
 #endif  /* __MAP_H__ */

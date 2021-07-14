@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <pcap.h>
 
+#include "decode.h"
 #include "unified2.h"
 
 /* this struct is for the alert socket code.... */
@@ -49,7 +50,7 @@ typedef struct _Alertpkt
 #define NOPACKET_STRUCT 0x1
     /* no transport headers in packet */
 #define NO_TRANSHDR    0x2
-    uint8_t pkt[SNAPLEN];
+    uint8_t pkt[PKT_SNAPLEN];
     Unified2EventCommon event;
 } Alertpkt;
 

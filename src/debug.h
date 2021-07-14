@@ -44,20 +44,23 @@
 
 #define DEBUG_VARIABLE "BARNYARD2_DEBUG"
 
-#define DEBUG_ALL             0xffffffff  /* 4294967295 */
-#define DEBUG_INIT            0x00000001  /* 1 */
-#define DEBUG_CONFIGRULES     0x00000002  /* 2 */
-#define DEBUG_PLUGIN          0x00000004  /* 4 */
-#define DEBUG_VARS            0x00000010  /* 16 */
-#define DEBUG_LOG             0x00000020  /* 32 */
-#define DEBUG_FLOW			  0x00000040
-#define DEBUG_DECODE		  0x00000080
-#define DEBUG_DATALINK		  0x00000100
-#define DEBUG_INPUT_PLUGIN	  0x00000200
-#define DEBUG_OUTPUT_PLUGIN	  0x00000400
-#define DEBUG_SPOOLER		  0x00000800
-#define DEBUG_MAPS            0x00001000  
-#define DEBUG_PATTERN_MATCH   0x00080000  
+#define DEBUG_ALL                   0xffffffff  /* 4294967295 */
+#define DEBUG_INIT                  0x00000001  /* 1 */
+#define DEBUG_CONFIGRULES           0x00000002  /* 2 */
+#define DEBUG_PLUGIN                0x00000004  /* 4 */
+#define DEBUG_VARS                  0x00000010  /* 16 */
+#define DEBUG_LOG                   0x00000020  /* 32 */
+#define DEBUG_FLOW		    0x00000040
+#define DEBUG_DECODE		    0x00000080
+#define DEBUG_DATALINK		    0x00000100
+#define DEBUG_INPUT_PLUGIN	    0x00000200
+#define DEBUG_OUTPUT_PLUGIN	    0x00000400
+#define DEBUG_SPOOLER		    0x00000800
+#define DEBUG_MAPS                  0x00001000  
+#define DEBUG_MAPS_DEEP             0x00002000  
+#define DEBUG_PATTERN_MATCH         0x00080000  
+#define DEBUG_SID_SUPPRESS          0x00100000
+#define DEBUG_SID_SUPPRESS_PARSE    0x00200000
 
 void DebugMessageFunc(int dbg,char *fmt, ...);
 #ifdef HAVE_WCHAR_H

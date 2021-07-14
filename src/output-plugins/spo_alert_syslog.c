@@ -68,6 +68,8 @@
 #include "plugbase.h"
 #include "unified2.h"
 #include "util.h"
+#include "ipv6_port.h"
+
 
 typedef struct _SyslogData
 {
@@ -515,7 +517,10 @@ void AlertSyslog(Packet *p, void *event, uint32_t event_type, void *arg)
 
 	data = (SyslogData *)arg;
 	sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-						ntohl(((Unified2EventCommon *)event)->signature_id));
+			    ntohl(((Unified2EventCommon *)event)->signature_id),
+			    ntohl(((Unified2EventCommon *)event)->signature_revision));
+			    
+
 	cn = ClassTypeLookupById(barnyard2_conf, ntohl(((Unified2EventCommon *)event)->classification_id));
     event_string[0] = '\0';
 
@@ -654,6 +659,8 @@ void AlertSyslogCleanExit(int signal, void *arg)
     /* free memory from SyslogData */
     if(data)
         free(data);
+
+    closelog();
 }
 
 void AlertSyslogRestart(int signal, void *arg)
@@ -663,4 +670,7 @@ void AlertSyslogRestart(int signal, void *arg)
     /* free memory from SyslogData */
     if(data)
         free(data);
+
+
+    closelog();
 }

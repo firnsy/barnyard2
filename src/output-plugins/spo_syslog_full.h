@@ -42,14 +42,33 @@
 #include "strlcpyu.h"
 #include "unified2.h"
 
+
+#define OUT_MODE_DEFAULT 0
+#define OUT_MODE_FULL 1
+
+#define LOG_UDP 0
+#define LOG_TCP 1
+
+#define ENCODE_HEX    0x0000
+#define ENCODE_ASCII  0x0001
+#define ENCODE_BASE64 0x0002
+
+#define SYSLOG_MAX_QUERY_SIZE MAX_QUERY_LENGTH  
+
 typedef struct _OpSyslog_Data 
 {
     char *server;
     char *sensor_name;
-    
+
+    u_int8_t log_context;
+    u_int8_t payload_encoding;
     u_int8_t operation_mode;
     u_int8_t local_logging;
-    u_int32_t syslog_priority;
+    u_int32_t priority;
+    u_int32_t facility;
+
+    char payload_escape_buffer[MAX_QUERY_LENGTH];
+    
     
     char syslog_tx_facility[16];
     char syslog_tx_priority[16];
@@ -75,13 +94,8 @@ typedef struct _OpSyslog_Data
 } OpSyslog_Data;
 
 void OpSyslog_Setup(void);
-void OpSyslog_Init(char *args);
+void OpSyslog_Init(char *args,u_int8_t context);
 
-#define SYSLOG_MAX_QUERY_SIZE 65535   /* This could be easely filled in log mode with  the full packet payload, 
-				         we issue a warning if payload is truncated in log mode 
-					 We could make the query size max payload *2 + 1024 or so bytes and we should be fine, but that would make large
-					 syslog messages if reached and i wonder if SIEM would be able to handle that.
-				      */
 
 #endif  /* __OP_SYSLOG_FULL_H_ */
 

@@ -51,6 +51,8 @@
 #include "debug.h"
 #include "util.h"
 
+#include "unified2.h"
+
 /* built-in input plugins */
 #include "input-plugins/spi_unified2.h"
 
@@ -70,7 +72,7 @@
 #include "output-plugins/spo_log_ascii.h"
 #include "output-plugins/spo_log_null.h"
 #include "output-plugins/spo_log_tcpdump.h"
-#include "output-plugins/spo_platypus.h"
+#include "output-plugins/spo_echidna.h"
 #include "output-plugins/spo_sguil.h"
 #include "output-plugins/spo_syslog_full.h"
 
@@ -79,6 +81,7 @@ extern OutputConfigFuncNode *output_config_funcs;
 extern PluginSignalFuncNode *plugin_shutdown_funcs;
 extern PluginSignalFuncNode *plugin_clean_exit_funcs;
 extern PluginSignalFuncNode *plugin_restart_funcs;
+
 extern InputFuncNode  *InputList;
 extern OutputFuncNode *AlertList;
 extern OutputFuncNode *LogList;
@@ -95,7 +98,6 @@ InputFuncNode *InputList;
 void RegisterInputPlugins()
 {
     LogMessage("Initializing Input Plugins!\n");
-    
     Unified2Setup();
 }
 
@@ -197,6 +199,7 @@ void RegisterInputPlugin(char *keyword, InputConfigFunc func)
 
     node2->keyword = SnortStrdup(keyword);
 }
+
 
 InputConfigFunc GetInputConfigFunc(char *keyword)
 {
@@ -321,7 +324,7 @@ static void AppendOutputFuncList(OutputFunc, void *, OutputFuncNode **);
 void RegisterOutputPlugins(void)
 {
     LogMessage("Initializing Output Plugins!\n");
-
+    
     AlertCEFSetup();
     AlertSyslogSetup();
 
@@ -355,7 +358,10 @@ void RegisterOutputPlugins(void)
 
     AlertTestSetup();
 
-    PlatypusSetup();
+#ifdef ENABLE_PLUGIN_ECHIDNA
+    EchidnaSetup();
+#endif
+
     SguilSetup();
 
     OpSyslog_Setup();
@@ -462,7 +468,60 @@ void FreeOutputConfigFuncs(void)
         free(head);
         head = tmp;
     }
+
+    output_config_funcs = NULL;
 }
+
+
+void FreeInputPlugins(void)
+{
+
+    InputConfigFuncNode *tmp = input_config_funcs;
+    InputConfigFuncNode *next = NULL;
+
+    InputFuncNode *tmp2 = InputList;
+    InputFuncNode *next2 = NULL;
+    
+    while(tmp != NULL)
+    {
+	next = tmp->next;
+
+	if(tmp->keyword != NULL)
+	{
+	    free(tmp->keyword);
+	    tmp->keyword = NULL;
+	}
+	
+       	free(tmp);
+	tmp = next;
+    }
+    
+
+    while(tmp2 != NULL)
+    {
+	next2 =tmp2->next;
+	
+	if( tmp2->keyword != NULL)
+	{
+	    free(tmp2->keyword);
+	    tmp2->keyword = NULL;
+	}
+
+	if( tmp2->arg != NULL)
+	{
+	    free(tmp2->arg);
+	    tmp2->arg = NULL;
+	}
+
+	free(tmp2);
+	tmp2 = next2;
+    }
+    
+    input_config_funcs = NULL;
+    InputList = NULL;
+    return;
+}
+
 
 void FreeOutputList(OutputFuncNode *list)
 {
@@ -477,6 +536,7 @@ void FreeOutputList(OutputFuncNode *list)
 	    free(tmp);
 	}
     }
+
 }
 
 /****************************************************************************
@@ -551,9 +611,74 @@ void AppendOutputFuncList(OutputFunc func, void *arg, OutputFuncNode **list)
     node->arg = arg;
 }
 
+int pbCheckSignatureSuppression(void *event)
+{
+    Unified2EventCommon *uCommon = (Unified2EventCommon *)event;
+    SigSuppress_list **sHead = BCGetSigSuppressHead();
+    SigSuppress_list *cNode = NULL;
+    u_int32_t gid = 0;
+    u_int32_t sid = 0;
+
+    if( (uCommon == NULL) ||
+	(sHead == NULL))
+    {
+	return 0;
+    }
+    
+    cNode = *sHead;
+
+    gid = ntohl(uCommon->generator_id);
+    sid = ntohl(uCommon->signature_id);
+
+    while(cNode)
+    {
+	if(cNode->gid == gid)
+	{
+	    switch(cNode->ss_type)
+	    {
+	    case SS_SINGLE:
+		if(cNode->ss_min == sid)
+		{
+		    SigSuppressCount();
+		    return 1;
+		}
+		break;
+		
+	    case SS_RANGE:
+		if( (sid >= cNode->ss_min) &&
+		    (sid <= cNode->ss_max))
+		{
+		    SigSuppressCount();
+		    return 1;
+		}
+		break;
+
+	    default:
+		FatalError("[%s()], Unknown Signature suppress type \n",
+			   __FUNCTION__);
+		break;
+	    }
+
+	}
+	cNode = cNode->next;
+    }
+    
+    return 0;
+}
+
+
+
 void CallOutputPlugins(OutputType out_type, Packet *packet, void *event, uint32_t event_type)
 {
     OutputFuncNode *idx = NULL;
+
+    /* Plug for sid suppression */
+    if(event)
+    {
+	if(pbCheckSignatureSuppression(event))
+	    return;
+    }
+
 
     if (out_type == OUTPUT_TYPE__SPECIAL)
     {
@@ -662,6 +787,7 @@ void AddFuncToSignalList(PluginSignalFunc func, void *arg, PluginSignalFuncNode 
     node->func = func;
     node->arg = arg;
 }
+
 
 void FreePluginSigFuncs(PluginSignalFuncNode *head)
 {

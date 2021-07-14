@@ -1,6 +1,6 @@
 /* 
 **
-** Copyright (C) 2008-2012 Ian Firns (SecurixLive) <dev@securixlive.com>
+** Copyright (C) 2008-2013 Ian Firns (SecurixLive) <dev@securixlive.com>
 **
 ** This program is free software; you can redistribute it and/or modify
 ** it under the terms of the GNU General Public License Version 2 as
@@ -41,7 +41,7 @@
 #include "unified2.h"
 #include "util.h"
 
-#define CACHED_EVENTS_MAX 256
+
 
 /*
 ** PRIVATE FUNCTIONS
@@ -61,8 +61,8 @@ int spoolerCloseWaldo(Waldo *);
 int spoolerPacketCacheAdd(Spooler *, Packet *);
 int spoolerPacketCacheClear(Spooler *);
 
-int spoolerEventCachePush(Spooler *, uint32_t, void *);
-EventRecordNode * spoolerEventCacheGetByEventID(Spooler *, uint32_t);
+int spoolerEventCachePush(Spooler *, uint32_t, void *,uint32_t,uint32_t);
+EventRecordNode * spoolerEventCacheGetByEventID(Spooler *, uint32_t,uint32_t);
 EventRecordNode * spoolerEventCacheGetHead(Spooler *);
 uint8_t spoolerEventCacheHeadUsed(Spooler *);
 int spoolerEventCacheClean(Spooler *);
@@ -162,6 +162,8 @@ Spooler *spoolerOpen(const char *dirpath, const char *filename, uint32_t extensi
     /* create the spooler structure and allocate all memory */
     spooler = (Spooler *)SnortAlloc(sizeof(Spooler));
 
+    RegisterSpooler(spooler);
+
     /* allocate some extra structures required (ie. Packet) */
 
     spooler->fd = -1;
@@ -180,6 +182,7 @@ Spooler *spoolerOpen(const char *dirpath, const char *filename, uint32_t extensi
     /* sanity check the filepath */
     if (ret != SNORT_SNPRINTF_SUCCESS)
     {
+	UnRegisterSpooler(spooler);
         spoolerClose(spooler);
         FatalError("spooler: filepath too long!\n");
     }
@@ -193,6 +196,7 @@ Spooler *spoolerOpen(const char *dirpath, const char *filename, uint32_t extensi
     {
         LogMessage("ERROR: Unable to open log spool file '%s' (%s)\n", 
                     spooler->filepath, strerror(errno));
+	UnRegisterSpooler(spooler);
         spoolerClose(spooler);
         spooler = NULL;
         return NULL;
@@ -205,6 +209,7 @@ Spooler *spoolerOpen(const char *dirpath, const char *filename, uint32_t extensi
 
     if (spooler->ifn == NULL)
     {
+	UnRegisterSpooler(spooler);
         spoolerClose(spooler);
         spooler = NULL;
         FatalError("ERROR: No suitable input plugin found!\n");
@@ -233,6 +238,51 @@ int spoolerClose(Spooler *spooler)
 
     return 0;
 }
+
+void RegisterSpooler(Spooler *spooler)
+{
+    Barnyard2Config *bc =  BcGetConfig();
+    
+    if(!bc)
+	return;
+    
+    
+    if(bc->spooler)
+    {
+	/* XXX */
+	FatalError("[%s()], can't register spooler. \n",
+		   __FUNCTION__);
+    }
+    else
+    {
+	bc->spooler = spooler;
+    }
+    
+    return;
+}
+
+void UnRegisterSpooler(Spooler *spooler)
+{
+    Barnyard2Config *bc =  BcGetConfig();
+
+    if(!bc)
+	return;
+    
+    if(bc->spooler != spooler)
+    {
+	/* XXX */
+	FatalError("[%s()], can't un-register spooler. \n",
+		   __FUNCTION__);
+    }
+    else
+    {
+	bc->spooler = NULL;
+    }
+
+    return;
+}
+
+
 
 int spoolerReadRecordHeader(Spooler *spooler)
 {
@@ -315,6 +365,9 @@ int ProcessBatch(const char *dirpath, const char *filename)
 
     while (exit_signal == 0 && pb_ret == 0)
     {
+	/* for SIGUSR1 / dropstats */
+	SignalCheck();
+	
         switch (spooler->state)
         {
             case SPOOLER_STATE_OPENED:
@@ -404,6 +457,9 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
     /* Start the main process loop */
     while (exit_signal == 0)
     {
+	/* for SIGUSR1 / dropstats */
+	SignalCheck();
+
         /* no spooler exists so let's create one */
         if (spooler == NULL)
         {
@@ -455,9 +511,11 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
 	    else
 	    {
 		/* Make sure we create a new waldo even if we did not have processed an event */
-		spooler->record_idx = 0;    
-		spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);
-			    
+		if(waldo_timestamp != extension)
+		{
+		    spooler->record_idx = 0;    
+		    spoolerWriteWaldo(&barnyard2_conf->waldo, spooler);
+		}
 		waiting_logged = 0;
 		
 		/* set timestamp to ensure we look for a newer file next time */
@@ -490,6 +548,7 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
 #endif
 
                 /* we've finished with the spooler so destroy and cleanup */
+		UnRegisterSpooler(spooler);
                 spoolerClose(spooler);
                 spooler = NULL;
 
@@ -566,6 +625,7 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
                     ArchiveFile(spooler->filepath, BcArchiveDir());
 
                 /* close (ie. destroy and cleanup) the spooler so we can rotate */
+		UnRegisterSpooler(spooler);
                 spoolerClose(spooler);
                 spooler = NULL;
 
@@ -606,8 +666,8 @@ int ProcessContinuous(const char *dirpath, const char *filebase,
 
     /* close waldo if appropriate */
     if(barnyard2_conf)
-	spoolerCloseWaldo(&barnyard2_conf->waldo);
-
+    	spoolerCloseWaldo(&barnyard2_conf->waldo);
+    
     return pc_ret;
 }
 
@@ -653,17 +713,22 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
             pc.total_unknown++;
     }
 
+    /* convert event id once */
+    uint32_t event_id = 0x0000ffff & ntohl(((Unified2CacheCommon *)spooler->record.data)->event_id);
+    uint32_t event_second = ntohl( ((Unified2CacheCommon *)spooler->record.data)->event_second);
+
+
     /* check if it's packet */
     if (type == UNIFIED2_PACKET)
     {
-        /* convert event id once */
-        uint32_t event_id = ntohl(((Unified2Packet *)spooler->record.data)->event_id);
 
         /* check if there is a previously cached event that matches this event id */
-        ernCache = spoolerEventCacheGetByEventID(spooler, event_id);
+        ernCache = spoolerEventCacheGetByEventID(spooler, event_id,event_second);
 
         /* allocate space for the packet and construct the packet header */
         spooler->record.pkt = SnortAlloc(sizeof(Packet));
+        spooler->record.pkt->ip6_extensions = SnortAlloc(sizeof(IP6Option) * 1);
+
 
         pkth.caplen = ntohl(((Unified2Packet *)spooler->record.data)->packet_length);
         pkth.len = pkth.caplen;
@@ -735,6 +800,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
         }
 
         /* free the memory allocated in this function */
+        free(spooler->record.pkt->ip6_extensions);
         free(spooler->record.pkt);
         spooler->record.pkt = NULL;
 
@@ -766,7 +832,7 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
         }
 
         /* cache new data */
-        spoolerEventCachePush(spooler, type, spooler->record.data);
+        spoolerEventCachePush(spooler, type, spooler->record.data,event_id,event_second);
         spooler->record.data = NULL;
 
         /* waldo operations occur after the output plugins are called */
@@ -805,11 +871,13 @@ void spoolerProcessRecord(Spooler *spooler, int fire_output)
     spoolerEventCacheClean(spooler);
 }
 
-int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)
+int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data,u_int32_t event_id,u_int32_t event_second)
 {
     EventRecordNode     *ernNode;
-
-    DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"Caching event...\n"););
+    DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"[%s], Caching event id[%u] second[%u] \n",
+			    __FUNCTION__,
+			    event_id,
+			    event_second););
 
     /* allocate memory */
     ernNode = (EventRecordNode *)SnortAlloc(sizeof(EventRecordNode));
@@ -818,6 +886,9 @@ int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)
     ernNode->used = 0;
     ernNode->type = type;
     ernNode->data = data;
+    
+    ernNode->event_id = event_id;
+    ernNode->event_second = event_second;
 
     /* add new events to the front of the cache */
     ernNode->next = spooler->event_cache;
@@ -830,14 +901,18 @@ int spoolerEventCachePush(Spooler *spooler, uint32_t type, void *data)
     return 0;
 }
 
-EventRecordNode *spoolerEventCacheGetByEventID(Spooler *spooler, uint32_t event_id)
+EventRecordNode *spoolerEventCacheGetByEventID(Spooler *spooler,uint32_t event_id,uint32_t event_second)
 {
     EventRecordNode     *ernCurrent = spooler->event_cache;
-
+    
     while (ernCurrent != NULL)
     {
-        if ( ntohl(((Unified2EventCommon *)ernCurrent->data)->event_id) == event_id )
+        if ( (ernCurrent->event_id == event_id) &&
+	     (ernCurrent->event_second == event_second))
         {
+	    ernCurrent->time_used++;
+	    DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"[%s], Using cached event[%d] event second [%d] \n",
+				    __FUNCTION__,event_id,event_second););
             return ernCurrent;
         }
 
@@ -868,6 +943,9 @@ int spoolerEventCacheClean(Spooler *spooler)
     EventRecordNode     *ernCurrent = NULL;
     EventRecordNode     *ernPrev = NULL;
     EventRecordNode     *ernNext = NULL;
+    EventRecordNode     *ernCandidate = NULL;
+    EventRecordNode     *ernCandidateNext = NULL;
+    EventRecordNode     *ernCandidatePrev = NULL;
     
     if (spooler == NULL || spooler->event_cache == NULL )
         return 1;
@@ -875,45 +953,95 @@ int spoolerEventCacheClean(Spooler *spooler)
     ernPrev = spooler->event_cache;
     ernCurrent = spooler->event_cache;
     
-    while (ernCurrent != NULL && spooler->events_cached > CACHED_EVENTS_MAX )
+    if(spooler->events_cached > barnyard2_conf->event_cache_size)
     {
-	ernNext = ernCurrent->next;
-	
-	if ( ernCurrent->used == 1 )
-        {
-	    /* Delete from list */
-	    if (ernCurrent == spooler->event_cache)
+	while (ernCurrent != NULL)
+	{
+	    ernNext = ernCurrent->next;
+	    if(ernCurrent->used == 1 && ernCurrent->time_used >=1)
 	    {
-                spooler->event_cache = ernNext;
-	    }
-            else
-	    {
-                ernPrev->next = ernNext;
-	    }
-	    
-            spooler->events_cached--;
-
-	    if(ernCurrent->data != NULL)
-	    {
-		free(ernCurrent->data);
+		ernCandidateNext = ernNext;
+		ernCandidatePrev = ernPrev;
+		ernCandidate=ernCurrent;
 	    }
 	    
 	    if(ernCurrent != NULL)
 	    {
-		free(ernCurrent);
+		ernPrev = ernCurrent;
 	    }
-        }
-	
-	if(ernCurrent != NULL)
-	{
-	    ernPrev = ernCurrent;
+	    
+	    ernCurrent = ernNext;
 	}
 	
-	ernCurrent = ernNext;
-
-    }
-
+	if ( ernCandidate != NULL)
+	{
+	    /* Delete from list */
+	    if (ernCandidate == spooler->event_cache)
+	    {
+		spooler->event_cache = NULL;
+	    }
+	    else
+	    {
+		ernCandidatePrev->next = ernCandidateNext;
+	    }
+	    
+	    DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"[%s],Event currently cached [%d] Purging cached event[%d] event second [%d]\n",
+				    __FUNCTION__,
+				    spooler->events_cached,
+				    ernCandidate->event_id,
+				    ernCandidate->event_second););
+	    
+	    spooler->events_cached--;
+	    
+	    if(ernCandidate->data != NULL)
+	    {
+		free(ernCandidate->data);
+	    }
+	    
+	    if(ernCandidate != NULL)
+	    {
+		free(ernCandidate);
+	    }
+	}
+	else
+	{
+	    DEBUG_WRAP(DebugMessage(DEBUG_SPOOLER,"[%s],Can't find a purge candidate in event cache, oddness cached event [%d]!! \n",
+				    __FUNCTION__,
+				    spooler->events_cached););
+	}
+	
+    }    
     return 0;
+}
+
+void spoolerEventCacheFlush(Spooler *spooler)
+{
+    EventRecordNode *next_ptr = NULL;
+    EventRecordNode *evt_ptr = NULL;
+    
+    if (spooler == NULL || spooler->event_cache == NULL )
+        return;
+    
+    evt_ptr = spooler->event_cache;
+    
+    while(evt_ptr != NULL)
+    {
+	next_ptr = evt_ptr->next;
+	
+	if(evt_ptr->data)
+	{
+	    free(evt_ptr->data);
+	    evt_ptr->data = NULL;
+	}
+	
+	free(evt_ptr);
+
+	evt_ptr = next_ptr;
+    }
+    
+    spooler->event_cache = NULL;
+    spooler->events_cached = 0;
+    return;
 }
 
 
@@ -923,6 +1051,7 @@ void spoolerFreeRecord(Record *record)
     {
         free(record->data);
     }
+
 
     record->data = NULL;
 }
@@ -994,13 +1123,17 @@ int spoolerOpenWaldo(Waldo *waldo, uint8_t mode)
 */
 int spoolerCloseWaldo(Waldo *waldo)
 {
-
+    if(waldo == NULL)
+	return WALDO_STRUCT_EMPTY;
+    
     /* check we have a valid file descriptor */
     if (waldo->state & WALDO_STATE_OPEN)
         return WALDO_FILE_EOPEN;
     
     /* close the file */
-    close(waldo->fd);
+    if(waldo->fd > 0)
+	close(waldo->fd);
+
     waldo->fd = -1;
 
     /* reset open state and mode */

@@ -66,6 +66,7 @@
 
 #include "sfutil/sf_textlog.h"
 #include "log_text.h"
+#include "ipv6_port.h"
 
 #define DEFAULT_CSV "timestamp,sig_generator,sig_id,sig_rev,msg,proto,src,srcport,dst,dstport,ethsrc,ethdst,ethlen,tcpflags,tcpseq,tcpack,tcpln,tcpwindow,ttl,tos,id,dgmlen,iplen,icmptype,icmpcode,icmpid,icmpseq"
 
@@ -346,7 +347,8 @@ static void RealAlertCSV(Packet * p, void *event, uint32_t event_type,
             if ( event != NULL )
             {
                 sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-                                ntohl(((Unified2EventCommon *)event)->signature_id));
+				    ntohl(((Unified2EventCommon *)event)->signature_id),
+				    ntohl(((Unified2EventCommon *)event)->signature_revision));
 
                 if (sn != NULL)
                 {
@@ -408,7 +410,7 @@ static void RealAlertCSV(Packet * p, void *event, uint32_t event_type,
         else if(!strncasecmp("ethlen", type, 6))
         {
             if(p->eh)
-                TextLog_Print(log, "0x%X",p->pkth->len);
+                TextLog_Print(log, "0x%X",p->pkth->pktlen);
         }
 #ifndef NO_NON_ETHER_DECODER
         else if(!strncasecmp("trheader", type, 8))
@@ -531,6 +533,29 @@ static void RealAlertCSV(Packet * p, void *event, uint32_t event_type,
                 TextLog_Print(log, "%s", tcpFlags);
             }
         }
+	else if(!strncasecmp("interface",type,strlen("interface")))
+        {
+	    if( barnyard2_conf->interface )
+	    {
+		TextLog_Print(log, "%s", barnyard2_conf->interface);
+	    }
+	    else
+	    {
+		TextLog_Print(log, "%s", "by2_no_interface_configured");
+	    }
+	}
+	else if(!strncasecmp("hostname",type,strlen("hostname")))
+        {
+	    if( barnyard2_conf->hostname)
+	    {
+		TextLog_Print(log, "%s", barnyard2_conf->hostname);
+	    }
+	    else
+	    {
+		TextLog_Print(log, "%s", "by2_no_hostname_configured");
+	    }
+	}
+
 
         DEBUG_WRAP(DebugMessage(DEBUG_LOG, "WOOT!\n"););
 

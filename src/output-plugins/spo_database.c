@@ -60,7 +60,7 @@ static const char* FATAL_NO_SENSOR_2 =
 
 static const char* FATAL_BAD_SCHEMA_1 =
     "database: The underlying database has not been initialized correctly.  This\n"
-    "          version of Snort requires version %d of the DB schema.  Your DB\n"
+    "          version of barnyard2 requires version %d of the DB schema.  Your DB\n"
     "          doesn't appear to have any records in the 'schema' table.\n%s";
 
 static const char* FATAL_BAD_SCHEMA_2 =
@@ -74,8 +74,8 @@ static const char* FATAL_OLD_SCHEMA_1 =
     "database: The underlying database seems to be running an older version of\n"
     "          the DB schema (current version=%d, required minimum version= %d).\n\n"
     "          If you have an existing database with events logged by a previous\n"
-    "          version of snort, this database must first be upgraded to the latest\n"
-    "          schema (see the snort-users mailing list archive or DB plugin\n"
+    "          version of barnyard2, this database must first be upgraded to the latest\n"
+    "          schema (see the barnyard2-users mailing list archive or DB plugin\n"
     "          documention for details).\n%s\n";
 
 static const char* FATAL_OLD_SCHEMA_2 =
@@ -87,10 +87,10 @@ static const char* FATAL_OLD_SCHEMA_2 =
     "          and the URL to the most recent database plugin documentation.\n";
 
 static const char* FATAL_NO_SUPPORT_1 =
-    "If this build of snort was obtained as a binary distribution (e.g., rpm,\n"
+    "If this build of barnyard2 was obtained as a binary distribution (e.g., rpm,\n"
     "or Windows), then check for alternate builds that contains the necessary\n"
     "'%s' support.\n\n"
-    "If this build of snort was compiled by you, then re-run the\n"
+    "If this build of barnyard2 was compiled by you, then re-run the\n"
     "the ./configure script using the '--with-%s' switch.\n"
     "For non-standard installations of a database, the '--with-%s=DIR'\n%s";
 
@@ -344,20 +344,19 @@ u_int32_t SynchronizeEventId(DatabaseData *data)
 	
 	if(Select(data->SQL_SELECT,data,(u_int32_t *)&c_cid))
 	{
-	    LogMessage("database: [%s()]: Problems executing [%s] \n",
-		       __FUNCTION__,
-		       data->SQL_SELECT);
+	    DEBUG_WRAP(DebugMessage(DB_DEBUG,"database: [%s()]: Problems executing [%s], (there is probably no row in the table for sensor id [%d] \n",
+				    __FUNCTION__,
+				    data->SQL_SELECT,
+			            data->sid););
 	}
 	
 	if(c_cid > data->cid)
 	{
-	    LogMessage("INFO database: Table [%s] had a more rescent cid [%u] using it. \n",
-		       table_array[itr],
-		       c_cid);
-	    
-	    LogMessage("\t Using cid [%u] instead of [%u]\n",
-		       c_cid,
-		       data->cid);
+	    DEBUG_WRAP(DebugMessage(DB_DEBUG,"INFO database: Table [%s] had a more recent cid [%u], using cid [%u] instead of [%u] \n",
+				    table_array[itr],
+				    c_cid,
+				    c_cid,
+				    data->cid););
 	    
 	    data->cid = c_cid;
 	}
@@ -1044,7 +1043,7 @@ void ParseDatabaseArgs(DatabaseData *data)
              !strncasecmp(type, KEYWORD_MSSQL, strlen(KEYWORD_MSSQL))  ||
              !strncasecmp(type, KEYWORD_ORACLE, strlen(KEYWORD_ORACLE)) )
         {
-            ErrorMessage("ERROR database: '%s' support is not compiled into this build of snort\n\n", type);
+            ErrorMessage("ERROR database: '%s' support is not compiled into this build of barnyard2\n\n", type);
             FatalError(FATAL_NO_SUPPORT_1, type, type, type, FATAL_NO_SUPPORT_2);
         }
         else
@@ -1150,6 +1149,10 @@ void ParseDatabaseArgs(DatabaseData *data)
 	{
 	    data->dbRH[data->dbtype_id].dbReconnectSleepTime.tv_sec = strtoul(a1,NULL,10);
 	}
+	if(!strncasecmp(dbarg,KEYWORD_DISABLE_SIGREFTABLE,strlen(KEYWORD_DISABLE_SIGREFTABLE)))
+	{
+	    data->dbRH[data->dbtype_id].disablesigref = 1;
+	}
 
 #ifdef ENABLE_MYSQL
 	/* Option declared here should be forced to dbRH[DB_MYSQL] */
@@ -1178,7 +1181,7 @@ void ParseDatabaseArgs(DatabaseData *data)
         }
         else if(!strncasecmp(dbarg, KEYWORD_SSL_CIPHER, strlen(KEYWORD_SSL_CIPHER)))
         {
-            data->dbRH[DB_MYSQL].ssl_key = a1;
+            data->dbRH[DB_MYSQL].ssl_cipher = a1;
             data->use_ssl = 1;
         }
 	else if(!strncasecmp(dbarg, KEYWORD_MYSQL_RECONNECT, strlen(KEYWORD_MYSQL_RECONNECT)))
@@ -1261,7 +1264,7 @@ void ParseDatabaseArgs(DatabaseData *data)
     
     if(data->dbRH[data->dbtype_id].dbConnectionLimit == 0)
     {
-	LogMessage("WARNING database: Defaulting Reconnect/Transaction Error limit to 10 \n");
+	LogMessage("INFO database: Defaulting Reconnect/Transaction Error limit to 10 \n");
 	data->dbRH[data->dbtype_id].dbConnectionLimit = 10;
 	
 	/* Might make a different option for it but for now lets consider
@@ -1271,7 +1274,7 @@ void ParseDatabaseArgs(DatabaseData *data)
     
     if(data->dbRH[data->dbtype_id].dbReconnectSleepTime.tv_sec == 0)
     {
-	LogMessage("WARNING database: Defaulting Reconnect sleep time to 5 second \n");
+	LogMessage("INFO database: Defaulting Reconnect sleep time to 5 second \n");
 	data->dbRH[data->dbtype_id].dbReconnectSleepTime.tv_sec = 5;
     }
     
@@ -1285,7 +1288,6 @@ void ParseDatabaseArgs(DatabaseData *data)
 */
 u_int32_t dbSignatureInformationUpdate(DatabaseData *data,cacheSignatureObj *iUpdateSig)
 {
-
     u_int32_t db_sig_id = 0;
     
     if( (data == NULL) ||
@@ -1442,7 +1444,19 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
     priority = ntohl(((Unified2EventCommon *)event)->priority_id);
     classification = ntohl(((Unified2EventCommon *)event)->classification_id);
     
+    /* 
+       This is now only needed for backward compatible with old sid-msg.map file.
+       new version has gid || sid || revision || msg || etc.. 
+    */
+    if( BcSidMapVersion() == SIDMAPV1)
+    {
+	if (gid == 3)
+	{
+	    gid = 1;
+	}
+    }
     
+
     /* NOTE: elz 
        For sanity purpose the sig_class table SHOULD have internal classification id to prevent possible 
        miss classification tagging ... but this is not happening with the old schema.
@@ -1474,7 +1488,6 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
     if( (sigMatchCount = cacheEventSignatureLookup(data->mc.cacheSignatureHead,
 						   data->mc.plgSigCompare,
 						   gid,sid)) > 0 )
-    {	
 	for(x = 0 ; x < sigMatchCount ; x++)
 	{
 	    if( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev == revision) &&
@@ -1488,8 +1501,14 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 	    }
 	    
 	    /* If we have an "uninitialized signature save it */
-	    if( data->mc.plgSigCompare[x].cacheSigObj->obj.rev == 0 || 
-		data->mc.plgSigCompare[x].cacheSigObj->obj.rev < revision)
+	    if( ( (data->mc.plgSigCompare[x].cacheSigObj->obj.rev == 0) || 
+		  (data->mc.plgSigCompare[x].cacheSigObj->obj.rev < revision)) ||
+		
+		/* So we have a signature that was inserted, probably a preprocessor signature,
+		   but it has probably never been logged before lets set it as a temporary unassigned signature */
+		((data->mc.plgSigCompare[x].cacheSigObj->obj.rev == revision) && 
+		 ( data->mc.plgSigCompare[x].cacheSigObj->obj.class_id == 0  ||
+		   data->mc.plgSigCompare[x].cacheSigObj->obj.priority_id == 0)))
 	    {
 		memcpy(&unInitSig,data->mc.plgSigCompare[x].cacheSigObj,sizeof(cacheSignatureObj));
 		
@@ -1505,50 +1524,51 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 		}
 	    }
 	}
-    }
+	    
+    if(BcSidMapVersion() == SIDMAPV1)
+    {
+	if(unInitSig.obj.db_id != 0)
+	{
+#if DEBUG
+	    DEBUG_WRAP(DebugMessage(DB_DEBUG,
+				    "[%s()], [%u] signatures where found in cache for [gid: %u] [sid: %u] but non matched event criteria.\n" 
+				    "Updating database [db_sig_id: %u] FROM  [rev: %u] classification [ %u ] priority [%u] "
+				    "                                  TO    [rev: %u] classification [ %u ] priority [%u]\n",
+				    __FUNCTION__,
+				    sigMatchCount,
+				    gid,
+				    sid,
+				    unInitSig.obj.db_id,
+				    unInitSig.obj.rev,unInitSig.obj.class_id,unInitSig.obj.priority_id,
+				    revision,db_classification_id,priority));
+#endif
+	    
+	    unInitSig.obj.rev = revision;
+	    unInitSig.obj.class_id = db_classification_id;
+	    unInitSig.obj.priority_id = priority;
+	    
+	    if( (dbSignatureInformationUpdate(data,&unInitSig)))
+	    {
+		
+		LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for : \n"
+			   "[gid :%u] [sid: %u] [upd_rev: %u] [upd class: %u] [upd pri %u]\n",
+			   __FUNCTION__,
+			   __LINE__,
+			   gid,			\
+			   sid,
+			   revision,
+			   db_classification_id,
+			   priority);
+		return 1;
+	    }
+	    
+	    assert( unInitSig.obj.db_id != 0);
 	
-/*
-  This shouldn't be needed since unitialized signature are not inserted anymore, thus preventing the need for update
-  if(unInitSig.obj.db_id != 0)
-  {
-  #if DEBUG
-  DEBUG_WRAP(DebugMessage(DB_DEBUG,"[%s()], [%u] signatures where found in cache for [gid: %u] [sid: %u] but non matched\n" 
-  "updating database [db_sig_id: %u] with [rev: 0] to [rev: %u] \n",
-  __FUNCTION__,
-  sigMatchCount,
-  gid,
-  sid,
-  unInitSig.obj.db_id,
-  revision));
-  #endif
-  
-  unInitSig.obj.rev = revision;
-  unInitSig.obj.class_id = db_classification_id;
-  unInitSig.obj.priority_id = priority;
-  
-  
-  if( (dbSignatureInformationUpdate(data,&unInitSig)))
-  {
-  
-  LogMessage("[%s()] Line[%u], call to dbSignatureInformationUpdate failed for : \n"
-  "[gid :%u] [sid: %u] [upd_rev: %u] [upd class: %u] [upd pri %u]\n",
-  __FUNCTION__,
-  __LINE__,
-  gid,						\
-  sid,
-  revision,
-  db_classification_id,
-  priority);
-  return 1;
-  }
-  
-  
-  assert( unInitSig.obj.db_id != 0);
-			   
-  *psig_id = unInitSig.obj.db_id;
-  return 0;
-  }
-*/  
+	    *psig_id = unInitSig.obj.db_id;
+	    return 0;
+	}
+    }
+
     /* 
        To avoid possible collision with an older barnyard process or 
        avoid signature insertion race condition we will look in the 
@@ -1578,12 +1598,12 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
 	if(reuseSigMsg)
 	{
 	    /* The signature was not found we will have to insert it */
-	    LogMessage("WARNING [%s()]: [Event: %u] with [gid: %u] [sid: %u] [rev: %u] [classification: %u] [priority: %u] Signature Message -> \"[%s]\"\n"
+	    LogMessage("INFO [%s()]: [Event: %u] with [gid: %u] [sid: %u] [rev: %u] [classification: %u] [priority: %u] Signature Message -> \"[%s]\"\n"
 		       "\t was not found in barnyard2 signature cache, this could mean its is the first time the signature is processed, and will be inserted\n"
 		       "\t in the database with the above information, this message should only be printed once for each signature that is not  present in the database\n"
 		       "\t The new inserted signature will not have its information present in the sig_reference table,it should be present on restart\n"
 		       "\t if the information is present in the sid-msg.map file. \n"
-		       "\t You can allways update the message via a SQL query if you want it to be displayed correctly by your favorite interface\n\n",
+		       "\t You can always update the message via a SQL query if you want it to be displayed correctly by your favorite interface\n\n",
 		       __FUNCTION__,
 		       ntohl(((Unified2EventCommon *)event)->event_id),
 		       gid,
@@ -1603,12 +1623,12 @@ int dbProcessSignatureInformation(DatabaseData *data,void *event, u_int32_t even
     	else
 	{
 	    /* The signature does not exist we will have to insert it */
-	    LogMessage("WARNING [%s()]: [Event: %u] with [gid: %u] [sid: %u] [rev: %u] [classification: %u] [priority: %u]\n"
+	    LogMessage("INFO [%s()]: [Event: %u] with [gid: %u] [sid: %u] [rev: %u] [classification: %u] [priority: %u]\n"
 		       "\t was not found in barnyard2 signature cache, this could lead to display inconsistency.\n"
 		       "\t To prevent this warning, make sure that your sid-msg.map and gen-msg.map file are up to date with the snort process logging to the spool file.\n"
 		       "\t The new inserted signature will not have its information present in the sig_reference table. \n"
 		       "\t Note that the message inserted in the signature table will be snort default message \"Snort Alert [gid:sid:revision]\" \n"
-		       "\t You can allways update the message via a SQL query if you want it to be displayed correctly by your favorite interface\n\n",
+		       "\t You can always update the message via a SQL query if you want it to be displayed correctly by your favorite interface\n\n",
 		       __FUNCTION__,
 		       ntohl(((Unified2EventCommon *)event)->event_id),
 		       gid,
@@ -1908,14 +1928,14 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 		
 	    case IPPROTO_ICMP:
 
-		if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
-		{
-		    goto bad_query;
-		}
-
 		/* IPPROTO_ICMP */
 		if(p->icmph)
 		{
+		    if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
+		    {
+			goto bad_query;
+		    }
+		    
 		    /*** Build a query for the ICMP Header ***/
 		    if(data->detail)
 		    {
@@ -1952,10 +1972,11 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 		}
 		else
 		{
-		    LogMessage("[%s()], unable to build query, IP header tell's us its an ICMP packet but "
-			       "there is not icmp header in the decoded packet ... \n",
-			       __FUNCTION__);
-		    goto bad_query;
+
+		    DEBUG_WRAP(DebugMessage(DB_DEBUG,
+					    "[%s()], unable to build query, IP header tell's us its an ICMP packet but "
+					    "there is not ICMP header in the decoded packet ... \n",
+					    __FUNCTION__));
 		}
 		break;
 		/* IPPROTO_ICMP */
@@ -1964,176 +1985,196 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 		/* IPPROTO_TCP */
 	    case IPPROTO_TCP:
 
-		if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
+		if(p->tcph)
 		{
-		    goto bad_query;
-		}
-
-                /*** Build a query for the TCP Header ***/
-                if(data->detail)
-                {
-                    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-				       "INSERT INTO "
-				       "tcphdr (sid, cid, tcp_sport, tcp_dport, "
-				       "tcp_seq, tcp_ack, tcp_off, tcp_res, "
-				       "tcp_flags, tcp_win, tcp_csum, tcp_urp) "
-				       "VALUES (%u,%u,%u,%u,%lu,%lu,%u,%u,%u,%u,%u,%u);",
-				       data->sid,
-				       data->cid,
-				       ntohs(p->tcph->th_sport),
-				       ntohs(p->tcph->th_dport),
-				       (u_long)ntohl(p->tcph->th_seq),
-				       (u_long)ntohl(p->tcph->th_ack),
-				       TCP_OFFSET(p->tcph),
-				       TCP_X2(p->tcph),
-				       p->tcph->th_flags,
-				       ntohs(p->tcph->th_win),
-				       ntohs(p->tcph->th_sum),
-				       ntohs(p->tcph->th_urp))) != SNORT_SNPRINTF_SUCCESS)
+		    if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
 		    {
 			goto bad_query;
 		    }
-                }
-                else
-                {
-                    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-				       "INSERT INTO "
-				       "tcphdr (sid,cid,tcp_sport,tcp_dport,tcp_flags) "
-				       "VALUES (%u,%u,%u,%u,%u);",
-				       data->sid,
-				       data->cid,
-				       ntohs(p->tcph->th_sport),
-				       ntohs(p->tcph->th_dport),
-				       p->tcph->th_flags))  != SNORT_SNPRINTF_SUCCESS)
+		    
+		    /*** Build a query for the TCP Header ***/
+		    if(data->detail)
 		    {
-                        goto bad_query;
-		    }
-                }
-		
-                if(data->detail)
-                {
-                    /*** Build the query for TCP Options ***/
-                    for(i=0; i < (int)(p->tcp_option_count); i++)
-                    {
-
-			if( p->tcp_options[i].len > 0)
+			if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
+					   "INSERT INTO "
+					   "tcphdr (sid, cid, tcp_sport, tcp_dport, "
+					   "tcp_seq, tcp_ack, tcp_off, tcp_res, "
+					   "tcp_flags, tcp_win, tcp_csum, tcp_urp) "
+					   "VALUES (%u,%u,%u,%u,%lu,%lu,%u,%u,%u,%u,%u,%u);",
+					   data->sid,
+					   data->cid,
+					   ntohs(p->tcph->th_sport),
+					   ntohs(p->tcph->th_dport),
+					   (u_long)ntohl(p->tcph->th_seq),
+					   (u_long)ntohl(p->tcph->th_ack),
+					   TCP_OFFSET(p->tcph),
+					   TCP_X2(p->tcph),
+					   p->tcph->th_flags,
+					   ntohs(p->tcph->th_win),
+					   ntohs(p->tcph->th_sum),
+					   ntohs(p->tcph->th_urp))) != SNORT_SNPRINTF_SUCCESS)
 			{
-			    if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
+			    goto bad_query;
+			}
+		    }
+		    else
+		    {
+			if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
+					   "INSERT INTO "
+					   "tcphdr (sid,cid,tcp_sport,tcp_dport,tcp_flags) "
+					   "VALUES (%u,%u,%u,%u,%u);",
+					   data->sid,
+					   data->cid,
+					   ntohs(p->tcph->th_sport),
+					   ntohs(p->tcph->th_dport),
+					   p->tcph->th_flags))  != SNORT_SNPRINTF_SUCCESS)
+			{
+			    goto bad_query;
+			}
+		    }
+		    
+		    if(data->detail)
+		    {
+                    /*** Build the query for TCP Options ***/
+			for(i=0; i < (int)(p->tcp_option_count); i++)
+			{
+
+			    if( (&p->tcp_options[i]) &&
+				(p->tcp_options[i].len > 0))
 			    {
-				goto bad_query;
-			    }
-			    
-			    if((data->encoding == ENCODING_HEX) || (data->encoding == ENCODING_ASCII))
-			    {
-				//packet_data = fasthex(p->tcp_options[i].data, p->tcp_options[i].len);
-				if( fasthex_STATIC(p->tcp_options[i].data, p->tcp_options[i].len,data->PacketData))
-				{
-				    /* XXX */
-				    goto bad_query;
-				}
-			    }
-			    else
-			    {
-				//packet_data = base64(p->tcp_options[i].data, p->tcp_options[i].len);
-				if( base64_STATIC(p->tcp_options[i].data, p->tcp_options[i].len,data->PacketData))
-				{
-				    /* XXX */
-				    goto bad_query;
-				}
-			    }
-			    
-			    
-			    if(data->dbtype_id == DB_ORACLE)
-			    {
-				/* Oracle field BLOB type case. We append unescaped
-				 * opt_data data after query, which later in Insert()
-				 * will be cut off and uploaded with OCIBindByPos().
-				 */
-				if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-						   "INSERT INTO "
-						   "opt (sid,cid,optid,opt_proto,opt_code,opt_len,opt_data) "
-						   "VALUES (%u,%u,%u,%u,%u,%u,:1);|%s",
-						   data->sid,
-						   data->cid,
-						   i,
-						   6,
-						   p->tcp_options[i].code,
-						   p->tcp_options[i].len,
-						   //packet_data))  != SNORT_SNPRINTF_SUCCESS)
-						   data->PacketData))  != SNORT_SNPRINTF_SUCCESS)
+				if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
 				{
 				    goto bad_query;
 				}
 				
-				
-			    }
-			    else
-			    {
-				if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-						   "INSERT INTO "
-					       "opt (sid,cid,optid,opt_proto,opt_code,opt_len,opt_data) "
-						   "VALUES (%u,%u,%u,%u,%u,%u,'%s');",
-						   data->sid,
-						   data->cid,
-						   i,
-						   6,
-						   p->tcp_options[i].code,
-						   p->tcp_options[i].len,
-						   //packet_data))  != SNORT_SNPRINTF_SUCCESS)
-						   data->PacketData))  != SNORT_SNPRINTF_SUCCESS)
+				if((data->encoding == ENCODING_HEX) || (data->encoding == ENCODING_ASCII))
 				{
-				    goto bad_query;
+				    //packet_data = fasthex(p->tcp_options[i].data, p->tcp_options[i].len);
+				    if( fasthex_STATIC(p->tcp_options[i].data, p->tcp_options[i].len,data->PacketData))
+				    {
+				    /* XXX */
+					goto bad_query;
+				    }
+				}
+				else
+				{
+				    //packet_data = base64(p->tcp_options[i].data, p->tcp_options[i].len);
+				    if( base64_STATIC(p->tcp_options[i].data, p->tcp_options[i].len,data->PacketData))
+				    {
+				    /* XXX */
+					goto bad_query;
+				    }
+			    }
+				
+				
+				if(data->dbtype_id == DB_ORACLE)
+				{
+				    /* Oracle field BLOB type case. We append unescaped
+				     * opt_data data after query, which later in Insert()
+				     * will be cut off and uploaded with OCIBindByPos().
+				     */
+				    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
+						       "INSERT INTO "
+						       "opt (sid,cid,optid,opt_proto,opt_code,opt_len,opt_data) "
+						       "VALUES (%u,%u,%u,%u,%u,%u,:1);|%s",
+						       data->sid,
+						       data->cid,
+						       i,
+						       6,
+						       p->tcp_options[i].code,
+						       p->tcp_options[i].len,
+						       //packet_data))  != SNORT_SNPRINTF_SUCCESS)
+						       data->PacketData))  != SNORT_SNPRINTF_SUCCESS)
+				    {
+					goto bad_query;
+				    }
+				}
+				else
+				{
+				    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
+						       "INSERT INTO "
+						       "opt (sid,cid,optid,opt_proto,opt_code,opt_len,opt_data) "
+						       "VALUES (%u,%u,%u,%u,%u,%u,'%s');",
+						       data->sid,
+						       data->cid,
+						       i,
+						       6,
+						       p->tcp_options[i].code,
+						       p->tcp_options[i].len,
+						       //packet_data))  != SNORT_SNPRINTF_SUCCESS)
+						       data->PacketData))  != SNORT_SNPRINTF_SUCCESS)
+				    {
+					goto bad_query;
+				    }
 				}
 			    }
 			}
 		    }
-                }
+		}
+		else
+                {
+                    DEBUG_WRAP(DebugMessage(DB_DEBUG,
+                                            "[%s()], unable to build query, IP header tell's us its an TCP  packet but "
+					    "there is not TCP header in the decoded packet ... \n",
+					    __FUNCTION__));
+		}
+		
 		break;		
 		/* IPPROTO_TCP */
 
 		
 		/* IPPROTO_UDP */
 	    case IPPROTO_UDP:
-		
-                /*** Build the query for the UDP Header ***/
-		if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
+
+		if(p->udph)
 		{
-		    goto bad_query;
-		}
-				
-                if(data->detail)
-		{
-		    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-				       "INSERT INTO "
-				       "udphdr (sid, cid, udp_sport, udp_dport, udp_len, udp_csum) "
-				       "VALUES (%u, %u, %u, %u, %u, %u);",
-				       data->sid,
-				       data->cid,
-				       ntohs(p->udph->uh_sport),
-				       ntohs(p->udph->uh_dport),
-				       ntohs(p->udph->uh_len),
-				       ntohs(p->udph->uh_chk)))  != SNORT_SNPRINTF_SUCCESS)
+		    /*** Build the query for the UDP Header ***/
+		    if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
 		    {
 			goto bad_query;
+		    }
+		    
+		    if(data->detail)
+		    {
+			if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
+					   "INSERT INTO "
+					   "udphdr (sid, cid, udp_sport, udp_dport, udp_len, udp_csum) "
+					   "VALUES (%u, %u, %u, %u, %u, %u);",
+					   data->sid,
+					   data->cid,
+					   ntohs(p->udph->uh_sport),
+					   ntohs(p->udph->uh_dport),
+					   ntohs(p->udph->uh_len),
+					   ntohs(p->udph->uh_chk)))  != SNORT_SNPRINTF_SUCCESS)
+			{
+			    goto bad_query;
+			}
+		    }
+		    else
+		    {
+			if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
+					   "INSERT INTO "
+					   "udphdr (sid, cid, udp_sport, udp_dport) "
+					   "VALUES (%u, %u, %u, %u);",
+					   data->sid,
+					   data->cid,
+					   ntohs(p->udph->uh_sport),
+					   ntohs(p->udph->uh_dport)))  != SNORT_SNPRINTF_SUCCESS)
+			{
+			    goto bad_query;
+			}
 		    }
 		}
 		else
 		{
-		    if( (SnortSnprintf(SQLQueryPtr, MAX_QUERY_LENGTH,
-					"INSERT INTO "
-					"udphdr (sid, cid, udp_sport, udp_dport) "
-					"VALUES (%u, %u, %u, %u);",
-					data->sid,
-					data->cid,
-					ntohs(p->udph->uh_sport),
-				       ntohs(p->udph->uh_dport)))  != SNORT_SNPRINTF_SUCCESS)
-		    {
-			goto bad_query;
-		    }
+		    DEBUG_WRAP(DebugMessage(DB_DEBUG,
+					    "[%s()], unable to build query, IP header tell's us its an UDP packet but "
+					    "there is not UDP header in the decoded packet ... \n",
+					    __FUNCTION__));
 		}
 		break;
 		/* IPPROTO_UDP */
-		
+		    
 		
 		/* DEFAULT */
 	    default:
@@ -2199,7 +2240,8 @@ int dbProcessEventInformation(DatabaseData *data,Packet *p,
 		{
 		    for(i=0 ; i < (int)(p->ip_option_count); i++)
 		    {
-			if(&p->ip_options[i])
+			if( (&p->ip_options[i]) &&
+			    (p->ip_options[i].len > 0))
 			{
 			    if( (SQLQueryPtr=SQL_GetNextQuery(data)) == NULL)
 			    {
@@ -2406,7 +2448,7 @@ void Database(Packet *p, void *event, uint32_t event_type, void *arg)
     
     if( event == NULL || p == NULL)
     {
-	LogMessage("WARNING database [%s()]: Called with Event[0x%x] Event Type [%u] (P)acket [0x%x] \n",
+	LogMessage("WARNING database [%s()]: Called with Event[0x%x] Event Type [%u] (P)acket [0x%x], information has not been outputed. \n",
 		   __FUNCTION__,
 		   event,
 		   event_type,
@@ -2414,6 +2456,40 @@ void Database(Packet *p, void *event, uint32_t event_type, void *arg)
 	return;
     }
     
+    
+    /* 
+       Check for invalid revision eg: rev==0 when people write their own testing signature and 
+       do not set a revision, in our context we will not log it to the database
+       and print a informative messsage 
+    */
+    u_int32_t sid = 0;
+    u_int32_t gid = 0;
+    u_int32_t revision = 0;
+    u_int32_t event_id = 0;
+    u_int32_t event_second = 0;
+    u_int32_t event_microsecond = 0;
+    
+    sid =  ntohl(((Unified2EventCommon *)event)->signature_id);    
+    gid =  ntohl(((Unified2EventCommon *)event)->generator_id);
+    revision = ntohl(((Unified2EventCommon *)event)->signature_revision);
+    event_id = ntohl(((Unified2EventCommon *)event)->event_id);
+    event_second = ntohl(((Unified2EventCommon *)event)->event_second);
+    event_microsecond =  ntohl(((Unified2EventCommon *)event)->event_microsecond);
+    
+    if( (gid == 1) &&
+	(revision == 0))
+    {
+	LogMessage("INFO: Current event with event_id [%u] Event Second:Microsecond [%u:%u] and signature id of [%u] was logged with a revision of [%u]\n"
+		   "      Make sure you verify your triggering  rule body so it include the snort keyword \"rev:xxx;\" Where xxx is greater than 0 \n"
+		   ">>>>>>The event has not been logged to the database<<<<<<\n",
+		   event_id,
+		   event_second,
+		   event_microsecond,
+		   sid,
+		   revision);
+	return;
+    }
+
 /*
   This has been refactored to simplify the workflow of the function 
   We separate the legacy signature entry code and the event entry code
@@ -3054,7 +3130,7 @@ int CheckDBVersion(DatabaseData * data)
        if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                           "SELECT vseq FROM [schema]")) != SNORT_SNPRINTF_SUCCESS)
        {
-	   return -1;
+	   return 1;
        }
    }
    else
@@ -3070,7 +3146,7 @@ int CheckDBVersion(DatabaseData * data)
 	  if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                              "SELECT vseq FROM `schema`")) != SNORT_SNPRINTF_SUCCESS)
 	  {
-	      return -1;
+	      return 1;
 	  }
       }
       else
@@ -3079,7 +3155,7 @@ int CheckDBVersion(DatabaseData * data)
 	  if( (SnortSnprintf(data->SQL_SELECT, MAX_QUERY_LENGTH,
                              "SELECT vseq FROM schema")) != SNORT_SNPRINTF_SUCCESS)
 	  {
-	      return -1;
+	      return 1;
 	  }
       }
    }
@@ -3640,6 +3716,8 @@ Select_reconnect:
                     ErrorMessage("ERROR database: Query [%s] returned more than one result\n",
                                  query);
                     result = 0;
+		    PQclear(data->p_result);
+		    data->p_result = NULL;
 		    return 1;
                 }
                 else
@@ -3647,6 +3725,12 @@ Select_reconnect:
                     *rval = atoi(PQgetvalue(data->p_result,0,0));
                 }
             }
+	    else
+	    {
+		PQclear(data->p_result);
+		data->p_result = NULL;
+		return 1;
+	    }
         }
 
         if(!result)
@@ -3907,6 +3991,21 @@ void Connect(DatabaseData * data)
 	
 #ifdef ENABLE_POSTGRESQL
     case DB_POSTGRESQL:
+
+#ifdef HAVE_PQPING
+	/* Set PQPing String */
+	memset(data->p_pingString,'\0',1024);
+	if(SnortSnprintf(data->p_pingString,1024,"host='%s' port='%s' user='%s' dbname='%s'",
+			 data->host,
+			 data->port == NULL ? "5432" : data->port,
+			 data->user,
+			 data->dbname))
+	{
+	    /* XXX */
+	    FatalError("[%s()],unable to create PQPing connection string.. bailing \n",
+		       __FUNCTION__);
+	}
+#endif
 	
         if (data->use_ssl == 1)
         {
@@ -3935,6 +4034,7 @@ void Connect(DatabaseData * data)
         if(PQstatus(data->p_connection) == CONNECTION_BAD)
         {
             PQfinish(data->p_connection);
+	    data->p_connection = NULL;
             FatalError("database Connection to database '%s' failed\n", data->dbname);
         }
 	break;
@@ -3968,16 +4068,26 @@ void Connect(DatabaseData * data)
                               data->port == NULL ? 0 : atoi(data->port), NULL, 0) == NULL)
         {
             if(mysql_errno(data->m_sock))
-                FatalError("database mysql_error: %s\n", mysql_error(data->m_sock));
-
-            FatalError("database Failed to logon to database '%s'\n", data->dbname);
+	    {
+                LogMessage("database mysql_error: %s\n", mysql_error(data->m_sock));
+		mysql_close(data->m_sock);
+		data->m_sock = NULL;
+		CleanExit(1);
+	    }
+	    
+            LogMessage("database Failed to logon to database '%s'\n", data->dbname);
+	    mysql_close(data->m_sock);
+	    data->m_sock = NULL;
+	    CleanExit(1);
         }
 	
 	if(mysql_autocommit(data->m_sock,0))
 	{
 	    /* XXX */
+	    mysql_close(data->m_sock);
+	    data->m_sock = NULL;
 	    LogMessage("WARNING database: unable to unset autocommit\n");
-	    return ;
+	    return;
 	}
 
 	data->dbRH[data->dbtype_id].pThreadID = mysql_thread_id(data->m_sock);
@@ -4226,8 +4336,9 @@ void Disconnect(DatabaseData * data)
 	}
 	
 	if(data->p_connection)
-	{
+ 	{
 	    PQfinish(data->p_connection);
+	    data->p_connection = NULL;
 	}
     break;
     
@@ -4246,7 +4357,7 @@ void Disconnect(DatabaseData * data)
 	if(data->m_sock)
 	{
 	    mysql_close(data->m_sock);
-	
+	    data->m_sock = NULL;
 	}
 
 
@@ -4353,7 +4464,7 @@ void DatabasePrintUsage(void)
     puts(" The configuration I am currently using is MySQL with the database");
     puts(" name of \"snort\". The user \"snortusr@localhost\" has INSERT and SELECT");
     puts(" privileges on the \"snort\" database and does not require a password.");
-    puts(" The following line enables snort to log to this database.\n");
+    puts(" The following line enables barnyard2 to log to this database.\n");
 
     puts(" output database: log, mysql, dbname=snort user=snortusr host=localhost\n");
 }
@@ -4377,34 +4488,36 @@ void SpoDatabaseCleanExitFunction(int signal, void *arg)
 	    }
 	    
 	}
-    	
+	
 	resetTransactionState(&data->dbRH[data->dbtype_id]);
 	
 	MasterCacheFlush(data,CACHE_FLUSH_ALL);    
 	
 	SQL_Finalize(data);
 	
-	UpdateLastCid(data, data->sid, ((data->cid)-1));
+	if( !(data->dbRH[data->dbtype_id].dbConnectionStatus(&data->dbRH[data->dbtype_id])))
+	{
+	    UpdateLastCid(data, data->sid, ((data->cid)-1));
+	}
 	
 	Disconnect(data);
-    }
-	
-    if(data->SQL_INSERT != NULL)
-    {
-	free(data->SQL_INSERT);
+
+	if(data->SQL_INSERT != NULL)
+	{
+	    free(data->SQL_INSERT);
 	    data->SQL_INSERT = NULL;
-    }
-    
-    if(data->SQL_SELECT != NULL)
-    {
-	free(data->SQL_SELECT);
-	data->SQL_SELECT = NULL;
-    }
-    
-    free(data->args);
-    free(data);
+	}
+	
+	if(data->SQL_SELECT != NULL)
+	{
+	    free(data->SQL_SELECT);
+	    data->SQL_SELECT = NULL;
+	}
+	
+	free(data->args);
+	free(data);
 	data = NULL;
-    
+    }
 
     return;
 }
@@ -4685,6 +4798,9 @@ u_int32_t MYSQL_ManualConnect(DatabaseData *dbdata)
 	    LogMessage("database: mysql_error: %s\n", mysql_error(dbdata->m_sock));
 	
 	LogMessage("database: Failed to logon to database '%s'\n", dbdata->dbname);
+	
+	mysql_close(dbdata->m_sock);
+	dbdata->m_sock = NULL;
 	return 1;
     }
 
@@ -4693,6 +4809,8 @@ u_int32_t MYSQL_ManualConnect(DatabaseData *dbdata)
     {
 	/* XXX */
 	LogMessage("database Can't set autocommit off \n");
+	mysql_close(dbdata->m_sock);
+	dbdata->m_sock = NULL;
 	return 1;
     }
     
@@ -4700,6 +4818,8 @@ u_int32_t MYSQL_ManualConnect(DatabaseData *dbdata)
     if (mysql_options(dbdata->m_sock, MYSQL_OPT_RECONNECT, &dbdata->dbRH[dbdata->dbtype_id].mysql_reconnect) != 0)
     {
 	LogMessage("database: Failed to set reconnect option: %s\n", mysql_error(dbdata->m_sock));
+	mysql_close(dbdata->m_sock);
+	dbdata->m_sock = NULL;
 	return 1;
     }
     
@@ -4724,6 +4844,9 @@ u_int32_t dbConnectionStatusMYSQL(dbReliabilityHandle *pdbRH)
     }
     
     dbdata = pdbRH->dbdata;
+    
+    if(dbdata->m_sock == NULL)
+	return 1;
     
 MYSQL_RetryConnection:    
     /* mysql_ping() could reconnect and we wouldn't know */
@@ -4996,6 +5119,8 @@ u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH)
 {
     DatabaseData *data = NULL;
     
+    int PQpingRet = 0;
+    
     if( (pdbRH == NULL) ||
         (pdbRH->dbdata == NULL))
     {
@@ -5008,6 +5133,44 @@ u_int32_t dbConnectionStatusPOSTGRESQL(dbReliabilityHandle *pdbRH)
 conn_test:
     if(data->p_connection != NULL)
     {
+	
+#ifdef HAVE_PQPING
+	switch( (PQpingRet = PQping(data->p_pingString)))
+        {
+        case PQPING_OK:
+            break;
+
+        case PQPING_NO_ATTEMPT:
+	    LogMessage("[%s()], PQPing call assumed [PQPING_NO_ATTEMPT] using connection string [%s], continuing \n",
+		       __FUNCTION__,
+		       data->p_pingString);
+	    break;
+
+        case PQPING_REJECT:
+        case PQPING_NO_RESPONSE:
+        default:
+
+            LogMessage("[%s()], PQPing call retval[%d] seem's to indicate unreacheable server, assuming connection is dead \n",
+                       __FUNCTION__,
+		       PQpingRet);
+
+            if(checkTransactionState(pdbRH))
+            {
+                /* ResetState for the caller */
+                setReconnectState(pdbRH,1);
+                setTransactionCallFail(pdbRH);
+                setTransactionState(pdbRH);
+            }
+
+	    if(data->p_connection)
+	    {
+		PQfinish(data->p_connection);
+		data->p_connection = NULL;
+	    }
+            break;
+        }
+#endif
+	
 	switch(PQstatus(data->p_connection))
 	{
 	case CONNECTION_OK:
@@ -5033,7 +5196,11 @@ conn_test:
 	    }
 
 	    /* Changed PQreset by call to PQfinish and PQdbLogin */
-	    PQfinish(data->p_connection);
+	    if(data->p_connection)
+	    {
+		PQfinish(data->p_connection);
+		data->p_connection = NULL;
+	    }
 
 	    if (data->use_ssl == 1)
 	    {

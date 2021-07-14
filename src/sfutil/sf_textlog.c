@@ -1,6 +1,7 @@
 /****************************************************************************
  *
- * Copyright (C) 2003-2009 Sourcefire, Inc.
+ * Copyright (C) 2014 Cisco and/or its affiliates. All rights reserved.
+ * Copyright (C) 2003-2013 Sourcefire, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License Version 2 as
@@ -15,15 +16,15 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  *
  ****************************************************************************/
- 
+
 /**
  * @file   sf_textlog.c
  * @author Russ Combs <rcombs@sourcefire.com>
- * @date   
- * 
+ * @date
+ *
  * @brief  implements buffered text stream for logging
  */
 
@@ -32,6 +33,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include "sf_types.h"
 
 #include "sf_textlog.h"
 #include "log.h"
@@ -144,10 +151,7 @@ bool TextLog_Flush(TextLog* this)
 
     ok = fwrite(this->buf, this->pos, 1, this->file);
 
-    /* on stdout flush after printing to avoid lags in output */
-    if (this->file == stdout ) fflush (this->file) ;
-
-    if ( ok == 1 ) 
+    if ( ok == 1 )
     {
         this->size += this->pos;
         TextLog_Reset(this);
@@ -240,7 +244,7 @@ bool TextLog_Print (TextLog* this, const char* fmt, ...)
 
 /*-------------------------------------------------------------------
  * TextLog_Quote: write string escaping quotes
- * FIXTHIS could be smarter by counting required escapes instead of
+ * TBD could be smarter by counting required escapes instead of
  * checking for 3
  *-------------------------------------------------------------------
  */

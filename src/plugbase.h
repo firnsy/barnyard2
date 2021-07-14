@@ -190,6 +190,6 @@ void AddFuncToPostConfigList(PluginSignalFunc, void *);
 void AddFuncToSignalList(PluginSignalFunc, void *, PluginSignalFuncNode **);
 void PostConfigInitPlugins(PluginSignalFuncNode *);
 void FreePluginSigFuncs(PluginSignalFuncNode *);
-
+void FreeInputPlugins(void);
 #endif /* __PLUGBASE_H__ */
 

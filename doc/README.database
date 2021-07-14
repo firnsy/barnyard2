@@ -4,9 +4,11 @@ The database output plug-in enables snort to log to
 
   - Postgresql,
   - MySQL,
-  - any unixODBC database,
-  - MS SQL Server and
-  - Oracle.
+
+# Currently unsupported.
+#  - any unixODBC database,
+#  - MS SQL Server and
+#  - Oracle.
 
 This README contains some quick information about how to set up and
 configure database logging with in snort.  More complete and
@@ -34,9 +36,11 @@ working.
       (unixODBC + some other RDBMS)
         MySQL      => http://www.mysql.org
         Postgresql => http://www.postgesql.org
-        unixODBC   => http://www.unixodbc.org
-        Oracle     => http://www.oracle.com
-        SQL Server => http://www.microsoft.com
+
+# Currently Unsupported
+# unixODBC   => http://www.unixodbc.org
+# Oracle     => http://www.oracle.com
+# SQL Server => http://www.microsoft.com
 
    2) Follow directions from your database vendor to be sure your
       RDBMS is properly configured and secured.
@@ -207,7 +211,16 @@ Arguments:
                 [yes|1]: Ignore the BPF part when looking for the server
                          definition
 
+       connection_limit <integer>: default 10  - The maximum number of time that barnyard2 will tolerate a transaction faillure and or 
+                                                 database connection failure.
+	
+       reconnect_sleep_time <integer> : default 5 - The number of seconds to sleep betwen connection retry.
 
+       disable_signature_reference_table - Tell the output plugin not to synchronize the sig_reference table in the schema. 
+				           This option will speedup the process, especialy if you use sid-msg.mapv2 file or
+					   have alot of signature already in databases. 
+					   (Make sure that you do not need that information before enablign this)
+			           
 
         MYSQL ONLY
 

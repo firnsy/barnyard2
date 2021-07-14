@@ -1,6 +1,6 @@
 /* 
 **
-** Copyright (C) 2008-2012 Ian Firns (SecurixLive) <dev@securixlive.com>
+** Copyright (C) 2008-2013 Ian Firns (SecurixLive) <dev@securixlive.com>
 **
 ** This program is free software; you can redistribute it and/or modify
 ** it under the terms of the GNU General Public License Version 2 as
@@ -122,7 +122,7 @@ void ParseReference(Barnyard2Config *bc, char *args, SigNode *sn)
     char **toks, *system, *id;
     int num_toks;
 
-    DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: parsing reference %s\n", args););
+    DEBUG_WRAP(DebugMessage(DEBUG_MAPS_DEEP, "map: parsing reference %s\n", args););
     
     /* 2 tokens: system, id */
     toks = mSplit(args, ",", 2, &num_toks, 0);
@@ -319,6 +319,28 @@ ClassType * ClassTypeLookupByType(Barnyard2Config *bc, char *type)
     return node;
 }
 
+ClassType * ClassTypeLookupByTypePure(ClassType *node, char *type)
+{
+    
+    if( (node == NULL) ||
+	(type == NULL))
+    {
+        return NULL;
+    }
+    
+    
+    while (node != NULL)
+    {
+        if (strcasecmp(type, node->type) == 0)
+	    return node;
+	
+        node = node->next;
+    }
+    
+    return NULL;
+}
+
+
 /* NOTE:  This lookup can only be done during parse time */
 /* Wut ...*/
 ClassType * ClassTypeLookupById(Barnyard2Config *bc, int id)
@@ -439,7 +461,7 @@ void DeleteClassifications(Barnyard2Config *bc)
     bc->classifications = NULL;
 }
 
-int ReadClassificationFile(Barnyard2Config *bc, const char *file)
+int ReadClassificationFile(Barnyard2Config *bc)
 {
     FILE        *fd;
     char        buf[BUFFER_SIZE];
@@ -448,27 +470,33 @@ int ReadClassificationFile(Barnyard2Config *bc, const char *file)
     int         num_toks;
     int         count = 0;
     
+    if( (bc == NULL) ||
+	(bc->class_file == NULL))
+    {
+	/* XXX */
+	return 1;
+    }
     
-    DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: opening file %s\n", file););
+    DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: opening file %s\n", bc->class_file););
     
-    if((fd = fopen(file, "r")) == NULL)
+    if((fd = fopen(bc->class_file, "r")) == NULL)
     {
         LogMessage("ERROR: Unable to open Classification file '%s' (%s)\n", 
-                file, strerror(errno));
+		   bc->class_file, strerror(errno));
         
         return -1;
     }
-
+    
     memset(buf, 0, BUFFER_SIZE); /* bzero() deprecated, replaced with memset() */
     
     while ( fgets(buf, BUFFER_SIZE, fd) != NULL )
     {
         index = buf;
-
+	
         /* advance through any whitespace at the beginning of the line */
         while (*index == ' ' || *index == '\t')
             index++;
-
+	
         /* if it's not a comment or a <CR>, send it to the parser */
         if ( (*index != '#') && (*index != 0x0a) && (index != NULL) )
         {
@@ -487,6 +515,7 @@ int ReadClassificationFile(Barnyard2Config *bc, const char *file)
   if(fd != NULL)
     fclose(fd);
 
+  
   return 0;
 }
 
@@ -494,41 +523,228 @@ int ReadClassificationFile(Barnyard2Config *bc, const char *file)
 
 /************************* Sid/Gid Map Implementation *************************/
 
-SigNode *sigTypes = NULL;
 
-int ReadSidFile(Barnyard2Config *bc, const char *file)
+
+/*
+   Classification parsing should happen before signature parsing,
+   so classification resolution should be done at signature initialization.
+
+   But at the moment this function was written classification could be parsed before
+   signature or signature before classification, thus leading to possible unresolvability.
+
+   hence.
+*/
+int SignatureResolveClassification(ClassType *class,SigNode *sig,char *sid_msg_file,char *classification_file)
+{
+    
+    ClassType *found = NULL;
+    
+    if( (class == NULL) ||
+        (sig == NULL) ||
+	(sid_msg_file == NULL) ||
+	(classification_file == NULL))
+    {
+	DEBUG_WRAP(DebugMessage(DEBUG_MAPS,"ERROR [%s()]: Failed class ptr [0x%x], sig ptr [0x%x], "
+				"sig_literal ptr [0x%x], sig_map_file ptr [0x%x], classification_file ptr [0x%x] \n",
+				__FUNCTION__,
+				class,
+				sig,
+				sig->classLiteral,
+				sid_msg_file,
+				classification_file););
+	return 1;
+    }
+    
+    while(sig != NULL)
+    {
+	found = NULL;
+
+	if(sig->classLiteral)
+	{
+	    if(strncasecmp(sig->classLiteral,"NOCLASS",strlen("NOCLASS")) == 0)
+	    {
+		DEBUG_WRAP(DebugMessage(DEBUG_MAPS,
+					"\nINFO: [%s()],In File [%s] \n"
+					"Signature [gid: %d] [sid : %d] [revision: %d] message [%s] has no classification [%s] defined, signature priority is [%d]\n\n",
+					__FUNCTION__,
+					BcGetSourceFile(sig->source_file),
+					sig->generator,
+					sig->id,
+					sig->rev,
+					sig->msg,
+					sig->classLiteral,
+					sig->priority););
+			   
+	    }
+	    else if( (found = ClassTypeLookupByTypePure(class,sig->classLiteral)) == NULL)
+	    {
+		sig->class_id = 0;
+	    }
+	    else
+	    {
+		sig->class_id = found->id;
+	    }
+	}
+	else
+	{
+	    if(sig->class_id == 0)
+	    {
+		
+		DEBUG_WRAP(DebugMessage(DEBUG_MAPS,
+					"\nINFO: [%s()],In file [%s]\n"
+					"Signature [gid: %d] [sid : %d] [revision: %d] message [%s] has no classification literal defined, signature priority is [%d]\n\n",
+					__FUNCTION__,
+					BcGetSourceFile(sig->source_file),
+					sig->generator,
+					sig->id,
+					sig->rev,
+					sig->msg,
+					sig->priority););
+	    }
+	}
+	
+	if(sig->priority == 0)
+	{
+	    if(found)
+		sig->priority = found->priority;
+	}
+	else
+	{
+	    if( (found) &&
+		(found->priority != sig->priority))
+	    {
+		DEBUG_WRAP(DebugMessage(DEBUG_MAPS,
+					"\nINFO: [%s()],In file [%s]\n"
+					"Signature [gid: %d] [sid : %d] [revision: %d] message [%s] has classification [%s] priority [%d]\n"
+					"The priority define by the rule will overwride classification [%s] priority [%d] defined in [%s] using [%d] as priority \n\n",
+					__FUNCTION__,
+					BcGetSourceFile(sig->source_file),
+					sig->generator,
+					sig->id,
+					sig->rev,
+					sig->msg,
+					sig->classLiteral,
+					sig->priority,
+					found->type,
+					found->priority,
+					classification_file,
+					sig->priority););
+	    }
+	}
+    	
+	if(sig->classLiteral)
+	{
+	    free(sig->classLiteral);
+	    sig->classLiteral = NULL;
+	}
+	
+	sig = sig->next;
+    }
+
+    return 0;
+}
+
+u_int32_t SigLookup(SigNode *head,u_int32_t gid,u_int32_t sid,u_int8_t source_file,SigNode **r_node)
+{
+    if( (head == NULL) ||
+	(r_node == NULL))
+    {
+	return 0;
+    }
+
+    while(head != NULL)
+    {
+
+	if(head->source_file == source_file)
+	{
+	    if( (head->generator == gid) &&
+		(head->id == sid))
+	    {
+		*r_node = head;
+		return 1;
+	    }
+	}
+
+	head = head->next;
+    }
+    
+
+    *r_node = NULL;
+    return 0;
+
+}
+
+
+
+int ReadSidFile(Barnyard2Config *bc)
 {
     FILE *fd;
     char buf[BUFFER_SIZE];
     char *index;
     int count = 0;
     
-    DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: opening file %s\n", file););
-
-    if( (fd = fopen(file, "r")) == NULL )
+    if(bc == NULL)
     {
-        LogMessage("ERROR: Unable to open SID file '%s' (%s)\n", file, 
-                strerror(errno));
-        
-        return -1;
+	return 1;
     }
 
+    if(bc->sid_msg_file == NULL)
+    {
+	return 0;
+    }
+
+    DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "[%s()] map: opening file %s\n", 
+			    __FUNCTION__,
+			    bc->sid_msg_file););   
+
+    if( (fd = fopen(bc->sid_msg_file, "r")) == NULL )
+    {
+        LogMessage("ERROR: Unable to open SID file '%s' (%s)\n", 
+		   bc->sid_msg_file, 
+		   strerror(errno));
+	return 1;
+    }
+    
     memset(buf, 0, BUFFER_SIZE); /* bzero() deprecated, replaced by memset() */
     
     while(fgets(buf, BUFFER_SIZE, fd) != NULL)
     {
         index = buf;
-
+	
         /* advance through any whitespace at the beginning of the line */
         while(*index == ' ' || *index == '\t')
             index++;
+	
+	/* Check if we are dealing with a sidv2 file */
+	if( (count == 0) && 
+	    (bc->sidmap_version == 0))
+	{
+	    if(*index == '#')
+	    {
+		index++;
+		if(strncasecmp(index,SIDMAPV1STRING,strlen(SIDMAPV1STRING)) == 0)
+		{
+		    bc->sidmap_version=SIDMAPV1;
+		    continue;
+		}
+		else if( strncasecmp(index,SIDMAPV2STRING,strlen(SIDMAPV2STRING)) == 0)
+		{
+		    bc->sidmap_version=SIDMAPV2;
+		    continue;
+		}
+	    }
+	    else
+	    {
+		bc->sidmap_version=SIDMAPV1;
+	    }
+	}
 
-        /* if it's not a comment or a <CR>, send it to the parser */
-        if((*index != '#') && (*index != 0x0a) && (index != NULL))
-        {
-            ParseSidMapLine(bc, index);
-            count++;
-        }
+	/* if it's not a comment or a <CR>, send it to the parser */
+	if((*index != '#') && (*index != 0x0a) && (index != NULL))
+	{
+	    ParseSidMapLine(bc, index);
+	    count++;
+	}
     }
     
     //LogMessage("Read [%u] signature \n",count);
@@ -536,15 +752,522 @@ int ReadSidFile(Barnyard2Config *bc, const char *file)
   if(fd != NULL)
     fclose(fd);
 
-  return count;
+  return 0;
 }
 
-void DeleteSigNodes()
+
+
+void ParseSidMapLine(Barnyard2Config *bc, char *data)
+{
+
+    SigNode *sn = NULL;
+    SigNode t_sn = {0}; 
+
+    char **toks = NULL;
+    char *idx = NULL;
+    
+    int num_toks = 0;
+    int min_toks = 0;
+    int i = 0;
+    
+    toks = mSplitSpecial(data, "||", 32, &num_toks, '\0');
+    
+    switch(bc->sidmap_version)
+    {
+    case SIDMAPV1:
+	min_toks = 2;
+	break;
+
+    case SIDMAPV2:
+	min_toks = 6;
+	break;
+	
+    default:
+	FatalError("[%s()]: Unknown sidmap file version [%d] \n",
+		   __FUNCTION__,
+		   bc->sidmap_version);
+    }
+    
+    if(num_toks < min_toks)
+    {
+        LogMessage("WARNING: Ignoring bad line in SID file: '%s'\n", data);
+    }
+    else
+    {
+        DEBUG_WRAP(DebugMessage(DEBUG_MAPS_DEEP, "map: creating new node\n"););
+
+	
+        for(i = 0; i<num_toks; i++)
+        { 
+            strtrim(toks[i]);
+            strip(toks[i]);
+            idx = toks[i];
+            while(*idx == ' ') idx++;
+
+	    if( (idx == NULL) ||
+		(strlen(idx) == 0))
+	    {
+		LogMessage("\n");
+		FatalError("[%s()], File [%s],\nError in map definition [%s] for value [%s] \n\n",
+			   __FUNCTION__,
+			   bc->sid_msg_file,
+			   data,
+			   idx);
+	    }
+
+	    switch(bc->sidmap_version)
+	    {
+	    case SIDMAPV1:
+		switch(i)
+		{
+                case 0: /* sid */
+                    t_sn.generator = 1;
+		    if( (t_sn.id = strtoul(idx, NULL, 10)) == ULONG_MAX)
+		    {
+			FatalError("[%s()], error converting integer [%s] for line [%s] \n",
+				   __FUNCTION__,
+				   strerror(errno),
+				   data);
+		    }
+		    break;
+		    
+                case 1: /* msg */
+                    if( (t_sn.msg = SnortStrdup(idx)) == NULL)
+		    {
+			FatalError("[%s()], error converting string for line [%s] \n",
+				   __FUNCTION__,
+				   data);
+		    }
+                    break;
+		    
+                default: /* reference data */
+                    ParseReference(bc, idx, &t_sn);
+                    break;
+		}
+		break;
+		
+	    case SIDMAPV2:
+
+		switch(i)
+		{
+
+		case 0: /*gid */
+		    if( (t_sn.generator = strtoul(idx,NULL,10)) == ULONG_MAX)
+		    {
+                        FatalError("[%s()], error converting integer [%s] for line [%s] \n",
+                                   __FUNCTION__,
+                                   strerror(errno),
+                                   data);
+                    }
+
+		    break;
+
+		case 1: /* sid */
+		    if( (t_sn.id = strtoul(idx, NULL, 10)) == ULONG_MAX)
+		    {
+                        FatalError("[%s()], error converting integer [%s] for line [%s] \n",
+                                   __FUNCTION__,
+                                   strerror(errno),
+                                   data);
+                    }
+		    break;
+
+		case 2: /* revision */
+		    if( (t_sn.rev = strtoul(idx, NULL, 10)) == ULONG_MAX)
+		    {
+                        FatalError("[%s()], error converting integer [%s] for line [%s] \n",
+                                   __FUNCTION__,
+                                   strerror(errno),
+                                   data);
+                    }
+		    break;
+		    
+		case 3: /* classification */
+		    if( (t_sn.classLiteral = SnortStrdup(idx)) == NULL)
+		    {
+			FatalError("[%s()], error converting string for line [%s] \n",
+				   __FUNCTION__,
+				   data);
+		    }
+		    break;
+
+		case 4: /* priority */
+		    
+		    if( (t_sn.priority = strtoul(idx, NULL, 10)) == ULONG_MAX)
+		    {
+                        FatalError("[%s()], error converting integer [%s] for line [%s] \n",
+                                   __FUNCTION__,
+                                   strerror(errno),
+                                   data);
+                    }
+		    break;
+
+		case 5: /* msg */
+		    if( (t_sn.msg = SnortStrdup(idx)) == NULL)
+		    {
+			FatalError("[%s()], error converting string for line [%s] \n",
+				   __FUNCTION__,
+				   data);
+		    }
+		    break;
+		    
+		default: /* reference data */
+		    ParseReference(bc, idx, &t_sn);
+		    break;
+		}
+		break;
+	    }
+	}
+    }
+    
+    sn = (SigNode *)*BcGetSigNodeHead();
+    
+    /* Look if we have a brother inserted from sid map file */
+    sig_lookup_continue:
+    if(SigLookup(sn,t_sn.generator,t_sn.id,SOURCE_SID_MSG,&sn))
+    {
+	if(t_sn.rev == sn->rev)
+	{
+	    DEBUG_WRAP(DebugMessage(DEBUG_MAPS,
+				    "[%s()],Item not inserted [ gid:[%d] sid:[%d] rev:[%d] msg:[%s] class:[%d] prio:[%d] ] in signature list \n"
+ 				    "\t Item already present  [ gid:[%d] sid:[%d] rev:[%d] msg:[%s] class:[%d] prio:[%d] ] \n",
+				    __FUNCTION__,
+				    t_sn.generator,t_sn.id,t_sn.rev,t_sn.msg,t_sn.class_id,t_sn.priority, /* revision,class_id and priority are hardcoded for generator */
+				    sn->generator,sn->id,sn->rev,sn->msg,sn->class_id,sn->priority););
+	}
+	else
+	{
+	    /* Continue to traverse the list to be sure */
+	    sn = sn->next;
+	    goto sig_lookup_continue;
+	}
+    }
+    else
+    {
+        if( (sn = CreateSigNode(BcGetSigNodeHead(),SOURCE_SID_MSG)) == NULL)
+        {
+            FatalError("[%s()], CreateSigNode() returned a NULL node, bailing \n",
+                       __FUNCTION__);
+        }
+
+        memcpy(sn,&t_sn,sizeof(SigNode));
+
+	sn->source_file = SOURCE_SID_MSG;
+    }
+
+    mSplitFree(&toks, num_toks);
+    
+    return;
+}
+
+SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid,u_int32_t revision)
+{
+    /* set temp node pointer to the Sid map list head */
+    SigNode **sh = BcGetSigNodeHead();
+    SigNode *sn = *sh;
+    
+    switch(BcSidMapVersion())
+    {
+    case SIDMAPV1:
+	/* The comment below is not true anymore with  sidmapv2 files generated by pulled pork */
+	
+	/* a snort general rule (gid=1) and a snort dynamic rule (gid=3) use the  */
+	/* the same sids and thus can be considered one in the same. */
+	if (gid == 3)
+	{
+	    gid = 1;
+	}
+	
+	/* find any existing Snort ID's that match */
+	while (sn != NULL)
+	{
+	    if (sn->generator == gid && sn->id == sid)
+	    {
+		return sn;
+	    }
+	    
+	    sn = sn->next;
+	}
+	break;
+	
+    case SIDMAPV2:
+	while (sn != NULL)
+        {
+            if ( (sn->generator == gid) && 
+		 (sn->id == sid) &&
+		 (sn->rev == revision))
+            {
+                return sn;
+            }
+	    
+            sn = sn->next;
+        }
+	break;
+    }
+    
+    /* create a default message since we didn't find any match */
+    sn = CreateSigNode(BcGetSigNodeHead(),SOURCE_GEN_RUNTIME);
+    sn->generator = gid;
+    sn->id = sid;
+    sn->rev = revision;
+    sn->msg = (char *)SnortAlloc(42);
+    snprintf(sn->msg, 42, "Snort Alert [%u:%u:%u]", gid, sid, revision);
+ 
+    return sn;
+}
+
+
+
+SigNode *CreateSigNode(SigNode **head,const u_int8_t source_file)
+{
+    SigNode       *sn = NULL;
+    
+    if (*head == NULL)
+    {
+        *head = (SigNode *) SnortAlloc(sizeof(SigNode));
+	sn = *head;
+	sn->source_file = source_file;
+        return *head;
+    }
+    else
+    {
+        sn = *head;
+	
+        while (sn->next != NULL) 
+	    sn = sn->next;
+	
+        sn->next = (SigNode *) SnortAlloc(sizeof(SigNode));
+	sn->next->source_file = source_file;
+        return sn->next;
+    }
+    
+    /* XXX */
+    return NULL;
+}
+
+int ReadGenFile(Barnyard2Config *bc)
+{
+    FILE        *fd;
+    char        buf[BUFFER_SIZE];
+    char        *index;
+    int         count = 0;
+    
+    if(bc->gen_msg_file == NULL)
+    {
+	return 0;
+    }
+    
+    DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "[%s()] map: opening file %s\n", 
+			    __FUNCTION__,
+			    bc->gen_msg_file););
+
+    if ( (fd = fopen(bc->gen_msg_file, "r")) == NULL )
+    {
+	LogMessage("ERROR: Unable to open Generator file \"%s\": %s\n", 
+		   bc->gen_msg_file, 
+		   strerror(errno));
+	
+	return 1;
+    }
+    
+    memset(buf, 0, BUFFER_SIZE); /* bzero() deprecated, replaced by memset() */
+    
+    while( fgets(buf, BUFFER_SIZE, fd) != NULL )
+    {
+        index = buf;
+
+        /* advance through any whitespace at the beginning of the line */
+        while (*index == ' ' || *index == '\t')
+            index++;
+
+        /* if it's not a comment or a <CR>, send it to the parser */
+        if( (*index != '#') && (*index != 0x0a) && (index != NULL) )
+        {
+            ParseGenMapLine(index);
+	    count++;
+        }
+    }
+    
+    //LogMessage("Read [%u] gen \n",count);
+    
+    if(fd != NULL)
+	fclose(fd);
+    
+    return 0;
+}
+
+
+void ParseGenMapLine(char *data)
+{
+    char **toks = NULL;
+    char *idx = NULL;
+
+    SigNode *sn = NULL; 
+    SigNode t_sn = {0};  /* used for temp storage before lookup */
+    
+    int num_toks = 0;
+    int i = 0;
+
+    toks = mSplitSpecial(data, "||", 32, &num_toks, '\0');
+    
+    if(num_toks < 2)
+    {
+        LogMessage("WARNING: Ignoring bad line in SID file: \"%s\"\n", data);
+	return;
+    }
+    
+    for(i=0; i<num_toks; i++)
+    {
+        strip(toks[i]);
+        idx = toks[i];
+        while(*idx == ' ') idx++;
+        
+        switch(i)
+        {
+	case 0: /* gen */
+	    if( (t_sn.generator = strtoul(idx, NULL, 10)) == ULONG_MAX)
+	    {
+		FatalError("[%s()], error converting integer [%s] for line [%s] \n",
+			   __FUNCTION__,
+			   strerror(errno),
+			   data);
+	    }
+	    break;
+	    
+	case 1: /* sid */
+	    if( (t_sn.id = strtoul(idx, NULL, 10)) == ULONG_MAX)
+	    {
+		FatalError("[%s()], error converting integer [%s] for line [%s] \n",
+			   __FUNCTION__,
+			   strerror(errno),
+			   data);
+	    }
+	    break;
+	    
+	case 2: /* msg */
+	    if( (t_sn.msg = SnortStrdup(idx)) == NULL)
+	    {
+		FatalError("[%s()], error converting string for line [%s] \n",
+			   __FUNCTION__,
+			   data);
+	    }
+	    break;
+	    
+	default: 
+	    break;
+        }
+    }
+    
+    switch(BcSidMapVersion())
+    {
+        case SIDMAPV1:
+           t_sn.rev = 1;
+           t_sn.priority = 0;
+           t_sn.classLiteral = strdup("NOCLASS"); /* default */
+           t_sn.class_id = 0;
+           break;
+
+        case SIDMAPV2:
+           /*
+              Generators have pre-defined revision,classification and priority
+           */
+           t_sn.rev = 1;
+           t_sn.classLiteral = strdup("NOCLASS"); /* default */
+           t_sn.class_id = 0;
+           t_sn.priority = 3;
+           break;
+    }
+    
+    /* Look if we have a brother inserted from sid map file */
+    if(SigLookup((SigNode *)*BcGetSigNodeHead(),t_sn.generator,t_sn.id,SOURCE_SID_MSG,&sn))
+    {
+
+	DEBUG_WRAP(DebugMessage(DEBUG_MAPS,
+				"[%s()],Item not inserted [ gid:[%d] sid:[%d] rev:[%d] msg:[%s] class:[%d] prio:[%d] ] in signature list \n"
+				"\t Item already present  [ gid:[%d] sid:[%d] rev:[%d] msg:[%s] class:[%d] prio:[%d] ] \n",
+				__FUNCTION__,
+				t_sn.generator,t_sn.id,t_sn.rev,t_sn.msg,t_sn.class_id,t_sn.priority, /* revision,class_id and priority are hardcoded for generator */
+				sn->generator,sn->id,sn->rev,sn->msg,sn->class_id,sn->priority););
+
+	/* 
+	   This is a quick hack for now to put sweet gid-msg.map messages up there 
+	*/
+	if(t_sn.msg)
+	{
+	    DEBUG_WRAP(DebugMessage(DEBUG_MAPS,"[%s()], swapping message [%s] for [%s] \n",
+				    __FUNCTION__,
+				    sn->msg,
+				    t_sn.msg););
+	    free(sn->msg);
+	    sn->msg = NULL;
+	    sn->msg = t_sn.msg;
+	    t_sn.msg = NULL;
+	}
+
+	if(t_sn.classLiteral)
+	{
+	    free(t_sn.classLiteral);
+	    t_sn.classLiteral = NULL;
+	}
+	
+	DEBUG_WRAP(DebugMessage(DEBUG_MAPS,"\n"););
+	
+    }
+    else
+    {
+	if(SigLookup((SigNode *)*BcGetSigNodeHead(),t_sn.generator,t_sn.id,SOURCE_GEN_MSG,&sn) == 0)
+	{
+	    if( (sn = CreateSigNode(BcGetSigNodeHead(),SOURCE_GEN_MSG)) == NULL)
+	    {
+		FatalError("[%s()], CreateSigNode() returned a NULL node, bailing \n",
+			   __FUNCTION__);
+	    }
+	 
+	    memcpy(sn,&t_sn,sizeof(SigNode));
+	    
+	    sn->source_file = SOURCE_GEN_MSG;
+	}
+	else
+	{
+	    
+	    DEBUG_WRAP(DebugMessage(DEBUG_MAPS,
+				    "[%s()],Item not inserted [ gid:[%d] sid:[%d] rev:[%d] msg:[%s] class:[%d] prio:[%d] ] in signature list \n"
+				    "\t Item already present  [ gid:[%d] sid:[%d] rev:[%d] msg:[%s] class:[%d] prio:[%d] ] \n\n",
+				    __FUNCTION__,
+				    t_sn.generator,t_sn.id,t_sn.rev,t_sn.msg,t_sn.class_id,t_sn.priority, /* revision,class_id and priority are hardcoded for generator */
+				    sn->generator,sn->id,sn->rev,sn->msg,sn->class_id,sn->priority););
+	    
+	    if(t_sn.msg)
+	    {
+		free(t_sn.msg);
+		t_sn.msg = NULL;
+	    }
+	    
+	    if(t_sn.classLiteral)
+	    {
+		free(t_sn.classLiteral);
+		t_sn.classLiteral = NULL;
+	    }
+
+	}
+    }
+	
+    mSplitFree(&toks, num_toks);
+
+    return;
+}
+
+/* 
+ * Some destructors 
+ * 
+ *
+ */
+
+void FreeSigNodes(SigNode **sigHead)
 {
     SigNode *sn = NULL, *snn = NULL;
     ReferenceNode *rn = NULL, *rnn = NULL;
-
-    sn = sigTypes;
+    sn = *sigHead;
 
     while(sn != NULL)
     {
@@ -552,8 +1275,17 @@ void DeleteSigNodes()
     
         /* free the message */
         if(sn->msg)
+	{
             free(sn->msg);
+	    sn->msg = NULL;
+	}
     
+	if(sn->classLiteral)
+	{
+	    free(sn->classLiteral);
+	    sn->classLiteral = NULL;
+	}
+
         /* free the references (NOT the reference systems) */
         if(sn->refs)
         {
@@ -574,208 +1306,72 @@ void DeleteSigNodes()
         }
 
         /* free the signature node */
-        free(sigTypes);
-
-        sigTypes = snn;
+	free(sn);
+	sn = NULL;
+        sn = snn;
     }
 
-    sigTypes = NULL;
-}
-
-void ParseSidMapLine(Barnyard2Config *bc, char *data)
-{
-    char **toks;
-    char *idx;
-    int num_toks;
-    int i;
-    SigNode *sn; 
-
-    toks = mSplitSpecial(data, "||", 32, &num_toks, '\0');
-
-    if(num_toks < 2)
-    {
-        LogMessage("WARNING: Ignoring bad line in SID file: '%s'\n", data);
-    }
-    else
-    {
-        DEBUG_WRAP(DebugMessage(DEBUG_MAPS, "map: creating new node\n"););
-
-        sn = CreateSigNode(&sigTypes);
+    *sigHead = NULL;
     
-        for(i = 0; i<num_toks; i++)
-        { 
-            strtrim(toks[i]);
-            strip(toks[i]);
-            idx = toks[i];
-            while(*idx == ' ') idx++;
-              
-            switch(i)
-            {
-                case 0: /* sid */
-                    sn->generator = 1;
-                    sn->id = strtoul(idx, NULL, 10);
-                    break;
-
-                case 1: /* msg */
-                    sn->msg = SnortStrdup(idx);
-                    break;
-
-                default: /* reference data */
-                    ParseReference(bc, idx, sn);
-                    break;
-            }
-        }
-    }
-
-    mSplitFree(&toks, num_toks);
-
     return;
 }
 
-SigNode *GetSigByGidSid(u_int32_t gid, u_int32_t sid)
+void FreeClassifications(ClassType **i_head)
 {
-  /* set temp node pointer to the Sid map list head */
-    SigNode *sn = sigTypes;
-  
-  /* a snort general rule (gid=1) and a snort dynamic rule (gid=3) use the  */
-  /* the same sids and thus can be considered one in the same. */
-  if (gid == 3)
-    gid = 1;
-
-    /* find any existing Snort ID's that match */
-    while (sn != NULL)
+    ClassType *head = *i_head;
+    
+    while (head != NULL)
     {
-        if (sn->generator == gid && sn->id == sid)
-        {
-            return sn;
-        }
+        ClassType *tmp = head;
 
-        sn = sn->next;
+        head = head->next;
+
+        if (tmp->name != NULL)
+            free(tmp->name);
+
+        if (tmp->type != NULL)
+            free(tmp->type);
+
+        free(tmp);
     }
 
-  /* create a default message since we didn't find any match */
-    sn = CreateSigNode(&sigTypes);
-    sn->generator = gid;
-    sn->id = sid;
-    sn->rev = 0;
-    sn->msg = (char *)SnortAlloc(42);
-    snprintf(sn->msg, 42, "Snort Alert [%u:%u:%u]", gid, sid, 0);
- 
-    return sn;
+    *i_head = NULL;
 }
 
-SigNode *CreateSigNode(SigNode **head)
+
+void FreeReferences(ReferenceSystemNode **i_head)
 {
-    SigNode       *sn;
-
-    if (*head == NULL)
+    ReferenceSystemNode *head = *i_head;
+    
+    while (head != NULL)
     {
-        *head = (SigNode *) SnortAlloc(sizeof(SigNode));
-        return *head;
-    }
-    else
-    {
-        sn = *head;
+        ReferenceSystemNode *tmp = head;
 
-        while (sn->next != NULL) 
-	    sn = sn->next;
+        head = head->next;
 	
-        sn->next = (SigNode *) SnortAlloc(sizeof(SigNode));
+        if (tmp->name != NULL)
+            free(tmp->name);
 	
-        return sn->next;
+        if (tmp->url != NULL)
+            free(tmp->url);
+	
+        free(tmp);
     }
-    
-    /* XXX */
-    return NULL;
+
+    *i_head = NULL;
 }
 
-int ReadGenFile(Barnyard2Config *bc, const char *file)
+void FreeSigSuppression(SigSuppress_list **i_head)
 {
-    FILE        *fd;
-    char        buf[BUFFER_SIZE];
-    char        *index;
-  int         count = 0;
+    SigSuppress_list *head = *i_head;
     
-
-    if ( (fd = fopen(file, "r")) == NULL )
+    while(head != NULL)
     {
-        LogMessage("ERROR: Unable to open Generator file \"%s\": %s\n", file, 
-                strerror(errno));
-        
-        return -1;
+	SigSuppress_list *next = head->next;
+	
+	free(head);
+	head = next;
     }
 
-    memset(buf, 0, BUFFER_SIZE); /* bzero() deprecated, replaced by memset() */
-    
-    while( fgets(buf, BUFFER_SIZE, fd) != NULL )
-    {
-        index = buf;
-
-        /* advance through any whitespace at the beginning of the line */
-        while (*index == ' ' || *index == '\t')
-            index++;
-
-        /* if it's not a comment or a <CR>, send it to the parser */
-        if( (*index != '#') && (*index != 0x0a) && (index != NULL) )
-        {
-            ParseGenMapLine(index);
-	    count++;
-        }
-    }
-
-    //LogMessage("Read [%u] gen \n",count);
-
-  if(fd != NULL)
-    fclose(fd);
-
-  return 0;
-}
-
-
-void ParseGenMapLine(char *data)
-{
-    char **toks;
-    int num_toks;
-    int i;
-    char *idx;
-    SigNode       *sn; 
-    
-    toks = mSplitSpecial(data, "||", 32, &num_toks, '\0');
-    
-    if(num_toks < 2)
-    {
-        LogMessage("WARNING: Ignoring bad line in SID file: \"%s\"\n", data);
-	return;
-    }
-    
-    sn = CreateSigNode(&sigTypes);
-    
-    for(i=0; i<num_toks; i++)
-    {
-        strip(toks[i]);
-        idx = toks[i];
-        while(*idx == ' ') idx++;
-            
-        switch(i)
-        {
-	case 0: /* gen */
-		//TODO: error checking on conversion
-	    sn->generator = strtoul(idx, NULL, 10);
-	    break;
-	    
-	case 1: /* sid */
-		//TODO: error checking on conversion
-	    sn->id = strtoul(idx, NULL, 10);
-	    break;
-	    
-	case 2: /* msg */
-	    sn->msg = SnortStrdup(idx);
-	    break;
-	    
-	default: 
-	    break;
-        }
-    }
-    
-    mSplitFree(&toks, num_toks);
+    *i_head = NULL;
 }

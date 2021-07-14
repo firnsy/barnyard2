@@ -1,5 +1,5 @@
-/* 
-** Copyright (C) 2008-2012 Ian Firns (SecurixLive) <dev@securixlive.com>
+/*
+** Copyright (C) 2008-2013 Ian Firns (SecurixLive) <dev@securixlive.com>
 **
 ** This program is free software; you can redistribute it and/or modify
 ** it under the terms of the GNU General Public License Version 2 as
@@ -20,9 +20,9 @@
 */
 
 
-#ifndef __SPO_PLATYPUS_H__
-#define __SPO_PLATYPUS_H__
+#ifndef __SPO_ECHIDNA_H__
+#define __SPO_ECHIDNA_H__
 
-void PlatypusSetup();
+void EchidnaSetup();
 
-#endif  /* __SPO_PLATYPUS_H__ */
+#endif  /* __SPO_ECHIDNA_H__ */

@@ -15,4 +15,4 @@ libsfutil_a_SOURCES = bitop.h \
     sf_vartable.c sf_vartable.h
 
 
-INCLUDES = -I..
+AM_CPPFLAGS = -I..

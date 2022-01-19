@@ -105,7 +105,7 @@ EXPERIMENTAL!!  I don't have a way to test this, so let me know if it works!
 ORACLE_HOME=%{OracleHome}
 
 %prep
-%setup -q
+%setup -q -n %{name}
 
 
 %build

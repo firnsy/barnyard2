@@ -10,7 +10,7 @@ WorkingDirectory=/usr/bin/
 ExecStart=/usr/bin/barnyard2-start.sh
 Restart=on-failure
 PermissionsStartOnly=True
-ExecStop=kill -9 `pidof barnyard2`
+ExecStop=/usr/bin/kill -9 `pidof barnyard2`
 
 [Install]
 WantedBy=multi-user.target

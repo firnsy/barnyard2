@@ -11,7 +11,7 @@ for INT in $INTERFACES; do
                 mkdir -p /var/run/barnyard2-${INT}
         fi
         BARNYARD_OPTS="-D -c $CONF -d $SNORTDIR/${INT} -w $WALDO_FILE -l $SNORTDIR/${INT} -a $ARCHIVEDIR -f $LOG_FILE -X /var/run/barnyard2-${INT}/barnyard.pid $EXTRA_ARGS --pid-path=/var/run/barnyard2-${INT}"
-        /usr/bin/barnyard2 $BARNYARD_OPTS
+        /usr/bin/barnyard2 $BARNYARD_OPTS &
 	RETVAL=$?
 done
 

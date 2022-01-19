@@ -15,5 +15,5 @@ for INT in $INTERFACES; do
 	RETVAL=$?
 done
 
-return $RETVAL
+exit $RETVAL
 

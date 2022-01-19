@@ -3,7 +3,7 @@ Description=Barnyard2 is an output processor for snort
 After=network.target
 
 [Service]
-Type=notify
+Type=forking
 User=root
 KillSignal=3
 WorkingDirectory=/usr/bin/

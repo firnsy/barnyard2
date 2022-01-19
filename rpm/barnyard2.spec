@@ -45,10 +45,10 @@ Summary: Snort Log Backend
 Name: barnyard2
 Version: 1.14
 Source0: https://github.com/firnsy/barnyard2/archive/barnyard2-%{version}.tar.gz
-Release: 1%{?dist}
+Release: 2%{?dist}
 License: GPL
 Group: Applications/Internet
-Url: http://www.github.com/firnsy/barnyard2
+Url: http://www.github.com/redsand/barnyard2
 
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
 BuildRequires: libtool
@@ -134,7 +134,16 @@ make
 %{__install} -d -p $RPM_BUILD_ROOT%{_sysconfdir}/{sysconfig,rc.d/init.d,snort} 
 %{__install} -d -p $RPM_BUILD_ROOT%{_datadir}/snort
 %{__install} -m 644 rpm/barnyard2.config $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/barnyard2
-%{__install} -m 755 rpm/barnyard2 $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/barnyard2
+%if %{rhel} <= 6
+	%{__install} -m 755 rpm/barnyard2 $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/barnyard2
+%else
+        if [ ! -d $RPM_BUILD_ROOT/usr/bin ]; then
+        	mkdir -p $RPM_BUILD_ROOT/usr/bin
+	fi
+	%{__install} -m 755 rpm/barnyard2-start.sh $RPM_BUILD_ROOT/usr/bin/barnyard2-start.sh
+        mkdir -p $RPM_BUILD_ROOT/etc/systemd/system/
+	%{__install} -m 755 rpm/barnyard2.service $RPM_BUILD_ROOT/etc/systemd/system/barnyard2.service
+%endif
 %{__mv} $RPM_BUILD_ROOT%{_sysconfdir}/barnyard2.conf $RPM_BUILD_ROOT%{_sysconfdir}/snort/
 if [ %{mysql} = 1 ]; then
   %{__install} -m 755 schemas/create_mysql $RPM_BUILD_ROOT%{_datadir}/snort/create_mysql
@@ -156,7 +165,12 @@ fi
 %doc LICENSE doc/INSTALL doc/README.*
 %attr(755,root,root)       		%{_bindir}/barnyard2
 %attr(640,root,root) %config(noreplace) %{_sysconfdir}/snort/barnyard2.conf
+%if %{rhel} <= 6
 %attr(755,root,root) %config(noreplace) %{_sysconfdir}/rc.d/init.d/barnyard2
+%else
+/etc/systemd/system/barnyard2.service
+/usr/bin/barnyard2-start.sh
+%endif
 %attr(644,root,root) %config(noreplace) %{_sysconfdir}/sysconfig/barnyard2
 
 %if %{mysql}

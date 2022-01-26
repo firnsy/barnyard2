@@ -361,7 +361,18 @@ typedef struct _dbReliabilityHandle
     /* Herited from shared data globals */
 
     unsigned long pThreadID; /* Used to store thread information and know if we "reconnected automaticaly" */
+    /*
+      https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-1.html
+      Incompatible Change: The my_bool type is no longer used in MySQL source code.
+      Any third-party code that used this type to represent C boolean variables should use the bool or int C type instead.
+    */
+#if !defined(MARIADB_BASE_VERSION) && !defined(MARIADB_VERSION_ID) && \
+        MYSQL_VERSION_ID >= 80001 && MYSQL_VERSION_ID != 80002
+    bool mysql_reconnect; /* We will handle it via the api. */
+#else
     my_bool mysql_reconnect; /* We will handle it via the api. */
+#endif
+
 #endif /* ENABLE_MYSQL */
 
 #ifdef ENABLE_POSTGRESQL

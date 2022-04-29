@@ -1,101 +1,312 @@
-#!/bin/sh
+#!/bin/bash
+# $Id$
 #
-# Init file for Barnyard2
+# barnyard2         Start/Stop the barnyard2 daemon.
 #
-#
-# chkconfig: 2345 40 60
+# chkconfig: 2345 57 61
 # description:  Barnyard2 is an output processor for snort.
 #
-# processname: barnyard2
-# config: /etc/sysconfig/barnyard2
-# config: /etc/snort/barnyard.conf
-# pidfile: /var/lock/subsys/barnyard2.pid
+# Created by Juan Jesus Prieto (jjprieto@redborder.net)
+#            Pablo Nebrera     (pablonebrera@redborder.net)
+#
+# Source function library.
+SYSTEMCTL_SKIP_REDIRECT=true
 
-source /etc/rc.d/init.d/functions
-source /etc/sysconfig/network
+lockfile="/var/lock/barnyard2.lck"
+locked=0
+subsysfile="/var/lock/subsys/barnyard2"
 
-### Check that networking is up.
-[ "${NETWORKING}" == "no" ] && exit 0
+if [ -f $lockfile ]; then
+    if [ "x$1" == "xstatus" ]; then
+        locked=1
+    else
+        PIDLOCK=$(<$lockfile)
+        if [ "x$PIDLOCK" != "x" ]; then
+            if [ ! -f /proc/$PIDLOCK/cmdline ]; then
+                echo "The process barnyard2 looks locked but the 'lock proccess' is not running. Unblocking it!!"
+                PIDLOCK=""
+            else
+                strings /proc/$PIDLOCK/cmdline | grep -q "barnyard2"
+                if [ $? -ne 0 ]; then
+                    echo "The process barnyard2 looks locked but the 'lock proccess' is not running. Unblocking it!!"
+                    PIDLOCK=""
+                fi
+            fi
+        fi
+ 
+        if [ "x$PIDLOCK" != "x" ]; then
+            if [ "x$WAIT" == "x1" ]; then
+                echo "Barnyard2 init script is locked ($lockfile). Waiting until it finish ..."
+                counter=1
+                max_counter=600
+                while [ $counter -lt $max_counter ]; do
+                    if [ -f $lockfile ]; then
+                        counter=$(( $counter +1 ))
+                        sleep 1
+                    else
+                        counter=$max_counter
+                    fi
+                done
+            fi
 
-[ -x /usr/sbin/snort ] || exit 1
-[ -r /etc/snort/snort.conf ] || exit 1
+            if [ -f $lockfile ]; then
+                echo "The lock file $lockfile exist (PID: $PIDLOCK). Exiting!"
+                exit 0
+            fi
+        fi
+    fi
+fi
 
-### Default variables
-SYSCONFIG="/etc/sysconfig/barnyard2"
 
-### Read configuration
-[ -r "$SYSCONFIG" ] && source "$SYSCONFIG"
 
-RETVAL=0
+if [ "x$1" != "xstatus" ]; then
+    trap "rm -f $lockfile" 0 2 5 15
+    echo $$ > $lockfile
+fi
+
+. /etc/rc.d/init.d/functions
+
+#RBDIR=""
+PATH="$PATH:$RBDIR/bin"
+SNORTBIN=$(which snort)
+NUMCPUS=$(ls -d /sys/devices/system/cpu/cpu[0-9]*|wc -l)
+[ $NUMCPUS -lt 1 ] && NUMCPUS=1
+NUMCPUS_1=$(($NUMCPUS-1))
 prog="barnyard2"
-desc="Snort Output Processor"
+USER="snort"
+GROUP="snort"
+RETVAL=0
 
-start() {
-	echo -n $"Starting $desc ($prog): "
-	for INT in $INTERFACES; do
-		PIDFILE="/var/lock/subsys/barnyard2-$INT.pid"
-		ARCHIVEDIR="$SNORTDIR/$INT/archive"
-		WALDO_FILE="$SNORTDIR/$INT/barnyard2.waldo"
-		BARNYARD_OPTS="-D -c $CONF -d $SNORTDIR/${INT} -w $WALDO_FILE -L $SNORTDIR/${INT} -a $ARCHIVEDIR -f $LOG_FILE -X $PIDFILE $EXTRA_ARGS"
-		daemon $prog $BARNYARD_OPTS
-	done
-	RETVAL=$?
-	echo
-	[ $RETVAL -eq 0 ] && touch /var/lock/subsys/$prog
-	return $RETVAL
+mkdir -p /var/log/barnyard2
+chown -R ${USER}:${GROUP} /var/log/barnyard2
+
+declare -a affinity
+for n in $(seq 0 ${NUMCPUS_1}); do
+    affinity[$n]=$(echo "ibase=10;obase=16;2^$n"|bc)
+done
+
+source /usr/lib/redborder/bin/rb_initscripts.sh
+
+f_start_instance() {
+   
+    local PIDFILE LOGDIR ARCHIVEDIR WALDO_FILE
+    for instance in $@; do
+        PIDFILE="/var/lock/subsys/${prog}_${INSTANCES_GROUP}-${instance}.pid"
+        LOGDIR="$SNORTDIR/instance-${instance}"
+        ARCHIVEDIR="$LOGDIR/archive"
+        WALDO_FILE="$LOGDIR/${prog}.waldo"
+
+        f_check_instance ${INSTANCES_GROUP} ${instance}
+        if [ $? -ne 0 ]; then
+            # instance is not running
+            RET=0
+            [ ! -d ${LOGDIR} ] && mkdir -p ${LOGDIR}
+            [ ! -d ${LOGDIR}/stats ] && mkdir -p ${LOGDIR}/stats
+            chown -R $USER:$GROUP $LOGDIR
+            
+            echo -n "Starting ${prog} "
+
+            echo -n "(${INSTANCES_GROUP_NAME}-${instance}): "
+
+            mkdir -p ${ARCHIVEDIR}
+            chown -R $USER:$GROUP ${ARCHIVEDIR}
+
+            [ "x$EVENT_CACHE" == "x" ] && EVENT_CACHE=2048
+
+            daemon env INSTANCE=\"${instance}\" INSTANCES_GROUP=\"${INSTANCES_GROUP}\" \
+                INSTANCES_GROUP_NAME=\"${INSTANCES_GROUP_NAME}\" CPU_LIST=\"${CPU_LIST}\" BIND_CPU=\"${v_cpu[${instance}]}\" \
+                taskset -c ${v_cpu[${instance}]} ionice -c 3 nice -n 15 $prog -D -c $CONF -d ${LOGDIR} -w ${WALDO_FILE} --event-cache-size ${EVENT_CACHE} \
+                    -a ${ARCHIVEDIR} -f ${LOG_FILE} -X ${PIDFILE} ${EXTRA_ARGS} -i "instance_${INSTANCES_GROUP}" -r \"-${instance}\" --create-pidfile &>/dev/null
+
+            RET=$?
+            [ $RET -ne 0 ] && RETVAL=$RET
+            print_result $RET
+        fi
+    done
+    
+    return $RET
 }
 
-stop() {
-	echo -n $"Shutting down $desc ($prog): "
-	killproc $prog
-	RETVAL=$?
-	echo
-	[ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/$prog
-	return $RETVAL
+f_start_group() {
+
+    local INSTANCES_GROUP=$1
+    local config_group_file=/etc/sysconfig/${prog}-${INSTANCES_GROUP}
+    local v_cpu
+    local PIDFILE LOGDIR ARCHIVEDIR WALDO_FILE 
+    source ${config_group_file}
+
+    if [ -f ${config_group_file}_local ]; then
+        source ${config_group_file}_local
+    fi
+
+    [ "x${SNORTDIR}" == "x" ] && SNORTDIR="/var/log/snort/${INSTANCES_GROUP}"
+
+    [ "x${ENABLED}" != "x0" ] && ENABLED=1 || return 0
+    [ "x${INSTANCES_GROUP_NAME}" == "x" ] && INSTANCES_GROUP_NAME="group_${INSTANCES_GROUP}"
+    [ "x${USER}" == "x" ] && USER="snort"
+    [ "x${GROUP}" == "x" ] && GROUP="snort"
+    [ "x${LOGDIR}" == "x" ] && LOGDIR=/var/log/snort/${INSTANCES_GROUP}
+    [ "x${CONF}" == "x" ] && CONF="/etc/snort/${INSTANCES_GROUP}/${prog}.conf"
+
+    [ ! -f /etc/snort/${INSTANCES_GROUP}/${prog}.conf -a -f /etc/snort/${prog}.conf.default ] && \
+        cp /etc/snort/${prog}.conf.default /etc/snort/${INSTANCES_GROUP}/${prog}.conf
+
+    [ "x${CPU_LIST}" == "x" ] && CPU_LIST=$(seq 0 ${NUMCPUS_1} | tr '\n' ',' | sed 's/,$//')
+    v_cpu=( $(echo ${CPU_LIST} | tr ',' ' ') )
+
+    f_start_instance ${!v_cpu[*]}
 }
 
-restart() {
-	stop
-	start
+f_status() {
+
+    declare -A instances_group_list
+    declare -A instances_list
+    local ret=0
+    local core pid config_group_file INSTANCE
+    for pid in $(pidof ${prog}); do
+        INSTANCES_GROUP=$(f_get_pid_value ${pid} 'INSTANCES_GROUP')
+        instances_group_list[${INSTANCES_GROUP}]="${instances_group_list[${INSTANCES_GROUP}]} ${pid}"
+    done
+    for config_group_file in $(ls /etc/sysconfig/${prog}-* 2>/dev/null | grep "${prog}-[0-9][0-9]*$" | sort); do
+        INSTANCES_GROUP=$(f_get_config_value "${config_group_file}" 'INSTANCES_GROUP')
+        [ "x${INSTANCES_GROUP}" == "x" ] && INSTANCES_GROUP="$(echo ${config_group_file} | sed 's/.*-\([0-9]*\)$/\1/')"
+        if [ "x${instances_group_list[${INSTANCES_GROUP}]}" == "x" ]; then
+            instances_group_list[${INSTANCES_GROUP}]="n/a"
+        fi
+    done
+   
+    INSTANCES_GROUP=""
+
+    for INSTANCES_GROUP in ${!instances_group_list[*]}; do
+        INSTANCES_GROUP_NAME=""
+        CPU_LIST=""
+        INTERFACES=""
+        unset instances_list
+        declare -A instances_list
+        for pid in ${instances_group_list[${INSTANCES_GROUP}]}; do
+            # getting instance number for this pid
+            if [ "x${pid}" != "xn/a" ]; then
+                INSTANCE=$(f_get_pid_value ${pid} 'INSTANCE')
+                instances_list[${INSTANCE}]=${pid}
+                CPU_LIST=$(f_get_pid_value ${pid} 'CPU_LIST')
+                INTERFACES=$(f_get_pid_value ${pid} 'INTERFACES')
+                INSTANCES_GROUP_NAME=$(f_get_pid_value ${pid} 'INSTANCES_GROUP_NAME')
+            fi
+        done
+        # checking every instance have a pid
+        if [ "x${CPU_LIST}" == "x" ]; then
+            CPU_LIST=$(f_get_config_value "/etc/sysconfig/${prog}-${INSTANCES_GROUP}" 'CPU_LIST')
+        fi
+        [ "x${CPU_LIST}" == "x" ] && CPU_LIST=$(seq 0 ${NUMCPUS_1} | tr '\n' ',' | sed 's/,$//')
+        CPU_TOTAL=$(echo ${CPU_LIST} | tr ',' '\n' | wc -l)
+        INSTANCE_MAX=$((${CPU_TOTAL}-1))
+        for INSTANCE in $(seq 0 ${INSTANCE_MAX}); do
+            if [ "x${instances_list[${INSTANCE}]}" == "x" ]; then
+                instances_list[${INSTANCE}]="n/a"
+                ret=1
+            fi
+        done
+
+        if [ -f /etc/sysconfig/${prog}-${INSTANCES_GROUP} ]; then
+            INSTANCES_GROUP_NAME=$(f_get_config_value "/etc/sysconfig/${prog}-${INSTANCES_GROUP}" 'INSTANCES_GROUP_NAME')
+        fi
+        [ "x${INSTANCES_GROUP_NAME}" == "x" ] && INSTANCES_GROUP_NAME="group_${INSTANCES_GROUP}"
+
+        echo "-------------------------------------------------------------------------------"
+        echo -n " Group Name: "
+        set_color blue
+        echo "${INSTANCES_GROUP_NAME}"
+        set_color norm
+
+        echo "-------------------------------------------------------------------------------"
+        printf " %-10s %-15s %-15s %-15s %-15s\n" "Instance" "PID" "CPU" " " "Status"
+        echo "-------------------------------------------------------------------------------"
+
+        for INSTANCE in $(echo ${!instances_list[*]} | tr ' ' '\n' | sort -n); do
+            pid=${instances_list[${INSTANCE}]}
+            if [ "x${pid}" != "xn/a" ]; then
+                coremask=$(taskset -p $pid | sed 's/^.*: \([0-9]*\)$/\1/')
+                for core in ${!affinity[*]}; do
+                    if [ "x${affinity[${core}]}" == "x${coremask}" ]; then
+                        # found core thread number
+                        break
+                    fi
+                done
+                if [ $core -ge 10 ]; then
+                    core_string="${core}"
+                else
+                    core_string="${core} "
+                fi
+            else
+                core_string="n/a"
+            fi
+            printf " %-10s %-15s %-15s" "${INSTANCE}" "${pid}" "${core_string}"
+            if [ "x${pid}" != "xn/a" ]; then
+                print_result 0
+            else
+                print_result 1
+            fi
+        done
+
+        echo "-------------------------------------------------------------------------------"
+
+        echo
+    done
+ 
+    return $ret
 }
 
+action=$1
+shift
 
-reload() {
-	echo -n $"Reloading $desc ($prog): "
-	killproc $prog -HUP
-	RETVAL=$?
-	echo
-	return $RETVAL
-}
-
-
-case "$1" in
-  start)
-	start
-	;;
-  stop)
-	stop
-	;;
-  restart)
-	restart
-	;;
-  reload)
-	reload
-	;;
-  condrestart)
-	[ -e /var/lock/subsys/$prog ] && restart
-	RETVAL=$?
-	;;
-  status)
-	status $prog
-	RETVAL=$?
-	;;
-  dump)
-	dump
-	;;
-  *)
-	echo $"Usage: $0 {start|stop|restart|reload|condrestart|status|dump}"
-	RETVAL=1
+case "${action}" in
+    start)
+        f_start $1
+        touch $subsysfile
+        ;;
+    stop)
+        f_stop $1
+        ;;
+    reload)
+        RETVAL=0
+        PIDS=$(pidof ${prog})
+        if [ "x$PIDS" == "x" ]; then
+            f_stop $1
+            f_start $1
+        else
+            f_reload $1
+        fi
+        touch $subsysfile
+        ;;
+    restart)
+        f_stop $1
+        f_start $1
+        ;;
+    condrestart)
+        if [ -e $subsysfile ]; then
+            f_stop $1
+            f_start $1
+        fi
+        ;;
+    clean)
+        f_clean
+        if [ "x$(pidof ${prog})" != "x" ]; then
+            touch $subsysfile
+        fi 
+        ;;
+    cleanstop)
+        f_clean stop
+        ;;
+    status)
+        f_status
+        RETVAL=$?
+        ;;
+   *)
+        echo "Usage: $0 {start|stop|reload|restart|condrestart|clean|cleanstop|status}"
+        RETVAL=2
 esac
 
+[ $locked -eq 1 ] && RETVAL=0
 exit $RETVAL
+
+## vim:ts=4:sw=4:expandtab:ai:nowrap:formatoptions=croqln:

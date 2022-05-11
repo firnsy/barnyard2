@@ -1,0 +1,15 @@
+[Unit]
+SourcePath=/etc/rc.d/init.d/barnyard2
+Description=SYSV: Barnyard2 is an output processor for snort. 
+
+[Service]
+Type=forking
+Restart=no
+TimeoutSec=5min
+IgnoreSIGPIPE=no
+KillMode=process
+GuessMainPID=no
+RemainAfterExit=yes
+ExecStart=/etc/rc.d/init.d/barnyard2 start
+ExecStop=/etc/rc.d/init.d/barnyard2 stop
+ExecReload=/etc/rc.d/init.d/barnyard2 reload

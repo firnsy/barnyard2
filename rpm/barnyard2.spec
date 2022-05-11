@@ -127,11 +127,12 @@ make
 
 %install
 %makeinstall 
-
+%{__mkdir_p} -p $RPM_BUILD_ROOT/usr/lib/systemd/system/
 %{__install} -d -p $RPM_BUILD_ROOT%{_sysconfdir}/{sysconfig,rc.d/init.d,snort} 
 %{__install} -m 644 rpm/barnyard2.config $RPM_BUILD_ROOT%{_sysconfdir}/sysconfig/barnyard2
 %{__install} -m 755 rpm/barnyard2 $RPM_BUILD_ROOT%{_sysconfdir}/rc.d/init.d/barnyard2
-%{__mv} $RPM_BUILD_ROOT%{_sysconfdir}/barnyard2.conf $RPM_BUILD_ROOT%{_sysconfdir}/snort/
+%{__install} -p -m 0644 rpm/barnyard2.service $RPM_BUILD_ROOT/usr/lib/systemd/system/barnyard2.service
+%{__rm} $RPM_BUILD_ROOT%{_sysconfdir}/barnyard2.conf
 
 
 %clean
@@ -143,9 +144,9 @@ fi
 %defattr(-,root,root)
 %doc LICENSE doc/INSTALL doc/README.*
 %attr(755,root,root)       %{_bindir}/barnyard2
-%attr(640,root,root) %config %{_sysconfdir}/snort/barnyard2.conf
 %attr(755,root,root) %config %{_sysconfdir}/rc.d/init.d/barnyard2
 %attr(644,root,root) %config %{_sysconfdir}/sysconfig/barnyard2
+%attr(644,root,root) /usr/lib/systemd/system/barnyard2.service 
 
 %changelog
 * Thu Feb 02 2012 Brent Woodruff <brent@fprimex.com>

@@ -340,6 +340,7 @@ if test  "$sunos4" != "no"; then
 AC_CHECK_FUNCS(vsnprintf,, LIBS="$LIBS -ldb")
 AC_CHECK_FUNCS(strtoul,, LIBS="$LIBS -l44bsd")
 fi
+LIBS="$LIBS -lpthread"
 
 # some funky macro to be backwards compatible with earlier autoconfs
 # in current they have AC_CHECK_DECLS

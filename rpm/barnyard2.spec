@@ -43,7 +43,7 @@
 
 Summary: Snort Log Backend 
 Name: barnyard2
-Version: 1.13
+Version: 1.14
 Source0: https://github.com/firnsy/barnyard2/archive/v2-%{version}.tar.gz
 Release: 1%{?dist}
 License: GPL
@@ -57,6 +57,7 @@ BuildRequires: libpcap1-devel
 BuildRequires: libpcap-devel
 %endif
 
+Requires: librd0 librdkafka1
 
 %description
 Barnyard has 3 modes of operation:
@@ -107,6 +108,10 @@ ORACLE_HOME=%{OracleHome}
 
 
 %build
+git clone --branch v0.9.2 https://github.com/edenhill/librdkafka.git /tmp/librdkafka-v0.9.2
+cd /tmp/librdkafka-v0.9.2
+./configure --prefix=/usr --sbindir=/usr/bin --exec-prefix=/usr && make
+make install
 
 %configure \
    %if %{libpcap1}

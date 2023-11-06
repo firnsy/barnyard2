@@ -19,6 +19,8 @@
 # See pg 399 of _Red_Hat_RPM_Guide_ for rpmbuild --with and --without options.
 ################################################################
 
+%global debug_package %{nil}
+
 # Other useful bits
 %define OracleHome /opt/oracle/OraHome1
 
@@ -51,6 +53,7 @@ Group: Applications/Internet
 Url: http://www.github.com/firnsy/barnyard2
 
 BuildRoot: %{_tmppath}/%{name}-%{version}-root
+Buildrequires: gcc-c++
 %if %{libpcap1}
 BuildRequires: libpcap1-devel
 %else
@@ -74,7 +77,7 @@ the last entry as listed in the waldo file.
 %package mysql
 Summary: barnyard2 with MySQL support
 Group: Applications/Internet
-Requires: %{name} = %{epoch}:%{version}-%{release}
+Requires: %{name} = %{version}-%{release}
 %if %{mysql}
 Requires: mysql
 BuildRequires: mysql-devel
@@ -85,7 +88,7 @@ barnyard2 binary compiled with mysql support.
 %package postgresql
 Summary: barnyard2 with PostgreSQL support
 Group: Applications/Internet
-Requires: %{name} = %{epoch}:%{version}-%{release}
+Requires: %{name} = %{version}-%{release}
 %if %{postgresql}
 Requires: postgresql
 BuildRequires: postgresql-devel
@@ -96,7 +99,7 @@ barnyard2 binary compiled with postgresql support.
 %package oracle
 Summary: barnyard2 with Oracle support
 Group: Applications/Internet
-Requires: %{name} = %{epoch}:%{version}-%{release}
+Requires: %{name} = %{version}-%{release}
 %description oracle
 barnyard2 binary compiled with Oracle support.
 

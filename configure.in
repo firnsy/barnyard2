@@ -214,7 +214,7 @@ AC_ARG_WITH(rdkafka_includes,
         [with_rdkafka_includes="$withval"],[with_rdkafka_includes="no"])
 
 AC_ARG_WITH(rdkafka_libraries,
-        [  --with-rdkfaka-libraries=DIR   rdkafka library directory],
+        [  --with-rdkafka-libraries=DIR   rdkafka library directory],
         [with_rdkafka_libraries="$withval"],[with_rdkafka_libraries="no"])
 
 if test "x$with_rdkafka_includes" != "xno"; then
@@ -272,7 +272,7 @@ AC_ARG_WITH(rd_includes,
         [with_rd_includes="$withval"],[with_rd_includes="no"])
 
 AC_ARG_WITH(rd_libraries,
-        [  --with-rdkfaka-libraries=DIR   rd library directory],
+        [  --with-rdkafka-libraries=DIR   rd library directory],
         [with_rd_libraries="$withval"],[with_rd_libraries="no"])
 
 if test "x$with_rd_includes" != "xno"; then

@@ -25,11 +25,13 @@
  *
  * Purpose: output plugin for json alerting
  *
- * Arguments: [alert_file]+kafka://<broker>:<port>@<topic>
+ * Arguments: [alert_file]+[kafka://<broker>:<port>@<topic>] [http://<host>:<port>/<url>]
  *
  * Effect:
  *
- * Alerts are sended to a kafka broker, using the port and topic given, plus to a alert file (if given).
+ * Alerts are sended to:
+ *    * kafka broker, using the port and topic given, plus to a alert file (if given).
+ *    * HTTP host, using http:// ot https:// version
  *
  * Comments: Allows use of json alerts with other output plugin types.
  * See doc/README.alert_json to more details
@@ -40,21 +42,6 @@
 #include "config.h"
 #endif
 
-#include <sys/types.h>
-#include <stdio.h>
-#include <stdlib.h>
-#ifndef WIN32
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#endif /* !WIN32 */
-
-#ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif
-
-#include "decode.h"
-#include "plugbase.h"
 #include "parser.h"
 #include "debug.h"
 #include "mstring.h"
@@ -66,38 +53,45 @@
 #include "barnyard2.h"
 
 #include "sfutil/sf_textlog.h"
-#include "rbutil/rb_kafka.h"
 #include "rbutil/rb_numstrpair_list.h"
 #include "rbutil/rb_pointers.h"
 #include "rbutil/rb_unified2.h"
-#include "errno.h"
-#include "signal.h"
-#include "log_text.h"
 
 #ifdef HAVE_RB_MAC_VENDORS
 #include "rb_mac_vendors.h"
 #endif
 
+#include <errno.h>
+#include <signal.h>
+#include <stdlib.h>
+#include <math.h>
+#include <sys/queue.h>
+
 #ifdef HAVE_GEOIP
 #include "GeoIP.h"
 #endif // HAVE_GEOIP
 
-#ifdef HAVE_LIBRD
-#include "librd/rd.h"
+#ifdef HAVE_LIBRDKAFKA
+#include <librdkafka/rdkafka.h>
 #endif
 
-#include "math.h"
+#ifdef HAVE_LIBRBHTTP
+#include <librbhttp/rb_http_handler.h>
+#define MAX_HTTP_DEFAULT_CONECTIONS 10
+#define MAX_HTTP_DEFAULT_QUEUED_MESSAGES 10000
+#define HTTP_DEFAULT_TIMEOUT 30000
+#define HTTP_DEFAULT_CONN_TIMEOUT 10000
+#define HTTP_DEFAULT_BATCH_TIMEOUT 1000
+#define HTTP_DEFAULT_VERBOSE 0
+#define HTTP_DEFAULT_MODE 1
+#define HTTP_DEFAULT_INSECURE 0
+#endif
 
-static const size_t initial_enrich_with_buf_len = 1024;
+#include <librd/rd.h>
+#include <rbutil/rb_printbuf.h>
 
-// Send object_name or not.
-// Note: Always including ,sensor_name,domain_name,group_name,src_net_name,src_as_name,dst_net_name,dst_as_name
-//#define SEND_NAMES
-
-#define DEFAULT_JSON_0 "timestamp,sig_generator,sig_id,sig_rev,priority,classification,action,msg,payload,l4_proto,src,src_net,src_net_name,src_as,src_as_name,dst,dst_net,dst_net_name,dst_as,dst_as_name,l4_srcport,l4_dstport,ethsrc,ethdst,ethlen,ethlength_range,arp_hw_saddr,arp_hw_sprot,arp_hw_taddr,arp_hw_tprot,vlan,vlan_priority,vlan_drop,tcpflags,tcpseq,tcpack,tcplen,tcpwindow,ttl,tos,id,dgmlen,iplen,iplen_range,icmptype,icmpcode,icmpid,icmpseq"
 
 #ifdef HAVE_GEOIP
-#define DEFAULT_JSON_1 DEFAULT_JSON_0 ",src_country,dst_country,src_country_code,dst_country_code" /* link with previous string */
 #define X_RB_GEOIP \
     _X(SRC_COUNTRY,"src_country","src_country",stringFormat,"N/A") \
     _X(DST_COUNTRY,"dst_country","dst_country",stringFormat,"N/A") \
@@ -108,33 +102,39 @@ static const size_t initial_enrich_with_buf_len = 1024;
     _X(SRC_AS_NAME,"src_as_name","src_as_name",stringFormat,"N/A") \
     _X(DST_AS_NAME,"dst_as_name","dst_as_name",stringFormat,"N/A")
 #else
-#define DEFAULT_JSON_1 DEFAULT_JSON_0
 #define X_RB_GEOIP
 #endif
 
 #ifdef HAVE_RB_MAC_VENDORS
-#define DEFAULT_JSON_2 DEFAULT_JSON_1 ",ethsrc_vendor,ethdst_vendor"
 #define X_RB_MAC_VENDORS \
     _X(ETHSRC_VENDOR,"ethsrc_vendor","ethsrc_vendor",stringFormat,"-") \
     _X(ETHDST_VENDOR,"ethdst_vendor","ethdst_vendor",stringFormat,"-")
 #else
-#define DEFAULT_JSON_2 DEFAULT_JSON_1
 #define X_RB_MAC_VENDORS
 #endif
 
-#ifdef SEND_NAMES
-#define DEFAULT_JSON DEFAULT_JSON_2 ",l4_proto_name,src_name,dst_name,l4_srcport_name,l4_dstport_name,vlan_name"
+#ifdef RB_EXTRADATA
+#define X_RB_EXTRADATA \
+    _X(SHA256,"sha256","sha256",stringFormat,"-") \
+    _X(FILE_SIZE,"file_size","file_size",numericFormat,"-") \
+    _X(FILE_HOSTNAME,"file_hostname","file_hostname",stringFormat,"-") \
+    _X(FILE_URI,"file_uri","file_uri",stringFormat,"-") \
+    _X(EMAIL_SENDER,"email_sender","email_sender",stringFormat,"-") \
+    _X(EMAIL_DESTINATIONS,"email_destinations","email_destinations",stringFormat,"-") \
+    _X(FTP_USER,"ftp_user","ftp_user",stringFormat,"-") \
+    _X(SMB_UID,"smb_uid","smb_uid", numericFormat, "0") \
+    _X(SMB_UPLOAD,"smb_upload","smb_upload",numericFormat,"-")
+    //_X(EMAIL_HEADERS,"email_headers","email_headers",stringFormat,"-")
 #else
-#define DEFAULT_JSON DEFAULT_JSON_2
+#define X_RB_EXTRADATA
 #endif
 
 #define DEFAULT_FILE  "alert.json"
 #define DEFAULT_KAFKA_BROKER "kafka://127.0.0.1@barnyard"
-#define DEFAULT_LIMIT (128*M_BYTES)
-#define LOG_BUFFER    (30*K_BYTES)
 
 #define KAFKA_PROT "kafka://"
-//#define KAFKA_TOPIC "rb_ips"
+#define HTTP_PROT  "http://"
+#define HTTPS_PROT "https://"
 #define FILENAME_KAFKA_SEPARATOR '+'
 #define BROKER_TOPIC_SEPARATOR   '@'
 
@@ -144,7 +144,6 @@ static const size_t initial_enrich_with_buf_len = 1024;
 #define X_FUNCTION_TEMPLATE \
     _X(TIMESTAMP,"timestamp","timestamp",numericFormat,"0") \
     _X(SENSOR_ID_SNORT,"sensor_id_snort","sensor_id_snort",numericFormat,"0") \
-    _X(TYPE,"type","type",stringFormat,"-") \
     _X(ACTION,"action","action",stringFormat,"-") \
     _X(SIG_GENERATOR,"sig_generator","sig_generator",numericFormat,"0") \
     _X(SIG_ID,"sig_id","sig_id",numericFormat,"0") \
@@ -152,6 +151,7 @@ static const size_t initial_enrich_with_buf_len = 1024;
     _X(PRIORITY,"priority","priority",stringFormat,"unknown") \
     _X(CLASSIFICATION,"classification","classification",stringFormat,"-") \
     _X(MSG,"msg","msg",stringFormat,"-") \
+    X_RB_EXTRADATA \
     _X(PAYLOAD,"payload","payload",stringFormat,"-") \
     _X(PROTO,"l4_proto_name","l4_proto_name",stringFormat,"-") \
     _X(PROTO_ID,"l4_proto","l4_proto",numericFormat,"0") \
@@ -170,7 +170,6 @@ static const size_t initial_enrich_with_buf_len = 1024;
     _X(UDPLENGTH,"udplength","udplength",numericFormat,"0") \
     _X(ETHLENGTH,"ethlen","ethlength",numericFormat,"0") \
     _X(ETHLENGTH_RANGE,"ethlength_range","ethlength_range",stringFormat,"0") \
-    _X(TRHEADER,"trheader","trheader",stringFormat,"-") \
     _X(SRCPORT,"l4_srcport","src_port",numericFormat,"0") \
     _X(SRCPORT_NAME,"l4_srcport_name","src_port_name",stringFormat,"-") \
     _X(DSTPORT,"l4_dstport","dst_port",numericFormat,"0") \
@@ -203,12 +202,19 @@ static const size_t initial_enrich_with_buf_len = 1024;
     X_RB_GEOIP \
     _X(TEMPLATE_END_ID,"","",numericFormat,"0")
 
-/* If you change some of this, remember to change printElementWithTemplate too */
 typedef enum{
     #define _X(a,b,c,d,e) a,
     X_FUNCTION_TEMPLATE
     #undef _X
 }TEMPLATE_ID;
+
+static const char DEFAULT_JSON0[] =
+    #define _X(a,b,c,d,e) "," b
+    X_FUNCTION_TEMPLATE
+    #undef _X
+    ;
+
+static const char *DEFAULT_JSON = DEFAULT_JSON0+1;  // Not getting first comma
 
 typedef enum{stringFormat,numericFormat} JsonPrintFormat;
 
@@ -220,22 +226,39 @@ typedef struct{
     char * defaultValue;
 }  AlertJSONTemplateElement;
 
-typedef struct _TemplateElementsList{
+typedef struct _TemplateElement{
     AlertJSONTemplateElement * templateElement;
-    struct _TemplateElementsList * next;
-} TemplateElementsList;
+    TAILQ_ENTRY(_TemplateElement) qentry;
+} TemplateElement;
 
-typedef struct _AlertJSONConfig{
-    char *type;
-    struct _AlertJSONConfig *next;
-} AlertJSONConfig;
+#define OutputTemplate TAILQ_HEAD(,_TemplateElement)
+#define output_template_init TAILQ_INIT
+#define output_template_append(t,elm) TAILQ_INSERT_TAIL(t,elm,qentry)
+#define output_template_first(t) TAILQ_FIRST(t)
+#define output_template_foreach(elm,t) TAILQ_FOREACH(elm,t,qentry)
+
+static const uint64_t RPRINTBUF_MAGIC = 0x1ba1c1ba1c1ba1c;
+
+typedef struct _RefcntPrintbuf {
+    DEBUG_WRAP(uint64_t magic;);
+    struct printbuf printbuf;
+    int refcnt;
+} RefcntPrintbuf;
+
+static void DecRefcntPrintbuf(RefcntPrintbuf *rprintbuf) {
+    if(rd_atomic_sub(&rprintbuf->refcnt,1) == 0) {
+        /* No more users, let's free */
+        free(rprintbuf->printbuf.buf);
+        DEBUG_WRAP(memset(rprintbuf,0,sizeof(rprintbuf)));
+        free(rprintbuf);
+    }
+}
 
 typedef struct _AlertJSONData
 {
-    KafkaLog * kafka;
+    RefcntPrintbuf *curr_printbuf;
     char * jsonargs;
-    TemplateElementsList * outputTemplate;
-    AlertJSONConfig *config;
+    OutputTemplate output_template;
     Number_str_assoc * hosts, *nets, *services, *protocols, *vlans;
     char *enrich_with;
 #ifdef HAVE_GEOIP
@@ -246,6 +269,33 @@ typedef struct _AlertJSONData
 #endif /* HAVE_GEOIP */
 #ifdef HAVE_RB_MAC_VENDORS
     struct mac_vendor_database *eth_vendors_db;
+#endif
+#ifdef HAVE_LIBRDKAFKA
+    struct {
+        int                    do_poll;
+        char *brokers,*topic;
+        rd_kafka_t            *rk;
+        rd_kafka_conf_t       *rk_conf;
+        rd_kafka_topic_t      *rkt;
+        rd_kafka_topic_conf_t *rkt_conf;
+        pthread_t              poll_thread;
+    } kafka;
+#endif
+#ifdef HAVE_LIBRBHTTP
+    struct {
+        long max_connections;
+        long max_queued_messages;
+        long req_timeout;
+        long conn_timeout;
+        long batch_timeout;
+        long verbose;
+        long mode;
+        long insecure;
+        int                    do_poll;
+        pthread_t              poll_thread;
+        const char *url;
+        struct rb_http_handler_s *handler;
+    } http;
 #endif
 } AlertJSONData;
 
@@ -258,6 +308,7 @@ static AlertJSONTemplateElement template[] = {
     #undef _X
 };
 
+
 /* list of function prototypes for this preprocessor */
 static void AlertJSONInit(char *);
 static AlertJSONData *AlertJSONParseArgs(char *);
@@ -265,6 +316,13 @@ static void AlertJSON(Packet *, void *, uint32_t, void *);
 static void AlertJSONCleanExit(int, void *);
 static void AlertRestart(int, void *);
 static void RealAlertJSON(Packet*, void*, uint32_t, AlertJSONData * data);
+#ifdef HAVE_LIBRDKAFKA
+static void AlertJsonKafkaDelayedInit (AlertJSONData *this);
+static void KafkaMsgDelivered (rd_kafka_t *rk,
+               void *payload, size_t len,
+               int error_code,
+               void *opaque, void *msg_opaque);
+#endif
 
 /*
  * Function: SetupJSON()
@@ -322,7 +380,7 @@ static void AlertJSONInit(char *args)
 #ifdef HAVE_LIBRDKAFKA
 
 /* Extracted from Magnus Edenhill's kafkacat */
-static rd_kafka_conf_res_t 
+static rd_kafka_conf_res_t
 rdkafka_add_attr_to_config(rd_kafka_conf_t *rk_conf,rd_kafka_topic_conf_t *topic_conf,
                     const char *name,const char *val,char *errstr,size_t errstr_size){
     if (!strcmp(name, "list") ||
@@ -347,11 +405,11 @@ rdkafka_add_attr_to_config(rd_kafka_conf_t *rk_conf,rd_kafka_topic_conf_t *topic
     return res;
 }
 
-static rd_kafka_conf_res_t 
+static rd_kafka_conf_res_t
 rdkafka_add_str_to_config(rd_kafka_conf_t *rk_conf, rd_kafka_topic_conf_t *rkt_conf,
             const char *_keyval, char *errstr,size_t errstr_size){
 
-    char *keyval = strdup(_keyval);
+    char *keyval = SnortStrdup(_keyval);
 
     const char *key = keyval;
     char *val = strchr(keyval,'=');
@@ -391,7 +449,6 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     int num_toks;
     AlertJSONData *data;
     char* filename = NULL;
-    char* kafka_str = NULL;
     int i;
     char* hostsListPath = NULL,*networksPath = NULL,*servicesPath = NULL,*protocolsPath = NULL,*vlansPath=NULL,*prioritiesPath=NULL;
     #ifdef HAVE_GEOIP
@@ -405,10 +462,6 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     #ifdef HAVE_RB_MAC_VENDORS
     char * eth_vendors_path = NULL;
     #endif
-    #ifdef HAVE_LIBRDKAFKA
-    rd_kafka_conf_t       *rk_conf  = rd_kafka_conf_new();
-    rd_kafka_topic_conf_t *rkt_conf = rd_kafka_topic_conf_new();
-    #endif
 
     DEBUG_WRAP(DebugMessage(DEBUG_INIT, "ParseJSONArgs: %s\n", args););
     data = (AlertJSONData *)SnortAlloc(sizeof(AlertJSONData));
@@ -419,6 +472,23 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     }
     if ( !args ) args = "";
     toks = mSplit((char *)args, " \t", 0, &num_toks, '\\');
+
+#ifdef HAVE_LIBRDKAFKA
+    char* kafka_str      = NULL;
+    data->kafka.rk_conf  = rd_kafka_conf_new();
+    data->kafka.rkt_conf = rd_kafka_topic_conf_new();
+#endif
+
+#ifdef HAVE_LIBRBHTTP
+    data->http.max_connections     = MAX_HTTP_DEFAULT_CONECTIONS;
+    data->http.max_queued_messages = MAX_HTTP_DEFAULT_QUEUED_MESSAGES;
+    data->http.req_timeout         = HTTP_DEFAULT_TIMEOUT;
+    data->http.conn_timeout        = HTTP_DEFAULT_CONN_TIMEOUT;
+    data->http.batch_timeout       = HTTP_DEFAULT_BATCH_TIMEOUT;
+    data->http.verbose             = HTTP_DEFAULT_VERBOSE;
+    data->http.mode                = HTTP_DEFAULT_MODE;
+    data->http.insecure            = HTTP_DEFAULT_INSECURE;
+#endif
 
     for (i = 0; i < num_toks; i++)
     {
@@ -433,7 +503,19 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         }
         else if(!strncasecmp(tok, KAFKA_PROT,strlen(KAFKA_PROT)) && !kafka_str)
         {
+#ifdef HAVE_LIBRDKAFKA
             RB_IF_CLEAN(kafka_str,kafka_str = SnortStrdup(tok),"%s(%i) param setted twice\n",tok,i);
+#else
+            FatalError("alert_json: This barnyard was build with no librdkafka support.");
+#endif
+        }
+        else if(!strncasecmp(tok, HTTP_PROT,strlen(HTTP_PROT)) || !strncasecmp(tok,HTTPS_PROT,strlen(HTTP_PROT)))
+        {
+#ifdef HAVE_LIBRBHTTP
+            RB_IF_CLEAN(data->http.url,data->http.url = SnortStrdup(tok),"%s(%i) param setted twice\n",tok,i);
+#else
+            FatalError("alert_json: This barnyard was build with no http support.");
+#endif
         }
         else if ( !strncasecmp(tok, "default", strlen("default")) && !data->jsonargs)
         {
@@ -483,7 +565,7 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
             #if HAVE_LIBRDKAFKA
             char errstr[512];
 
-            const rd_kafka_conf_res_t rc = rdkafka_add_str_to_config(rk_conf,rkt_conf,tok+strlen("rdkafka."),errstr,sizeof(errstr));
+            const rd_kafka_conf_res_t rc = rdkafka_add_str_to_config(data->kafka.rk_conf,data->kafka.rkt_conf,tok+strlen("rdkafka."),errstr,sizeof(errstr));
             if(rc != RD_KAFKA_CONF_OK){
                 FatalError("alert_json: Cannot parse %s(%i): %s: %s\n",
                     file_name, file_line, tok,errstr);
@@ -492,6 +574,52 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
             FatalError("alert_json: Cannot parse %s(%i): %s: Does not have librdkafka\n",
                 file_name, file_line, tok);
             #endif
+        }
+        else if(!strncasecmp(tok,"http.",strlen("http.")))
+        {
+#ifndef HAVE_LIBRBHTTP
+            FatalError("alert_json: This plugin was not build using HTTP extensions");
+#else
+            /// @TODO use a function
+            char *end=NULL;
+            if(!strncmp(tok,"http.mode=",strlen("http.mode=")))
+            {
+                data->http.mode = strtol(tok+strlen("http.mode="),&end,0);
+            }
+            if(!strncmp(tok,"http.max_connections=",strlen("http.max_connections=")))
+            {
+                data->http.max_connections = strtol(tok+strlen("http.max_connections="),&end,0);
+            }
+            else if (!strncmp(tok,"http.max_queued_messages=",strlen("http.max_queued_messages=")))
+            {
+                data->http.max_queued_messages = strtol(tok+strlen("http.max_queued_messages="),&end,0);
+            }
+            else if (!strncmp(tok,"http.conn_timeout=",strlen("http.conn_timeout=")))
+            {
+                data->http.conn_timeout = strtol(tok+strlen("http.conn_timeout="),&end,0);
+            }
+            else if (!strncmp(tok,"http.req_timeout=",strlen("http.req_timeout=")))
+            {
+                data->http.req_timeout = strtol(tok+strlen("http.req_timeout="),&end,0);
+            }
+            else if (!strncmp(tok,"http.verbose=",strlen("http.verbose=")))
+            {
+                data->http.verbose = strtol(tok+strlen("http.verbose="),&end,0);
+            }
+            else if (!strncmp(tok,"http.insecure=",strlen("http.insecure=")))
+            {
+               data->http.insecure = strtol(tok+strlen("http.insecure="),&end,0);
+            }
+            else if (!strncmp(tok,"http.batch_timeout=",strlen("http.batch_timeout=")))
+            {
+               data->http.batch_timeout = strtol(tok+strlen("http.batch_timeout="),&end,0);
+            }
+
+            if(NULL == end || *end != '\0')
+            {
+                FatalError("alert_json: Cannot parse HTTP %s parameter: Invalid value\n",tok);
+            }
+#endif
         }
         else if(!strncasecmp(tok,"eth_vendors=",strlen("eth_vendors=")))
         {
@@ -525,16 +653,15 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         #endif
         else
         {
-			FatalError("alert_json: Cannot parse %s(%i): %s\n",
-			file_name, file_line, tok);
+            FatalError("alert_json: Cannot parse %s(%i): %s\n",
+            file_name, file_line, tok);
         }
     }
 
     /* DFEFAULT VALUES */
     if ( !data->jsonargs ) data->jsonargs = SnortStrdup(DEFAULT_JSON);
     if ( !filename ) filename = ProcessFileOption(barnyard2_conf_for_parsing, DEFAULT_FILE);
-    if ( !kafka_str ) kafka_str = SnortStrdup(DEFAULT_KAFKA_BROKER);
-    
+
     /* names-str assoc */
     if(hostsListPath) FillHostsList(hostsListPath,&data->hosts,HOSTS);
     if(networksPath) FillHostsList(networksPath,&data->nets,NETWORKS);
@@ -545,16 +672,24 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     mSplitFree(&toks, num_toks);
     toks = mSplit(data->jsonargs, ",", 128, &num_toks, 0);
 
+    output_template_init(&data->output_template);
+
     for(i=0;i<num_toks;++i){
         int j;
         for(j=0;;++j){
             if(template[j].id==TEMPLATE_END_ID)
                 FatalError("alert_json: Cannot parse template element %s\n",toks[i]);
             if(!strcmp(template[j].templateName,toks[i])){
-                TemplateElementsList ** templateIterator = &data->outputTemplate;
-                while(*templateIterator!=NULL) templateIterator=&(*templateIterator)->next;
-                *templateIterator = SnortAlloc(sizeof(TemplateElementsList));
-                (*templateIterator)->templateElement = &template[j];
+                TemplateElement *elm = SnortAlloc(sizeof(elm[0]));
+                if (NULL != elm)
+                {
+                    elm->templateElement = &template[j];
+                    output_template_append(&data->output_template,elm);
+                }
+                else
+                {
+                    FatalError("alert_json: Cannot allocate template element (out of memory?)\n");
+                }
                 break;
             }
         }
@@ -629,27 +764,28 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
         DEBUG_INIT, "alert_json: '%s' '%s'\n", filename, data->jsonargs
     ););
 
+#ifdef HAVE_LIBRDKAFKA
     if(kafka_str){
+        /// @TODO this should be cleaned.
         char * at_char = strchr(kafka_str,BROKER_TOPIC_SEPARATOR);
         if(at_char==NULL)
             FatalError("alert_json: No topic specified, despite the fact a kafka server was given. Use kafka://broker@topic.");
         const size_t broker_length = (at_char-(kafka_str+strlen(KAFKA_PROT)));
-        char * kafka_server = malloc(sizeof(char)*(broker_length+1));
-        strncpy(kafka_server,kafka_str+strlen(KAFKA_PROT),broker_length);
-        kafka_server[broker_length] = '\0';
+        data->kafka.brokers = SnortAlloc(broker_length+1);
+        strncpy(data->kafka.brokers,kafka_str+strlen(KAFKA_PROT),broker_length);
+        data->kafka.brokers[broker_length] = '\0';
+        data->kafka.topic = SnortStrdup(at_char+1);
 
         /*
-         * In DaemonMode(), kafka must start in another function, because, in daemon mode, Barnyard2Main will execute this 
-         * function, will do a fork() and then, in the child process, will call RealAlertJSON, that will not be able to 
-         * send kafka data*/
-        data->kafka = KafkaLog_Init (kafka_server, LOG_BUFFER, at_char+1, kafka_str?NULL:filename
-            #ifdef HAVE_LIBRDKAFKA
-            ,rk_conf,rkt_conf
-            #endif
-        );
+         * In DaemonMode(), kafka must start in another function, because, in daemon mode, Barnyard2Main will execute this
+         * function, will do a fork() and then, in the child process, will call RealAlertJSON, that will not be able to
+         * send kafka data */
+
+        free(kafka_str);
     }
+#endif
+
     if ( filename ) free(filename);
-    if( kafka_str ) free (kafka_str);
     if( hostsListPath ) free (hostsListPath);
     if( networksPath ) free (networksPath);
     if( servicesPath ) free (servicesPath);
@@ -665,45 +801,259 @@ static AlertJSONData *AlertJSONParseArgs(char *args)
     return data;
 }
 
+#ifdef HAVE_LIBRDKAFKA
+static void KafkaMsgDelivered (rd_kafka_t *rk,
+               void *payload, size_t len,
+               int error_code,
+               void *opaque, void *msg_opaque)
+{
+    RefcntPrintbuf *rprintbuf = msg_opaque;
+
+    DEBUG_WRAP(if(RPRINTBUF_MAGIC!=rprintbuf->magic)
+        FatalError("msg_delivered: Not valid magic"));
+
+    if (unlikely(error_code))
+        ErrorMessage("rdkafka Message delivery failed: %s\n",rd_kafka_err2str(error_code));
+    else if (unlikely(BcLogVerbose()))
+        LogMessage("rdkafka Message delivered (%zd bytes)\n", len);
+
+    DecRefcntPrintbuf(rprintbuf);
+}
+
+static void *KafkaPollFuncion(void *vjsonData)
+{
+    AlertJSONData *jsonData = vjsonData;
+    while(rd_atomic_add(&jsonData->kafka.do_poll,0))
+    {
+        rd_kafka_poll(jsonData->kafka.rk,500);
+    }
+
+    return NULL;
+}
+
+static void AlertJsonKafkaDelayedInit (AlertJSONData *this)
+{
+    char errstr[256];
+
+    if(!this->kafka.rk_conf)
+        FatalError("%s called with NULL==this->rk_conf\n",
+            __FUNCTION__);
+
+    if(!this->kafka.rkt_conf)
+        FatalError("%s called with NULL==this->rkt_conf\n",
+            __FUNCTION__);
+
+    rd_kafka_conf_set_dr_cb(this->kafka.rk_conf,KafkaMsgDelivered);
+    this->kafka.rk = rd_kafka_new(RD_KAFKA_PRODUCER, this->kafka.rk_conf, errstr, sizeof(errstr));
+
+    if(NULL==this->kafka.rk)
+        FatalError("Failed to create new producer: %s\n",errstr);
+
+    if (rd_kafka_brokers_add(this->kafka.rk, this->kafka.brokers) == 0)
+        FatalError("Kafka: No valid brokers specified in %s\n",this->kafka.brokers);
+
+    this->kafka.rkt = rd_kafka_topic_new(this->kafka.rk, this->kafka.topic, this->kafka.rkt_conf);
+
+    if(NULL==this->kafka.rkt)
+        FatalError("It was not possible create a kafka topic %s\n",this->kafka.topic);
+
+    rd_atomic_add(&this->kafka.do_poll,1);
+    const int rc = pthread_create(&this->kafka.poll_thread, NULL,
+                          KafkaPollFuncion, this);
+
+    if(rc != 0)
+    {
+        char errbuf[512];
+
+        strerror_r(errno,errbuf,sizeof(errbuf));
+        FatalError("Couln't create kafka poll thread: %s",errbuf);
+    }
+}
+#endif
+
+#ifdef HAVE_LIBRBHTTP
+static void HttpMsgDelivered(struct rb_http_handler_s * rb_http_handler,
+                            int status_code,
+                            long http_code,
+                            const char * status_code_str,
+                            char * buff,size_t len,
+                            void * msg_opaque)
+{
+    RefcntPrintbuf *rprintbuf = msg_opaque;
+
+    DEBUG_WRAP(if(RPRINTBUF_MAGIC!=rprintbuf->magic)
+        FatalError("msg_delivered: Not valid magic"));
+
+    if (unlikely(status_code))
+    {
+        ErrorMessage("http Message delivery failed: (%d)%s\n",status_code,status_code_str);
+    }
+    else if(unlikely(http_code != 200))
+    {
+        ErrorMessage("alert_json: HTTP server returned %ld code\n",http_code);
+    }
+    else if (unlikely(BcLogVerbose()))
+    {
+        LogMessage("http Message delivered (%zd bytes)\n", len);
+    }
+
+    DecRefcntPrintbuf(rprintbuf);
+}
+
+void *HttpPollFuncion(void *vjsonData) {
+    AlertJSONData *jsonData = vjsonData;
+
+    while(rd_atomic_add(&jsonData->http.do_poll,0))
+    {
+        rb_http_get_reports (jsonData->http.handler,
+                              HttpMsgDelivered, 500);
+    }
+
+    return NULL;
+}
+
+static void HTTPHandlerSetLongOpt(struct rb_http_handler_s *handler,
+    const char *key,long val)
+{
+    char errstr[BUFSIZ];
+    char valbuf[BUFSIZ];
+
+    snprintf(valbuf,sizeof(valbuf),"%ld",val);
+
+    const int rc = rb_http_handler_set_opt(handler,key,valbuf,errstr,
+        sizeof(errstr));
+
+    if(rc != 0)
+    {
+        FatalError("alert_json: Couldn't set option %s to %ld: %s\n",
+            key, val, errstr);
+    }
+}
+
+static void AlertJsonHTTPDelayedInit (AlertJSONData *this)
+{
+
+    char errstr[256];
+
+    if(!this->http.url)
+    {
+        FatalError("%s called with NULL==this->http.url\n",
+            __FUNCTION__);
+    }
+
+    this->http.handler = rb_http_handler_create (this->http.url,
+        errstr, sizeof(errstr));
+
+    HTTPHandlerSetLongOpt(this->http.handler, "RB_HTTP_CONNECTIONS",
+                          this->http.max_connections);
+    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_TIMEOUT",
+                          this->http.req_timeout);
+    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_CONNTTIMEOUT",
+                          this->http.conn_timeout);
+    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_VERBOSE",
+                          this->http.verbose);
+    HTTPHandlerSetLongOpt(this->http.handler, "RB_HTTP_MAX_MESSAGES",
+                          this->http.max_queued_messages);
+    HTTPHandlerSetLongOpt(this->http.handler, "RB_HTTP_BATCH_TIMEOUT",
+                          this->http.batch_timeout);
+    HTTPHandlerSetLongOpt(this->http.handler, "RB_HTTP_MODE",
+                          this->http.mode);
+    HTTPHandlerSetLongOpt(this->http.handler, "HTTP_INSECURE",
+                          this->http.insecure);
+
+    rb_http_handler_run(this->http.handler);
+
+    if(NULL==this->http.handler)
+    {
+        FatalError("Failed to create new HTTP producer: %s\n",errstr);
+    }
+
+    rd_atomic_add(&this->http.do_poll,1);
+    const int rc = pthread_create(&this->http.poll_thread, NULL,
+                          HttpPollFuncion, this);
+
+    if(rc != 0)
+    {
+        char errbuf[512];
+
+        strerror_r(errno,errbuf,sizeof(errbuf));
+        FatalError("Couln't create http poll thread: %s",errbuf);
+    }
+
+}
+#endif
+
 static void AlertJSONCleanup(int signal, void *arg, const char* msg)
 {
     AlertJSONData *data = (AlertJSONData *)arg;
-    TemplateElementsList *iter,*aux;
+    TemplateElement *template_element = NULL;
     /* close alert file */
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"%s\n", msg););
 
     if(data)
     {
-        if(data->kafka){
-            KafkaLog_FlushAll(data->kafka);
-            KafkaLog_Term(data->kafka);
+#ifdef HAVE_LIBRDKAFKA
+        if(data->kafka.rk)
+        {
+            rd_atomic_sub(&data->kafka.do_poll,1);
+            const int join_rc = pthread_join(data->kafka.poll_thread,NULL);
+            if(0 != join_rc)
+            {
+                ErrorMessage("Couldn't join poll_thread (%d)",join_rc);
+            }
+
+            while (rd_kafka_outq_len(data->kafka.rk) > 0)
+            {
+                rd_kafka_poll(data->kafka.rk, 100);
+            }
+
+            if(data->kafka.rkt)
+            {
+                 rd_kafka_topic_destroy(data->kafka.rkt);
+            }
+
+            rd_kafka_destroy(data->kafka.rk);
+            while(rd_kafka_wait_destroyed(1000) == -1);
+
         }
+#endif
 
+#ifdef HAVE_GEOIP
         if(data->gi)
+        {
             GeoIP_delete(data->gi);
+        }
         if(data->gi_org)
+        {
             GeoIP_delete(data->gi_org);
+        }
         if(data->gi6)
+        {
             GeoIP_delete(data->gi6);
+        }
         if(data->gi6_org)
+        {
             GeoIP_delete(data->gi6_org);
+        }
+#endif // HAVE_GEOIP
 
+#ifdef HAVE_RB_MAC_VENDORS
+        if(data->eth_vendors_db)
+            rb_destroy_mac_vendor_db(data->eth_vendors_db);
+#endif
         free(data->jsonargs);
         freeNumberStrAssocList(data->hosts);
         freeNumberStrAssocList(data->nets);
         freeNumberStrAssocList(data->services);
         freeNumberStrAssocList(data->protocols);
         freeNumberStrAssocList(data->vlans);
-        for(iter=data->outputTemplate;iter;iter=aux){
-            aux = iter->next;
-            free(iter);
+
+        while(!TAILQ_EMPTY(&data->output_template)) {
+            template_element = output_template_first(&data->output_template);
+            TAILQ_REMOVE(&data->output_template, template_element, qentry);
+            free(template_element);
         }
 
-
-        #ifdef HAVE_GEOIP
-        if(data->gi) GeoIP_delete(data->gi);
-        if(data->gi_org) GeoIP_delete(data->gi_org);
-        #endif // GWO_IP
         /* free memory from SpoJSONData */
         free(data);
     }
@@ -730,14 +1080,14 @@ static void AlertJSON(Packet *p, void *event, uint32_t event_type, void *arg)
  * Function: C++ version 0.4 char* style "itoa", Written by Lukás Chmela. (Modified)
  *
  * Purpose: Fast itoa conversion. snprintf is slow.
- * 
+ *
  * Arguments:   value => Number.
  *             result => Where to save result
  *               base => Number base.
  *
  * Return: result
  * TODO: Return writed buffer lenght.
- * 
+ *
  */
 char* _itoa(uint64_t value, char* result, int base, size_t bufsize) {
     // check that the base if valid
@@ -760,15 +1110,25 @@ char* _itoa(uint64_t value, char* result, int base, size_t bufsize) {
 
 /* shortcut to used bases */
 static inline char *itoa10(uint64_t value,char *result,const size_t bufsize){return _itoa(value,result,10,bufsize);}
-static inline char *itoa16(uint64_t value,char *result,const size_t bufsize){return _itoa(value,result,16,bufsize);}
-static inline void printHWaddr(KafkaLog *kafka,const uint8_t *addr,char * buf,const size_t bufLen){
+static inline char *itoa16(uint64_t value,char *result,const size_t bufsize){
+    char *ret = _itoa(value,result,16,bufsize);
+    if(value < 16 && ret > result){
+        ret--;
+        *ret='0';
+    }
+    return ret;
+}
+
+static inline void printHWaddr(struct printbuf *pbuf,const uint8_t *addr,char * buf,const size_t bufLen){
     int i;
-    for(i=0;i<6;++i){
+    for(i=0;i<6;++i)
+    {
         if(i>0)
-            KafkaLog_Putc(kafka,':');
-        if(addr[i]<0x10)
-            KafkaLog_Putc(kafka,'0');
-        KafkaLog_Puts(kafka, itoa16(addr[i],buf,bufLen));
+        {
+            printbuf_memappend_fast_str(pbuf,":");
+        }
+
+        printbuf_memappend_fast_n16(pbuf,addr[i]);
     }
 }
 
@@ -835,7 +1195,7 @@ static int extract_ip0(sfip_t *ip,const void *_event, uint32_t event_type, Packe
     case UNIFIED2_PACKET:
         // Does not have information in the event -> trying to get it from the packet
         return extract_ip_from_packet(ip,p,srcdst_req);
-        
+
 
     case UNIFIED2_IDS_EVENT:
     case UNIFIED2_IDS_EVENT_VLAN:
@@ -850,7 +1210,7 @@ static int extract_ip0(sfip_t *ip,const void *_event, uint32_t event_type, Packe
             {
                 ipv4 = ((Unified2IDSEvent *)_event)->ip_destination;
             }
-            
+
             const int rc = sfip_set_raw(ip,&ipv4,AF_INET);
             if(p && rc != SFIP_SUCCESS)
                 return extract_ip_from_packet(ip,p,srcdst_req);
@@ -1127,6 +1487,229 @@ static char *extract_AS(AlertJSONData *jsonData,const sfip_t *ip)
 
 #endif
 
+#ifdef RB_EXTRADATA
+/*
+ * Function: printMail(const char *, int, struct printbuf *)
+ *
+ * Purpose: Write an Unified2 extradata mail in printbuf
+ *
+ * Arguments:     mail => mail <test@test.com>
+ *                 len => length of mail
+ *            printbuf => printed mail with no <,>
+ * Returns: printed characters.
+ */
+static void printMail(const char *mail,int len, struct printbuf *printbuf) {
+    if (len >1 && mail[0]=='<' && mail[len-1] == '>')
+        printbuf_memappend_fast(printbuf, mail+1, len-2);
+    else
+        printbuf_memappend_fast(printbuf, mail, len);
+}
+
+/*
+ * Function: printMultipleMails(const char *, struct printbuf *)
+ *
+ * Purpose: Write an Unified2 extradata mails in printbuf
+ *
+ * Arguments:    mails => mail "<test@test.com>,<test2@test.com>"
+ *                 len => length of mails string
+ *            printbuf => printed mail in ["test@test.com","test2@test.com"]
+ * Returns: printed characters.
+ */
+static void printMultipleMails(const char *mails,int len, struct printbuf *printbuf)
+{
+    printbuf_memappend_fast(printbuf, "[", 1);
+
+    const char *cursor = mails;
+    while(cursor)
+    {
+        const size_t rest_of_mails = len - (cursor - mails);
+        const char *end = memchr(cursor,',',rest_of_mails);
+        if (cursor != mails)
+        {
+            printbuf_memappend_fast_str(printbuf, ",");
+        }
+
+        int mail_len = end ? end - cursor : rest_of_mails;
+
+        printbuf_memappend_fast_str(printbuf, "\\\"");
+        printMail(cursor, mail_len, printbuf);
+        printbuf_memappend_fast_str(printbuf, "\\\"");
+
+        cursor = end ? end + 1 : NULL;
+    }
+
+    printbuf_memappend_fast(printbuf, "]", 1);
+}
+
+static int printElementExtraDataBlob(AlertJSONTemplateElement *templateElement,
+    struct printbuf *printbuf, Unified2ExtraData *U2ExtraData)
+{
+    uint32_t    event_info;     /* type in Unified2 Event */
+    const char  *str;
+    int         len;
+
+    event_info = ntohl(U2ExtraData->type);
+
+    switch (templateElement->id)
+    {
+        case SHA256:
+            if (event_info == EVENT_INFO_FILE_SHA256)
+            {
+                const uint8_t *sha_str = (uint8_t *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+
+                uint16_t i;
+                char buf[sizeof "00"];
+                const size_t bufLen = sizeof buf;
+                if(sha_str && len>0)
+                    for(i=0; i<len; ++i)
+                        printbuf_memappend_fast_str(printbuf, itoa16(sha_str[i],buf,bufLen));
+                else
+                    printbuf_memappend_fast_str(printbuf, templateElement->defaultValue);
+            }
+            break;
+        case FILE_SIZE:
+            if (event_info == EVENT_INFO_FILE_SIZE)
+            {
+                str = (char *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                printbuf_memappend_fast(printbuf, str, len);
+            }
+            break;
+        case FILE_URI:
+            if (event_info == EVENT_INFO_FILE_NAME)
+            {
+                str = (char *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                printbuf_memappend_escaped(printbuf, str, len);
+            }
+            break;
+        case FILE_HOSTNAME:
+            if (event_info == EVENT_INFO_FILE_HOSTNAME)
+            {
+                str = (char *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                printbuf_memappend_fast(printbuf, str, len);
+            }
+            break;
+        case EMAIL_SENDER:
+            if (event_info == EVENT_INFO_FILE_MAILFROM)
+            {
+                str = (char *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                printMail(str,len,printbuf);
+            }
+            break;
+        case EMAIL_DESTINATIONS:
+            if (event_info == EVENT_INFO_FILE_RCPTTO)
+            {
+                str = (const char *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                printMultipleMails(str,len,printbuf);
+            }
+            break;
+
+        case FTP_USER:
+            if (event_info == EVENT_INFO_FTP_USER)
+            {
+                str = (char *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                printbuf_memappend_fast(printbuf, str, len);
+            }
+            break;
+        case SMB_UID:
+            if (event_info == EVENT_INFO_SMB_UID) {
+                {
+                char buf[sizeof "00"];
+                const size_t buflen = sizeof buf;
+                uint16_t uid = ntohs(*(uint16_t *)(U2ExtraData+1));
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                printbuf_memappend_fast_str(printbuf, itoa10(uid, buf, buflen));
+                }
+            }
+            break;
+        case SMB_UPLOAD:
+            if (event_info == EVENT_INFO_SMB_IS_UPLOAD) {
+                {
+                const char * true_str = "true";
+                const char * false_str = "false";
+                char buf[sizeof "0"];
+                const size_t buflen = sizeof buf;
+                uint8_t uid = *((uint8_t *)(U2ExtraData+1));
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+
+                itoa10(uid, buf, buflen);
+                if (strcmp(buf, "0") == 0)
+                    printbuf_memappend_fast(printbuf, false_str, strlen(false_str));
+                else
+                    printbuf_memappend_fast(printbuf, true_str, strlen(true_str));
+                }
+            }
+            break;
+
+        /*
+        case EMAIL_HEADERS:
+            if (event_info == EVENT_INFO_FILE_MAILHEADERS)
+            {
+                str = (char *)(U2ExtraData+1);
+                len = (int) (ntohl(U2ExtraData->blob_length) - sizeof(U2ExtraData->data_type) - sizeof(U2ExtraData->blob_length));
+                printbuf_memappend_fast(printbuf, str, len);
+            }
+            break;
+        */
+        default:
+            LogMessage("WARNING: printElementExtraDataBlob(): JSON Element ID inconsistent (%d)\n", templateElement->id);
+            break;
+    }
+
+    return 0;
+}
+
+static int printElementExtraData(void *event, uint32_t event_type,
+    AlertJSONTemplateElement *templateElement, struct printbuf *printbuf)
+{
+    uint32_t                event_data_type;        /* datatype in Unified2 Event*/
+    ExtraDataRecordNode     *edrnCurrent = NULL;
+    Unified2ExtraData       *U2ExtraData;
+    ExtraDataRecordCache    *extra_data_cache;
+
+    switch (event_type)
+    {
+        case UNIFIED2_IDS_EVENT:
+            extra_data_cache = &(((Unified2IDSEvent_legacy_WithPED *)(event))->extra_data_cache);
+            break;
+        case UNIFIED2_IDS_EVENT_MPLS:
+        case UNIFIED2_IDS_EVENT_VLAN:
+            extra_data_cache = &(((Unified2IDSEvent_WithPED *)(event))->extra_data_cache);
+            break;
+        case UNIFIED2_IDS_EVENT_IPV6:
+            extra_data_cache = &(((Unified2IDSEventIPv6_legacy_WithPED *)(event))->extra_data_cache);
+            break;
+        case UNIFIED2_IDS_EVENT_IPV6_MPLS:
+        case UNIFIED2_IDS_EVENT_IPV6_VLAN:
+            extra_data_cache = &(((Unified2IDSEventIPv6_WithPED *)(event))->extra_data_cache);
+            break;
+        default:
+            extra_data_cache = NULL;
+            LogMessage("WARNING: printElementExtraData(): event_type inconsistent (%d)\n", event_type);
+            break;
+    }
+
+    if (extra_data_cache == NULL)
+        return 0;
+
+    TAILQ_FOREACH(edrnCurrent, extra_data_cache, entry)
+    {
+        U2ExtraData = (Unified2ExtraData *)(((Unified2ExtraDataHdr *)edrnCurrent->data)+1);
+        event_data_type = ntohl(U2ExtraData->data_type);
+
+        if (event_data_type == EVENT_DATA_TYPE_BLOB)
+            printElementExtraDataBlob(templateElement, printbuf, U2ExtraData);
+    }
+
+    return 0;
+}
+#endif
 
 /*
  * Function: PrintElementWithTemplate(Packet *, char *, FILE *, char *, numargs const int)
@@ -1141,17 +1724,19 @@ static char *extract_AS(AlertJSONData *jsonData,const sfip_t *ip)
  * Returns: 0 if nothing writed to jsonData. !=0 otherwise.
  *
  */
-static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type, AlertJSONData *jsonData, AlertJSONTemplateElement *templateElement){
+static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
+        AlertJSONData *jsonData, AlertJSONTemplateElement *templateElement,
+        struct printbuf *printbuf)
+{
     SigNode *sn;
     char tcpFlags[9];
     char buf[sizeof "0000:0000:0000:0000:0000:0000:0000:0000"];
     const size_t bufLen = sizeof buf;
     const char * str_aux=NULL;
-    KafkaLog * kafka = jsonData->kafka;
 
     sfip_t ip;
     sfip_clear(&ip);
-    const int initial_buffer_pos = KafkaLog_Tell(jsonData->kafka);
+    const int initial_buffer_pos = printbuf->bpos;
 
     /* Avoid repeated code */
     switch(templateElement->id){
@@ -1192,34 +1777,34 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
     #endif
     switch(templateElement->id){
         case TIMESTAMP:
-            KafkaLog_Puts(kafka,itoa10(ntohl(((Unified2EventCommon *)event)->event_second), buf, bufLen));
+            printbuf_memappend_fast_str(printbuf,itoa10(ntohl(((Unified2EventCommon *)event)->event_second), buf, bufLen));
             break;
         case SENSOR_ID_SNORT:
-            KafkaLog_Puts(kafka,event?itoa10(ntohl(((Unified2EventCommon *)event)->sensor_id),buf, bufLen):templateElement->defaultValue);
+            printbuf_memappend_fast_str(printbuf,event?itoa10(ntohl(((Unified2EventCommon *)event)->sensor_id),buf, bufLen):templateElement->defaultValue);
             break;
         case ACTION:
             if((str_aux = actionOfEvent(event,event_type)))
-                KafkaLog_Puts(kafka,str_aux);
+                printbuf_memappend_fast_str(printbuf,str_aux);
             break;
         case SIG_GENERATOR:
             if(event != NULL)
-                KafkaLog_Puts(kafka,itoa10(ntohl(((Unified2EventCommon *)event)->generator_id),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf,itoa10(ntohl(((Unified2EventCommon *)event)->generator_id),buf,bufLen));
             break;
         case SIG_ID:
             if(event != NULL)
-                KafkaLog_Puts(kafka,itoa10(ntohl(((Unified2EventCommon *)event)->signature_id),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf,itoa10(ntohl(((Unified2EventCommon *)event)->signature_id),buf,bufLen));
             break;
         case SIG_REV:
             if(event != NULL)
-                KafkaLog_Puts(kafka,itoa10(ntohl(((Unified2EventCommon *)event)->signature_revision),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf,itoa10(ntohl(((Unified2EventCommon *)event)->signature_revision),buf,bufLen));
             break;
         case PRIORITY:
             if(event != NULL){
                 const int priority_id = ntohl(((Unified2EventCommon *)event)->priority_id);
                 const char *prio_name = NULL;
-                if(priority_id < sizeof(priority_name)/sizeof(priority_name[0])) 
+                if(priority_id < sizeof(priority_name)/sizeof(priority_name[0]))
                     prio_name = priority_name[priority_id];
-                KafkaLog_Puts(kafka,prio_name ? prio_name : templateElement->defaultValue);
+                printbuf_memappend_fast_str(printbuf,prio_name ? prio_name : templateElement->defaultValue);
             }
             break;
         case CLASSIFICATION:
@@ -1227,9 +1812,9 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             {
                 uint32_t classification_id = ntohl(((Unified2EventCommon *)event)->classification_id);
                 const ClassType *cn = ClassTypeLookupById(barnyard2_conf, classification_id);
-                KafkaLog_Puts(kafka,cn?cn->name:templateElement->defaultValue);
+                printbuf_memappend_fast_str(printbuf,cn?cn->name:templateElement->defaultValue);
             }else{ /* Always log something */
-                KafkaLog_Puts(kafka, templateElement->defaultValue);
+                printbuf_memappend_fast_str(printbuf, templateElement->defaultValue);
             }
             break;
         case MSG:
@@ -1242,10 +1827,25 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
                 if (sn != NULL)
                 {
                     //const int msglen = strlen(sn->msg);
-                    KafkaLog_Puts(kafka,sn->msg);
+                    printbuf_memappend_fast_str(printbuf,sn->msg);
                 }
             }
             break;
+#ifdef RB_EXTRADATA
+        case SHA256:
+        case FILE_SIZE:
+        case FILE_URI:
+        case FILE_HOSTNAME:
+        case EMAIL_SENDER:
+        case EMAIL_DESTINATIONS:
+        case FTP_USER:
+        case SMB_UID:
+        case SMB_UPLOAD:
+        //case EMAIL_HEADERS:
+            if (event != NULL)
+                printElementExtraData(event, event_type, templateElement, printbuf);
+            break;
+#endif
         case PAYLOAD:
             {
                 /* Sending packet payload (Packet->data) inside kafka message, instead of
@@ -1255,9 +1855,9 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
                 uint16_t i;
                 if(p &&  p->dsize>0){
                     for(i=0;i<p->dsize;++i)
-                        KafkaLog_Puts(kafka, itoa16(p->data[i],buf,bufLen));
+                        printbuf_memappend_fast_str(printbuf, itoa16(p->data[i],buf,bufLen));
                 }else{
-                    KafkaLog_Puts(kafka, templateElement->defaultValue);
+                    printbuf_memappend_fast_str(printbuf, templateElement->defaultValue);
                 }
             }
             break;
@@ -1267,7 +1867,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
                 const uint16_t proto = extract_proto(event,event_type,p);
                 Number_str_assoc * service_name_asoc = SearchNumberStr(proto,jsonData->protocols);
                 if(service_name_asoc){
-                    KafkaLog_Puts(kafka,service_name_asoc->human_readable_str);
+                    printbuf_memappend_fast_str(printbuf,service_name_asoc->human_readable_str);
                     break;
                 }
             }
@@ -1275,19 +1875,19 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case PROTO_ID:
             {
                 const uint16_t proto = extract_proto(event,event_type,p);
-                KafkaLog_Puts(kafka,itoa10(proto,buf,bufLen));
+                printbuf_memappend_fast_str(printbuf,itoa10(proto,buf,bufLen));
             }
 
             break;
 
         case ETHSRC:
             if(p && p->eh)
-                printHWaddr(kafka, p->eh->ether_src, buf,bufLen);
+                printHWaddr(printbuf, p->eh->ether_src, buf,bufLen);
             break;
 
         case ETHDST:
             if(p && p->eh)
-                printHWaddr(kafka,p->eh->ether_dst,buf,bufLen);
+                printHWaddr(printbuf,p->eh->ether_dst,buf,bufLen);
             break;
 
 #ifdef HAVE_RB_MAC_VENDORS
@@ -1296,7 +1896,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             {
                 const char * vendor = rb_find_mac_vendor(HWADDR_vectoi(p->eh->ether_src),jsonData->eth_vendors_db);
                 if(vendor)
-                    KafkaLog_Puts(kafka,vendor);
+                    printbuf_memappend_fast_str(printbuf,vendor);
             }
             break;
         case ETHDST_VENDOR:
@@ -1304,107 +1904,107 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             {
                 const char * vendor = rb_find_mac_vendor(HWADDR_vectoi(p->eh->ether_dst),jsonData->eth_vendors_db);
                 if(vendor)
-                    KafkaLog_Puts(kafka,vendor);
+                    printbuf_memappend_fast_str(printbuf,vendor);
             }
             break;
 #endif
 
         case ARP_HW_SADDR:
             if(p && p->ah)
-                printHWaddr(kafka,p->ah->arp_sha,buf,bufLen);
+                printHWaddr(printbuf,p->ah->arp_sha,buf,bufLen);
             break;
         case ARP_HW_SPROT:
             if(p && p->ah)
             {
-                KafkaLog_Puts(kafka, "0x");
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_spa[0],buf,bufLen));
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_spa[1],buf,bufLen));
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_spa[2],buf,bufLen));
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_spa[3],buf,bufLen));
+                printbuf_memappend_fast_str(printbuf, "0x");
+                printbuf_memappend_fast_str(printbuf, itoa16(p->ah->arp_spa[0],buf,bufLen));
+                printbuf_memappend_fast_str(printbuf, itoa16(p->ah->arp_spa[1],buf,bufLen));
+                printbuf_memappend_fast_str(printbuf, itoa16(p->ah->arp_spa[2],buf,bufLen));
+                printbuf_memappend_fast_str(printbuf, itoa16(p->ah->arp_spa[3],buf,bufLen));
             }
             break;
         case ARP_HW_TADDR:
             if(p && p->ah)
-                printHWaddr(kafka,p->ah->arp_tha,buf,bufLen);
+                printHWaddr(printbuf,p->ah->arp_tha,buf,bufLen);
             break;
         case ARP_HW_TPROT:
             if(p && p->ah)
             {
-                KafkaLog_Puts(kafka, "0x");
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_tpa[0],buf,bufLen));
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_tpa[1],buf,bufLen));
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_tpa[2],buf,bufLen));
-                KafkaLog_Puts(kafka, itoa16(p->ah->arp_tpa[3],buf,bufLen));
+                printbuf_memappend_fast_str(printbuf, "0x");
+                printbuf_memappend_fast_str(printbuf, itoa16(p->ah->arp_tpa[0],buf,bufLen));
+                printbuf_memappend_fast_str(printbuf, itoa16(p->ah->arp_tpa[1],buf,bufLen));
+                printbuf_memappend_fast_str(printbuf, itoa16(p->ah->arp_tpa[2],buf,bufLen));
+                printbuf_memappend_fast_str(printbuf, itoa16(p->ah->arp_tpa[3],buf,bufLen));
             }
             break;
 
         case ETHTYPE:
             if(p && p->eh)
             {
-                KafkaLog_Puts(kafka, itoa10(ntohs(p->eh->ether_type),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf, itoa10(ntohs(p->eh->ether_type),buf,bufLen));
             }
             break;
 
         case UDPLENGTH:
             if(p && p->udph){
-                KafkaLog_Puts(kafka, itoa10(ntohs(p->udph->uh_len),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf, itoa10(ntohs(p->udph->uh_len),buf,bufLen));
             }
             break;
         case ETHLENGTH:
             if(p && p->eh){
-                KafkaLog_Puts(kafka, itoa10(p->pkth->len,buf,bufLen));
+                printbuf_memappend_fast_str(printbuf, itoa10(p->pkth->len,buf,bufLen));
             }
             break;
 
         case ETHLENGTH_RANGE:
             if(p && p->eh){
                 if(p->pkth->len==0)
-                    KafkaLog_Puts(kafka, "0");
+                    printbuf_memappend_fast_str(printbuf, "0");
                 if(p->pkth->len<=64)
-                    KafkaLog_Puts(kafka, "(0-64]");
+                    printbuf_memappend_fast_str(printbuf, "(0-64]");
                 else if(p->pkth->len<=128)
-                    KafkaLog_Puts(kafka, "(64-128]");
+                    printbuf_memappend_fast_str(printbuf, "(64-128]");
                 else if(p->pkth->len<=256)
-                    KafkaLog_Puts(kafka, "(128-256]");
+                    printbuf_memappend_fast_str(printbuf, "(128-256]");
                 else if(p->pkth->len<=512)
-                    KafkaLog_Puts(kafka, "(256-512]");
+                    printbuf_memappend_fast_str(printbuf, "(256-512]");
                 else if(p->pkth->len<=768)
-                    KafkaLog_Puts(kafka, "(512-768]");
+                    printbuf_memappend_fast_str(printbuf, "(512-768]");
                 else if(p->pkth->len<=1024)
-                    KafkaLog_Puts(kafka, "(768-1024]");
+                    printbuf_memappend_fast_str(printbuf, "(768-1024]");
                 else if(p->pkth->len<=1280)
-                    KafkaLog_Puts(kafka, "(1024-1280]");
+                    printbuf_memappend_fast_str(printbuf, "(1024-1280]");
                 else if(p->pkth->len<=1514)
-                    KafkaLog_Puts(kafka, "(1280-1514]");
+                    printbuf_memappend_fast_str(printbuf, "(1280-1514]");
                 else if(p->pkth->len<=2048)
-                    KafkaLog_Puts(kafka, "(1514-2048]");
+                    printbuf_memappend_fast_str(printbuf, "(1514-2048]");
                 else if(p->pkth->len<=4096)
-                    KafkaLog_Puts(kafka, "(2048-4096]");
+                    printbuf_memappend_fast_str(printbuf, "(2048-4096]");
                 else if(p->pkth->len<=8192)
-                    KafkaLog_Puts(kafka, "(4096-8192]");
+                    printbuf_memappend_fast_str(printbuf, "(4096-8192]");
                 else if(p->pkth->len<=16384)
-                    KafkaLog_Puts(kafka, "(8192-16384]");
+                    printbuf_memappend_fast_str(printbuf, "(8192-16384]");
                 else if(p->pkth->len<=32768)
-                    KafkaLog_Puts(kafka, "(16384-32768]");
+                    printbuf_memappend_fast_str(printbuf, "(16384-32768]");
                 else
-                    KafkaLog_Puts(kafka, ">32768");
+                    printbuf_memappend_fast_str(printbuf, ">32768");
             }
             break;
 
         case VLAN_PRIORITY:
             if(p && p->vh)
-                KafkaLog_Puts(kafka,itoa10(VTH_PRIORITY(p->vh),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf,itoa10(VTH_PRIORITY(p->vh),buf,bufLen));
             break;
         case VLAN_DROP:
             if(p && p->vh)
-                KafkaLog_Puts(kafka,itoa10(VTH_CFI(p->vh),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf,itoa10(VTH_CFI(p->vh),buf,bufLen));
             break;
         case VLAN:
             {
                 int ok;
                 const uint16_t vlan = extract_vlan_id(event, event_type, p, &ok);
                 if(ok)
-                    KafkaLog_Puts(kafka,itoa10(vlan,buf,bufLen));
+                    printbuf_memappend_fast_str(printbuf,itoa10(vlan,buf,bufLen));
             }
             break;
         case VLAN_NAME:
@@ -1415,9 +2015,9 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
                 {
                     const Number_str_assoc * vlan_str = SearchNumberStr(vlan,jsonData->vlans);
                     if(vlan_str)
-                        KafkaLog_Puts(kafka,vlan_str->human_readable_str);
+                        printbuf_memappend_fast_str(printbuf,vlan_str->human_readable_str);
                     else
-                        KafkaLog_Puts(kafka,itoa10(vlan,buf,bufLen));
+                        printbuf_memappend_fast_str(printbuf,itoa10(vlan,buf,bufLen));
                 }
             }
             break;
@@ -1425,7 +2025,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case SRCPORT_NAME:
         case DSTPORT_NAME:
             {
-                const uint16_t port = templateElement->id==SRCPORT_NAME? 
+                const uint16_t port = templateElement->id==SRCPORT_NAME?
                     extract_src_port(event, event_type, p)
                     :extract_dst_port(event, event_type, p);
                 Number_str_assoc * service_name_asoc = SearchNumberStr(port,jsonData->services);
@@ -1433,9 +2033,9 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
                 if(port!=0)
                 {
                     if(service_name_asoc)
-                        KafkaLog_Puts(kafka,service_name_asoc->human_readable_str);
+                        printbuf_memappend_fast_str(printbuf,service_name_asoc->human_readable_str);
                     else /* Log port number */
-                        KafkaLog_Puts(kafka,itoa10(port,buf,bufLen));
+                        printbuf_memappend_fast_str(printbuf,itoa10(port,buf,bufLen));
                 }
             }
             break;
@@ -1443,12 +2043,12 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
         case SRCPORT:
         case DSTPORT:
             {
-                const uint16_t port = templateElement->id==SRCPORT? 
+                const uint16_t port = templateElement->id==SRCPORT?
                     extract_src_port(event, event_type, p)
                     :extract_dst_port(event, event_type, p);
 
                 if(port!=0)
-                    KafkaLog_Puts(kafka,itoa10(port,buf,bufLen));
+                    printbuf_memappend_fast_str(printbuf,itoa10(port,buf,bufLen));
             }
             break;
 
@@ -1457,14 +2057,14 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             /*if(sfip_family(&ip)==AF_INET){ // buggy sfip_family macro...*/
             if(ip.family==AF_INET)
             {
-                KafkaLog_Puts(kafka,itoa10(*ip.ip32, buf,bufLen));
+                printbuf_memappend_fast_str(printbuf,itoa10(*ip.ip32, buf,bufLen));
             }
             /* doesn't make very sense print so large number. If you want, make me know. */
             break;
         case SRC_STR:
         case DST_STR:
             {
-                KafkaLog_Puts(kafka,sfip_to_str(&ip));
+                printbuf_memappend_fast_str(printbuf,sfip_to_str(&ip));
             }
             break;
         case SRC_NAME:
@@ -1472,7 +2072,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             {
                 Number_str_assoc * ip_str_node = SearchIpStr(ip,jsonData->hosts,HOSTS);
                 const char * ip_name = ip_str_node ? ip_str_node->human_readable_str : sfip_to_str(&ip);
-                KafkaLog_Puts(kafka,ip_name);
+                printbuf_memappend_fast_str(printbuf,ip_name);
             }
             break;
         case SRC_NET:
@@ -1480,7 +2080,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             {
                 Number_str_assoc *ip_net = SearchIpStr(ip,jsonData->nets,NETWORKS);
                 if(ip_net)
-                    KafkaLog_Puts(kafka,ip_net->number_as_str);
+                    printbuf_memappend_fast_str(printbuf,ip_net->number_as_str);
             }
             break;
         case SRC_NET_NAME:
@@ -1488,7 +2088,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             {
                 Number_str_assoc *ip_net = SearchIpStr(ip,jsonData->nets,NETWORKS);
                 if(ip_net)
-                    KafkaLog_Puts(kafka,ip_net->human_readable_str);
+                    printbuf_memappend_fast_str(printbuf,ip_net->human_readable_str);
             }
             break;
 
@@ -1498,7 +2098,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             {
                 const char * country_name = extract_country(jsonData,&ip);
                 if(country_name)
-                    KafkaLog_Puts(kafka,country_name);
+                    printbuf_memappend_fast_str(printbuf,country_name);
             }
             break;
 
@@ -1507,7 +2107,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             if(jsonData->gi){
                 const char * country_code = extract_country_code(jsonData,&ip);
                 if(country_code)
-                    KafkaLog_Puts(kafka,country_code);
+                    printbuf_memappend_fast_str(printbuf,country_code);
             }
             break;
 
@@ -1519,7 +2119,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
                 {
                     const char *space = strchr(as_name,' ');
                     if(space)
-                        KafkaLog_Write(kafka,as_name+2,space - &as_name[2]);
+                        printbuf_memappend_fast(printbuf,as_name+2,space - &as_name[2]);
                     free(as_name);
                 }
             }
@@ -1533,7 +2133,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
                 {
                     const char * space = strchr(as_name,' ');
                     if(space)
-                        KafkaLog_Puts(kafka,space+1);
+                        printbuf_memappend_fast_str(printbuf,space+1);
                     free(as_name);
                 }
             }
@@ -1546,7 +2146,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
                 int ok;
                 const uint16_t itype = extract_icmp_type(event,event_type,p,&ok);
                 if(ok)
-                    KafkaLog_Puts(kafka, itoa10(itype,buf,bufLen));
+                    printbuf_memappend_fast_str(printbuf, itoa10(itype,buf,bufLen));
             }
             break;
         case ICMPCODE:
@@ -1554,12 +2154,12 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
                 int ok;
                 const uint16_t icode = extract_icmp_code(event,event_type,p,&ok);
                 if(ok)
-                    KafkaLog_Puts(kafka, itoa10(icode,buf,bufLen));
+                    printbuf_memappend_fast_str(printbuf, itoa10(icode,buf,bufLen));
             }
             break;
         case ICMPID:
             if(p && p->icmph)
-                KafkaLog_Puts(kafka, itoa10(ntohs(p->icmph->s_icmp_id),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf, itoa10(ntohs(p->icmph->s_icmp_id),buf,bufLen));
             break;
         case ICMPSEQ:
             if(p && p->icmph){
@@ -1567,25 +2167,25 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
                     PrintJSONFieldName(kafka,JSON_ICMPSEQ_NAME);
                     KafkaLog_Print(kafka, "%d",ntohs(p->icmph->s_icmp_seq));
                 */
-                KafkaLog_Puts(kafka,itoa10(ntohs(p->icmph->s_icmp_seq),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf,itoa10(ntohs(p->icmph->s_icmp_seq),buf,bufLen));
             }
             break;
         case TTL:
             if(p && IPH_IS_VALID(p))
-                KafkaLog_Puts(kafka,itoa10(GET_IPH_TTL(p),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf,itoa10(GET_IPH_TTL(p),buf,bufLen));
             break;
 
-        case TOS: 
+        case TOS:
             if(p && IPH_IS_VALID(p))
-                KafkaLog_Puts(kafka,itoa10(GET_IPH_TOS(p),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf,itoa10(GET_IPH_TOS(p),buf,bufLen));
             break;
         case ID:
             if(p && IPH_IS_VALID(p))
-                KafkaLog_Puts(kafka,itoa10(IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf,itoa10(IS_IP6(p) ? ntohl(GET_IPH_ID(p)) : ntohs((u_int16_t)GET_IPH_ID(p)),buf,bufLen));
             break;
         case IPLEN:
             if(p && IPH_IS_VALID(p))
-                KafkaLog_Puts(kafka,itoa10(ntohs(GET_IPH_LEN(p)),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf,itoa10(ntohs(GET_IPH_LEN(p)),buf,bufLen));
             break;
         case IPLEN_RANGE:
             if(p && IPH_IS_VALID(p))
@@ -1595,45 +2195,45 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
                 const unsigned int upper_limit = pow(2.0,ceil(log2_len));
                 //printf("log2_len: %0lf; floor: %0lf; ceil: %0lf; low_limit: %0lf; upper_limit:%0lf\n",
                 //    log2_len,floor(log2_len),ceil(log2_len),pow(floor(log2_len),2.0),pow(ceil(log2_len),2));
-                KafkaLog_Print(kafka,"[%u-%u)",lower_limit,upper_limit);
+                sprintbuf(printbuf,"[%u-%u)",lower_limit,upper_limit);
                 //printf(kafka,"[%lf-%lf)\n",lower_limit,upper_limit);
             }
             break;
         case DGMLEN:
             if(p && IPH_IS_VALID(p)){
                 // XXX might cause a bug when IPv6 is printed?
-                KafkaLog_Puts(kafka, itoa10(ntohs(GET_IPH_LEN(p)),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf, itoa10(ntohs(GET_IPH_LEN(p)),buf,bufLen));
             }
             break;
 
         case TCPSEQ:
             if(p && p->tcph){
                 // KafkaLog_Print(kafka, "lX%0x",(u_long) ntohl(p->tcph->th_ack)); // hex format
-                KafkaLog_Puts(kafka,itoa10(ntohl(p->tcph->th_seq),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf,itoa10(ntohl(p->tcph->th_seq),buf,bufLen));
             }
             break;
         case TCPACK:
             if(p && p->tcph){
                 // KafkaLog_Print(kafka, "0x%lX",(u_long) ntohl(p->tcph->th_ack));
-                KafkaLog_Puts(kafka,itoa10(ntohl(p->tcph->th_ack),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf,itoa10(ntohl(p->tcph->th_ack),buf,bufLen));
             }
             break;
         case TCPLEN:
             if(p && p->tcph){
-                KafkaLog_Puts(kafka, itoa10(TCP_OFFSET(p->tcph) << 2,buf,bufLen));
+                printbuf_memappend_fast_str(printbuf, itoa10(TCP_OFFSET(p->tcph) << 2,buf,bufLen));
             }
             break;
         case TCPWINDOW:
             if(p && p->tcph){
                 //KafkaLog_Print(kafka, "0x%X",ntohs(p->tcph->th_win));  // hex format
-                KafkaLog_Puts(kafka,itoa10(ntohs(p->tcph->th_win),buf,bufLen));
+                printbuf_memappend_fast_str(printbuf,itoa10(ntohs(p->tcph->th_win),buf,bufLen));
             }
             break;
         case TCPFLAGS:
             if(p && p->tcph)
             {
                 CreateTCPFlagString(p, tcpFlags);
-                KafkaLog_Puts(kafka, tcpFlags);
+                printbuf_memappend_fast_str(printbuf, tcpFlags);
             }
             break;
 
@@ -1642,7 +2242,7 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
             break;
     };
 
-    return KafkaLog_Tell(kafka)-initial_buffer_pos; /* if we have write something */
+    return printbuf->bpos-initial_buffer_pos; /* if we have write something */
 }
 
 /*
@@ -1659,9 +2259,16 @@ static int printElementWithTemplate(Packet *p, void *event, uint32_t event_type,
  */
 static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSONData * jsonData)
 {
-    TemplateElementsList * iter;
+    TemplateElement * iter;
 
-    KafkaLog * kafka = jsonData->kafka;
+    RefcntPrintbuf *rprintbuf = calloc(1,sizeof(*rprintbuf));
+    if(NULL == rprintbuf) {
+        ErrorMessage("alert_json, (%s:%d): Couldn't allocate (out of memory?)",__FUNCTION__,__LINE__);
+        return;
+    }
+
+    printbuf_new(&rprintbuf->printbuf);
+    struct printbuf *printbuf = &rprintbuf->printbuf;
 
     // if(p == NULL)
     //     return;
@@ -1673,42 +2280,93 @@ static void RealAlertJSON(Packet * p, void *event, uint32_t event_type, AlertJSO
     }
 
     DEBUG_WRAP(DebugMessage(DEBUG_LOG,"Logging JSON Alert data\n"););
-    KafkaLog_Putc(kafka,'{');
-    for(iter=jsonData->outputTemplate;iter;iter=iter->next)
+    printbuf_memappend_fast_str(printbuf,"{");
+    output_template_foreach(iter,&jsonData->output_template)
     {
-        const int initial_pos = KafkaLog_Tell(kafka);
-        if(iter!=jsonData->outputTemplate)
-            KafkaLog_Puts(kafka,JSON_FIELDS_SEPARATOR);
+        const int initial_pos = printbuf->bpos;
+        if (iter!=output_template_first(&jsonData->output_template))
+        {
+            printbuf_memappend_fast_str(printbuf,JSON_FIELDS_SEPARATOR);
+        }
 
-        KafkaLog_Putc(kafka,'"');
-        KafkaLog_Puts(kafka,iter->templateElement->jsonName);
-        KafkaLog_Puts(kafka,"\":");
+        printbuf_memappend_fast_str(printbuf,"\"");
+        printbuf_memappend_fast_str(printbuf,iter->templateElement->jsonName);
+        printbuf_memappend_fast_str(printbuf,"\":");
 
         if(iter->templateElement->printFormat==stringFormat)
-            KafkaLog_Putc(kafka,'"');
-        const int writed = printElementWithTemplate(p,event,event_type,jsonData,iter->templateElement);
+            printbuf_memappend_fast_str(printbuf,"\"");
+        const int writed = printElementWithTemplate(p,event,event_type,jsonData,iter->templateElement,printbuf);
         if(iter->templateElement->printFormat==stringFormat)
-            KafkaLog_Putc(kafka,'"');
+            printbuf_memappend_fast_str(printbuf,"\"");
 
         if(0==writed)
         {
-            #ifdef HAVE_LIBRDKAFKA
-            kafka->pos = initial_pos; // Revert the insertion of empty element */
-            #endif
-            
-            if(kafka->textLog) 
-                kafka->textLog->pos = initial_pos;
+            rprintbuf->printbuf.bpos = initial_pos;
         }
     }
 
     if(jsonData->enrich_with)
     {
-        KafkaLog_Puts(kafka,jsonData->enrich_with);
+        printbuf_memappend_fast_str(printbuf,jsonData->enrich_with);
     }
 
-    KafkaLog_Putc(kafka,'}');
+    printbuf_memappend_fast_str(printbuf,"}");
     // Just for debug
-    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"[KAFKA]: %s",kafka->buf););
-    KafkaLog_Flush(kafka);
-}
+    DEBUG_WRAP(DebugMessage(DEBUG_LOG,"[alert_json]: %s",printbuf->buf););
 
+    rprintbuf->refcnt = 1;
+
+#ifdef HAVE_LIBRDKAFKA
+    if(unlikely(NULL == jsonData->kafka.rk && NULL != jsonData->kafka.brokers))
+    {
+        /* Still not initialized */
+        AlertJsonKafkaDelayedInit(jsonData);
+    }
+
+    if(jsonData->kafka.rkt)
+    {
+        const int produce_rc = rd_kafka_produce(jsonData->kafka.rkt, RD_KAFKA_PARTITION_UA,
+                 /* Free/copy flags */
+                 0,
+                 /* Payload and length */
+                 printbuf->buf, printbuf->bpos,
+                 /* Optional key and its length */
+                 NULL, 0,
+                 /* Message opaque, provided in
+                  * delivery report callback as
+                  * msg_opaque. */
+                 rprintbuf);
+
+        if(produce_rc < 0)
+        {
+            ErrorMessage("alert_json: Failed to produce kafka message: %s",
+                rd_kafka_err2str(rd_kafka_errno2err(errno)));
+            DecRefcntPrintbuf(rprintbuf);
+        }
+    }
+#endif
+
+#ifdef HAVE_LIBRBHTTP
+    if(unlikely(NULL == jsonData->http.handler && NULL != jsonData->http.url))
+    {
+        /* Still not initialized */
+        AlertJsonHTTPDelayedInit(jsonData);
+    }
+
+    if(NULL != jsonData->http.handler)
+    {
+        char err[BUFSIZ];
+
+        const int rc = rb_http_produce (jsonData->http.handler,
+            printbuf->buf,printbuf->bpos, 0 /* No flags */,err,sizeof(err),
+            rprintbuf);
+
+        if(rc != 0)
+        {
+            ErrorMessage("alert_json: Failed to produce HTTP message: %s\n",
+                err);
+            DecRefcntPrintbuf(rprintbuf);
+        }
+    }
+#endif
+}

@@ -34,6 +34,8 @@
 #include "sf_ip.h"
 #include "util.h"
 
+#include <stdlib.h>
+
 typedef struct _Number_str_assoc{
     char * human_readable_str;     /* Example: Google, tcp, ssh... */
     char * number_as_str;          /* Example: 8.8.8.8, 0x800, 22... String format*/

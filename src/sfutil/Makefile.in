@@ -78,7 +78,7 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-subdir = src/rbutil
+subdir = src/sfutil
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libprelude.m4 \
@@ -97,11 +97,13 @@ AM_V_AR = $(am__v_AR_@AM_V@)
 am__v_AR_ = $(am__v_AR_@AM_DEFAULT_V@)
 am__v_AR_0 = @echo "  AR      " $@;
 am__v_AR_1 = 
-librbutil_a_AR = $(AR) $(ARFLAGS)
-librbutil_a_LIBADD =
-am_librbutil_a_OBJECTS = rb_printbuf.$(OBJEXT) \
-	rb_numstrpair_list.$(OBJEXT) rb_unified2.$(OBJEXT)
-librbutil_a_OBJECTS = $(am_librbutil_a_OBJECTS)
+libsfutil_a_AR = $(AR) $(ARFLAGS)
+libsfutil_a_LIBADD =
+am_libsfutil_a_OBJECTS = getopt_long.$(OBJEXT) sfmemcap.$(OBJEXT) \
+	sfprimetable.$(OBJEXT) sfxhash.$(OBJEXT) sf_ip.$(OBJEXT) \
+	sf_iph.$(OBJEXT) sf_ipvar.$(OBJEXT) sf_textlog.$(OBJEXT) \
+	sf_vartable.$(OBJEXT)
+libsfutil_a_OBJECTS = $(am_libsfutil_a_OBJECTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -139,8 +141,8 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(librbutil_a_SOURCES)
-DIST_SOURCES = $(librbutil_a_SOURCES)
+SOURCES = $(libsfutil_a_SOURCES)
+DIST_SOURCES = $(libsfutil_a_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -192,7 +194,7 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GREP = @GREP@
-INCLUDES = -I.. -I../sfutil
+INCLUDES = -I..
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -294,8 +296,19 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = foreign no-dependencies
-noinst_LIBRARIES = librbutil.a
-librbutil_a_SOURCES = rb_printbuf.c rb_numstrpair_list.h rb_numstrpair_list.c rb_unified2.c
+noinst_LIBRARIES = libsfutil.a
+libsfutil_a_SOURCES = bitop.h \
+    getopt_long.c getopt.h getopt1.h \
+    sfhashfcn.h \
+    sfmemcap.c sfmemcap.h \
+    sfprimetable.c sfprimetable.h \
+    sfxhash.c sfxhash.h \
+    sf_ip.c sf_ip.h \
+    sf_iph.c sf_iph.h \
+    sf_ipvar.c sf_ipvar.h \
+    sf_textlog.c sf_textlog.h \
+    sf_vartable.c sf_vartable.h
+
 all: all-am
 
 .SUFFIXES:
@@ -309,9 +322,9 @@ $(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am  $(am__confi
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign src/rbutil/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign src/sfutil/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --foreign src/rbutil/Makefile
+	  $(AUTOMAKE) --foreign src/sfutil/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
@@ -334,10 +347,10 @@ $(am__aclocal_m4_deps):
 clean-noinstLIBRARIES:
 	-test -z "$(noinst_LIBRARIES)" || rm -f $(noinst_LIBRARIES)
 
-librbutil.a: $(librbutil_a_OBJECTS) $(librbutil_a_DEPENDENCIES) $(EXTRA_librbutil_a_DEPENDENCIES) 
-	$(AM_V_at)-rm -f librbutil.a
-	$(AM_V_AR)$(librbutil_a_AR) librbutil.a $(librbutil_a_OBJECTS) $(librbutil_a_LIBADD)
-	$(AM_V_at)$(RANLIB) librbutil.a
+libsfutil.a: $(libsfutil_a_OBJECTS) $(libsfutil_a_DEPENDENCIES) $(EXTRA_libsfutil_a_DEPENDENCIES) 
+	$(AM_V_at)-rm -f libsfutil.a
+	$(AM_V_AR)$(libsfutil_a_AR) libsfutil.a $(libsfutil_a_OBJECTS) $(libsfutil_a_LIBADD)
+	$(AM_V_at)$(RANLIB) libsfutil.a
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)

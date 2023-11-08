@@ -146,6 +146,10 @@
 //# define PRINT_INTERFACE(i)  print_interface(i)
 #endif
 
+#ifdef RB_EXTRADATA
+#define TIME_ALARM 1 // seconds to flush the last cached event
+#endif
+
 /*  D A T A  S T R U C T U R E S  *********************************************/
 typedef struct _VarEntry
 {
@@ -428,6 +432,9 @@ typedef struct _PacketCount
     uint64_t total_records;
     uint64_t total_events;
     uint64_t total_packets;
+#ifdef RB_EXTRADATA
+    uint64_t total_extra_data;
+#endif
     uint64_t total_processed;
     uint64_t total_unknown;
     uint64_t total_suppressed;
@@ -575,6 +582,11 @@ Barnyard2Config * Barnyard2ConfNew(void);
 int Barnyard2Main(int argc, char *argv[]);
 int Barnyard2Sleep(unsigned int);
 int SignalCheck(void);
+#ifdef RB_EXTRADATA
+int AlarmCheck(void);
+void AlarmStart(int time_alarm);
+void AlarmClear(void);
+#endif
 
 void CleanExit(int);
 void SigCantHupHandler(int signal);

@@ -78,7 +78,7 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-subdir = src/rbutil
+subdir = src/output-plugins
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libprelude.m4 \
@@ -97,11 +97,20 @@ AM_V_AR = $(am__v_AR_@AM_V@)
 am__v_AR_ = $(am__v_AR_@AM_DEFAULT_V@)
 am__v_AR_0 = @echo "  AR      " $@;
 am__v_AR_1 = 
-librbutil_a_AR = $(AR) $(ARFLAGS)
-librbutil_a_LIBADD =
-am_librbutil_a_OBJECTS = rb_printbuf.$(OBJEXT) \
-	rb_numstrpair_list.$(OBJEXT) rb_unified2.$(OBJEXT)
-librbutil_a_OBJECTS = $(am_librbutil_a_OBJECTS)
+libspo_a_AR = $(AR) $(ARFLAGS)
+libspo_a_LIBADD =
+am_libspo_a_OBJECTS = spo_alert_arubaaction.$(OBJEXT) \
+	spo_alert_bro.$(OBJEXT) spo_alert_cef.$(OBJEXT) \
+	spo_alert_csv.$(OBJEXT) spo_alert_fast.$(OBJEXT) \
+	spo_alert_full.$(OBJEXT) spo_alert_fwsam.$(OBJEXT) \
+	spo_alert_json.$(OBJEXT) spo_alert_prelude.$(OBJEXT) \
+	spo_alert_syslog.$(OBJEXT) spo_alert_test.$(OBJEXT) \
+	spo_alert_unixsock.$(OBJEXT) spo_common.$(OBJEXT) \
+	spo_log_ascii.$(OBJEXT) spo_log_null.$(OBJEXT) \
+	spo_log_tcpdump.$(OBJEXT) spo_sguil.$(OBJEXT) \
+	spo_echidna.$(OBJEXT) spo_syslog_full.$(OBJEXT) \
+	spo_database.$(OBJEXT) spo_database_cache.$(OBJEXT)
+libspo_a_OBJECTS = $(am_libspo_a_OBJECTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -139,8 +148,8 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(librbutil_a_SOURCES)
-DIST_SOURCES = $(librbutil_a_SOURCES)
+SOURCES = $(libspo_a_SOURCES)
+DIST_SOURCES = $(libspo_a_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -192,7 +201,7 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GREP = @GREP@
-INCLUDES = -I.. -I../sfutil
+INCLUDES = -I.. -I ../sfutil -I../rbutil
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -294,8 +303,30 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = foreign no-dependencies
-noinst_LIBRARIES = librbutil.a
-librbutil_a_SOURCES = rb_printbuf.c rb_numstrpair_list.h rb_numstrpair_list.c rb_unified2.c
+noinst_LIBRARIES = libspo.a
+libspo_a_SOURCES = \
+spo_alert_arubaaction.c spo_alert_arubaaction.h \
+spo_alert_bro.c spo_alert_bro.h \
+spo_alert_cef.c spo_alert_cef.h \
+spo_alert_csv.c spo_alert_csv.h \
+spo_alert_fast.c spo_alert_fast.h \
+spo_alert_full.c spo_alert_full.h \
+spo_alert_fwsam.c spo_alert_fwsam.h \
+spo_alert_json.c spo_alert_json.h \
+spo_alert_prelude.c spo_alert_prelude.h \
+spo_alert_syslog.c spo_alert_syslog.h \
+spo_alert_test.c spo_alert_test.h \
+spo_alert_unixsock.c spo_alert_unixsock.h \
+spo_common.c spo_common.h \
+spo_log_ascii.c spo_log_ascii.h \
+spo_log_null.c spo_log_null.h \
+spo_log_tcpdump.c spo_log_tcpdump.h \
+spo_sguil.c spo_sguil.h \
+spo_echidna.c spo_echidna.h \
+spo_syslog_full.c spo_syslog.full.h \
+spo_database.c spo_database.h \
+spo_database_cache.c spo_database_cache.h
+
 all: all-am
 
 .SUFFIXES:
@@ -309,9 +340,9 @@ $(srcdir)/Makefile.in: @MAINTAINER_MODE_TRUE@ $(srcdir)/Makefile.am  $(am__confi
 	      exit 1;; \
 	  esac; \
 	done; \
-	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign src/rbutil/Makefile'; \
+	echo ' cd $(top_srcdir) && $(AUTOMAKE) --foreign src/output-plugins/Makefile'; \
 	$(am__cd) $(top_srcdir) && \
-	  $(AUTOMAKE) --foreign src/rbutil/Makefile
+	  $(AUTOMAKE) --foreign src/output-plugins/Makefile
 .PRECIOUS: Makefile
 Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	@case '$?' in \
@@ -334,10 +365,10 @@ $(am__aclocal_m4_deps):
 clean-noinstLIBRARIES:
 	-test -z "$(noinst_LIBRARIES)" || rm -f $(noinst_LIBRARIES)
 
-librbutil.a: $(librbutil_a_OBJECTS) $(librbutil_a_DEPENDENCIES) $(EXTRA_librbutil_a_DEPENDENCIES) 
-	$(AM_V_at)-rm -f librbutil.a
-	$(AM_V_AR)$(librbutil_a_AR) librbutil.a $(librbutil_a_OBJECTS) $(librbutil_a_LIBADD)
-	$(AM_V_at)$(RANLIB) librbutil.a
+libspo.a: $(libspo_a_OBJECTS) $(libspo_a_DEPENDENCIES) $(EXTRA_libspo_a_DEPENDENCIES) 
+	$(AM_V_at)-rm -f libspo.a
+	$(AM_V_AR)$(libspo_a_AR) libspo.a $(libspo_a_OBJECTS) $(libspo_a_LIBADD)
+	$(AM_V_at)$(RANLIB) libspo.a
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)

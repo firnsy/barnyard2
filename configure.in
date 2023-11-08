@@ -161,6 +161,17 @@ else
     AC_MSG_RESULT(no)
 fi
 
+AC_ARG_ENABLE(extradata,
+[  --enable-extradata       Enable ExtraData collection.],
+       enable_extradata="$enableval", enable_extradata="no")
+
+if test "x$enable_extradata" = "xyes"; then
+    AC_MSG_RESULT(yes)
+    AC_DEFINE_UNQUOTED([RB_EXTRADATA],[],[ExtraData collection])
+else
+    AC_MSG_RESULT(no)
+fi
+
 AC_ARG_WITH(macs-vendors-includes,
         [  --with-macs-vendors-include=DIR    librb_macs_vendors include directory],
         [with_macsvendors_includes="$withval"],[with_macsvendors_includes="no"])
@@ -234,6 +245,26 @@ if test "x$enable_kafka" = "x$enableval"; then
     ])
 
   LDFLAGS="${LDFLAGS} -lrdkafka"  
+fi
+
+AC_ARG_ENABLE(rb-http,
+[  --enable-rb-http         Enable HTTP POST json sending.],
+       enable_rbhttp="$enableval", enable_rbhttp="no")
+
+if test "x$enable_rbhttp" = "x$enableval"; then
+  AC_CHECK_HEADERS([librbhttp/rb_http_handler.h],[],
+      [
+        echo "Error: redBorder HTTP headers not found."
+        exit 1
+      ])
+
+  AC_CHECK_LIB(rbhttp,rb_http_produce,[],
+    [
+      echo "Error: redBorder HTTP library not found."
+      exit 1
+    ])
+
+  LDFLAGS="${LDFLAGS} -lrbhttp"
 fi
 
 AC_ARG_WITH(rd_includes,

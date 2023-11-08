@@ -33,6 +33,7 @@
 #include <arpa/inet.h>
 
 #include "unified2.h"
+#include "util.h"
 #include <stdlib.h>
 
 #define U2_FLAG_ALLOWED 0x00        // impact_flag = 0 (packet allowed)

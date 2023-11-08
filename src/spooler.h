@@ -31,6 +31,9 @@
 #include <sys/queue.h>
 
 #include "plugbase.h"
+#ifdef RB_EXTRADATA
+#include "unified2.h"
+#endif
 
 #define SPOOLER_EXTENSION_FOUND     0
 #define SPOOLER_EXTENSION_NONE      1

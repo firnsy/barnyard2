@@ -55,8 +55,10 @@
 #endif
 #include <getopt.h>
 
+#ifndef RB_EXTRADATA
 #ifdef TIMESTATS
 # include <time.h>   /* added for new time stats function in util.c */
+#endif
 #endif
 
 #ifdef HAVE_STRINGS_H
@@ -132,6 +134,11 @@ VarNode *cmd_line_var_list = NULL;
 int exit_signal = 0;
 
 static int usr_signal = 0;
+
+#ifdef RB_EXTRADATA
+static int alarm_raised = 0;
+#endif
+
 static volatile int hup_signal = 0;
 volatile int barnyard2_initializing = 1;
 
@@ -236,6 +243,10 @@ int SignalCheck(void);
 static void SigExitHandler(int);
 static void SigUsrHandler(int);
 static void SigHupHandler(int);
+
+#ifdef RB_EXTRADATA
+static void SigAlrmHandler(int);
+#endif
 
 
 /*  F U N C T I O N   D E F I N I T I O N S  **********************************/
@@ -1054,6 +1065,13 @@ static void SigHupHandler(int signal)
     return;
 }
 
+#ifdef RB_EXTRADATA
+static void SigAlrmHandler(int signal)
+{
+    alarm_raised = 1;
+}
+#endif
+
 /****************************************************************************
  *
  * Function: CleanExit()
@@ -1421,6 +1439,25 @@ int SignalCheck(void)
     return 0;
 }
 
+#ifdef RB_EXTRADATA
+/* check for alarm activity */
+int AlarmCheck(void)
+{
+    return alarm_raised;
+}
+
+/* start alarm */
+void AlarmStart(int time_alarm)
+{
+    alarm(time_alarm);
+}
+
+/* clear alarm */
+void AlarmClear(void)
+{
+    alarm_raised = 0;
+}
+#endif
 
 static void InitGlobals(void)
 {
@@ -2145,12 +2182,17 @@ static void InitSignals(void)
     signal(SIGQUIT, SigExitHandler);
     signal(SIGUSR1, SigUsrHandler);
 
-#ifdef TIMESTATS
-    /* Establish a handler for SIGALRM signals and set an alarm to go off
-     * in approximately one hour.  This is used to drop statistics at
-     * an interval which the alarm will tell us to do. */
+#ifdef RB_EXTRADATA /* define an own SigAlrmHandler and discard the previous and unused one */
     signal(SIGALRM, SigAlrmHandler);
+#else
+    #ifdef TIMESTATS
+        /* Establish a handler for SIGALRM signals and set an alarm to go off
+         * in approximately one hour.  This is used to drop statistics at
+         * an interval which the alarm will tell us to do. */
+        signal(SIGALRM, SigAlrmHandler);
+    #endif
 #endif
+
 
     signal(SIGHUP, SigHupHandler);
 

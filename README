@@ -1,3 +1,7 @@
+It's been a minute, sadly I this project has not seen any love in nearly a
+decade and it's probably time to put it out to pasture. Thanks for the 
+memories <3
+
 
 ------------------------------------------------------------------------------
 0. SUMMARY
@@ -7,10 +11,6 @@ Barnyard2 - version 2-1.14
 
 This README contains some quick information about how to set up and
 configure barnyard2 to ensure it works as it should.
-
-Distribution Site:
-http://www.securixlive.com
-http://www.github.com/firnsy/barnyard2
 
 
 ------------------------------------------------------------------------------
@@ -157,15 +157,3 @@ Examples:
   2. Using barnyard2 in batch mode
 
     # ./barnyard2 -c /etc/barnyard2.conf -o file1.u2 file2.u2 file3.u2
-
-
-------------------------------------------------------------------------------
-4. CONTACT
-------------------------------------------------------------------------------
-
-You can contact the barnyard2 team and user base for question/help debugging issue concerning barnyard2 by using our mailing lists.
-
-barnyard2-users@googlegroups.com
-AND
-barnyard2-devel@googlegroups.com
-

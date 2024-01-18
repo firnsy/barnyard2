@@ -1,6 +1,6 @@
 /*
 **
-** Copyright (C) 2008-2012 Ian Firns (SecurixLive) <dev@securixlive.com>
+** Copyright (C) 2008-2013 Ian Firns (SecurixLive) <dev@securixlive.com>
 **
 ** Copyright (C) 2002-2009 Sourcefire, Inc.
 ** Copyright (C) 1998-2002 Martin Roesch <roesch@sourcefire.com>
@@ -32,17 +32,25 @@
 
 //SNORT DEFINES
 //Long time ago...
-#define UNIFIED2_EVENT               1
+#define UNIFIED2_EVENT                  1
 
 //CURRENT
-#define UNIFIED2_PACKET              2
-#define UNIFIED2_IDS_EVENT           7
-#define UNIFIED2_IDS_EVENT_IPV6      72
-#define UNIFIED2_IDS_EVENT_MPLS      99
-#define UNIFIED2_IDS_EVENT_IPV6_MPLS 100
-#define UNIFIED2_IDS_EVENT_VLAN      104
-#define UNIFIED2_IDS_EVENT_IPV6_VLAN 105
-#define UNIFIED2_EXTRA_DATA          110
+#define UNIFIED2_PACKET                 2
+#define UNIFIED2_IDS_EVENT              7
+#define UNIFIED2_IDS_EVENT_IPV6         72
+#define UNIFIED2_IDS_EVENT_MPLS         99
+#define UNIFIED2_IDS_EVENT_IPV6_MPLS    100
+#define UNIFIED2_IDS_EVENT_VLAN         104
+#define UNIFIED2_IDS_EVENT_IPV6_VLAN    105
+#define UNIFIED2_EXTRA_DATA             110
+
+#if defined(FEAT_OPEN_APPID)
+#define UNIFIED2_IDS_EVENT_APPID        111
+#define UNIFIED2_IDS_EVENT_APPID_IPV6   112
+#define UNIFIED2_IDS_EVENT_APPSTAT      113
+
+#define MAX_EVENT_APPNAME_LEN        16
+#endif
 
 /* Each unified2 record will start out with one of these */
 typedef struct _Unified2RecordHeader
@@ -75,6 +83,9 @@ typedef struct _Unified2IDSEvent
     uint32_t mpls_label;
     uint16_t vlanId;
     uint16_t pad2;//Policy ID
+#if defined(FEAT_OPEN_APPID)
+    char     app_name[MAX_EVENT_APPNAME_LEN];
+#endif /* defined(FEAT_OPEN_APPID) */
 } Unified2IDSEvent;
 
 //UNIFIED2_IDS_EVENT_IPV6_VLAN = type 105
@@ -100,6 +111,9 @@ typedef struct _Unified2IDSEventIPv6
     uint32_t mpls_label;
     uint16_t vlanId;
     uint16_t pad2;/*could be IPS Policy local id to support local sensor alerts*/
+#if defined(FEAT_OPEN_APPID)
+    char     app_name[MAX_EVENT_APPNAME_LEN];
+#endif /* defined(FEAT_OPEN_APPID) */
 } Unified2IDSEventIPv6;
 
 //UNIFIED2_PACKET = type 2
@@ -200,6 +214,17 @@ typedef struct Unified2IDSEventIPv6_legacy
 
 ////////////////////-->LEGACY
 
+/*
+** Smaller subset of feature common across event,packet and extradata
+**
+**
+*/
+typedef struct _Unified2CacheCommon
+{
+    uint32_t sensor_id;
+    uint32_t event_id;
+    uint32_t event_second;
+} Unified2CacheCommon;
 
 /* 
 ** The Unified2EventCommon structure is the common structure that occurs

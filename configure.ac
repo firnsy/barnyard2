@@ -2,9 +2,10 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.50)
-AC_INIT(src/barnyard2.c)
+AC_INIT([barnyard2], [1.14])
+AC_CONFIG_SRCDIR([src/barnyard2.c])
 AM_CONFIG_HEADER(config.h)
-AM_INIT_AUTOMAKE(barnyard2,1.10)
+AM_INIT_AUTOMAKE
 AC_CONFIG_MACRO_DIR([m4])
 
 LT_INIT
@@ -15,10 +16,10 @@ ADD_WERROR="no"
 # Test for -Werror and sed it out for now since some of the auto tests,
 # for example AC_CHECK_LIB, will fail because of
 # warning: conflicting types for built-in function <func>
-if eval "echo $CFLAGS | grep -e -Werror"; then
-    CFLAGS=`echo $CFLAGS | sed -e "s/-Werror//g"`
-    ADD_WERROR="yes"
-fi
+#if eval "echo $CFLAGS | grep -e -Werror"; then
+#    CFLAGS=`echo $CFLAGS | sed -e "s/-Werror//g"`
+#    ADD_WERROR="yes"
+#fi
 
 # Disable annoying practice of recursively re-running the autotools
 AM_MAINTAINER_MODE
@@ -815,7 +816,8 @@ if test "x$with_postgresql" != "xno"; then
     postgresql_fail="no"
   fi
 
-  AC_MSG_CHECKING(for postgresql)
+
+    AC_MSG_CHECKING([for postgresql])
 
   if test "x$with_pgsql_includes" != "xno"; then
     for i in $with_pgsql_includes $postgresql_directory; do
@@ -861,6 +863,7 @@ if test "x$with_postgresql" != "xno"; then
     fi
   fi
 
+
   if test -z "$POSTGRESQL_DIR"; then
     for dir in $postgresql_directory; do
        for i in "lib" "lib/pgsql"; do
@@ -898,6 +901,10 @@ if test "x$with_postgresql" != "xno"; then
         exit 1
      fi
   fi
+
+AC_CHECK_FUNC([PQping], [AC_DEFINE([HAVE_PQPING], [1],
+			[Define if PQping exists.])])
+
 fi
 
 AC_ARG_WITH(oracle, 
@@ -1035,6 +1042,21 @@ if test "$with_tcl" != "no"; then
     fi
 fi
 
+#
+# OUTPUT PLUGIN - ECHIDNA
+
+AC_ARG_ENABLE(plugin-echidna,
+[  --enable-plugin-echidna           Enable echidna plugin (experimental)],
+       enable_plugin_echidna="$enableval", enable_plugin_echidna="no")
+if test "x$enable_plugin_echidna" = "xyes"; then
+    AC_CHECK_LIB([crypto], [SHA256_Init], [], [AC_MSG_ERROR([SHA256_Init was not found in libcrypto])])
+    AC_CHECK_LIB([curl], [curl_easy_setopt], [], [AC_MSG_ERROR([curl_easy_setopt was not found in libcurl])])
+    AC_CHECK_LIB([websockets], [libwebsocket_create_context], [], [AC_MSG_ERROR([libwebsocket_create_context was not found in libwebsockets])])
+    AC_CHECK_LIB([json], [json_tokener_parse], [], [AC_MSG_ERROR([json_tokener_parse was not found in libjson])])
+
+    CPPFLAGS="$CPPFLAGS -DENABLE_PLUGIN_ECHIDNA"
+    LIBS="$LIBS -lwebsockets -ljson -lcurl -lcrypto"
+fi
 
 
 # let's make some fixes..
@@ -1093,9 +1115,9 @@ fi
 echo $CFLAGS > cflags.out
 echo $CPPFLAGS > cppflags.out
 
-INCLUDES='-I$(top_srcdir) -I$(top_srcdir)/src -I$(top_srcdir)/src/sfutil $(extra_incl) -I$(top_srcdir)/src/output-plugins -I$(top_srcdir)/src/input-plugins'
+AM_CPPFLAGS='-I$(top_srcdir) -I$(top_srcdir)/src -I$(top_srcdir)/src/sfutil $(extra_incl) -I$(top_srcdir)/src/output-plugins -I$(top_srcdir)/src/input-plugins'
 
-AC_SUBST(INCLUDES)
+AC_SUBST(AM_CPPFLAGS)
 
 AC_PROG_INSTALL
 AC_CONFIG_FILES([ \
@@ -1119,15 +1141,15 @@ cat <<EOF
 
  The MySQL client version you are using does not by default reconnect to the
  server if the connection is lost and does not have the option to configure
- this for the client.  Snort, for security reasons, erases the connection
+ this for the client.  Barnyard2, for security reasons, erases the connection
  password from memory, so it cannot explicity reconnect at runtime.  Please
  update your version of MySQL to 5.0.13 or greater or you risk connections
- timing out because of inactivity resulting in the inablilty of Snort to write
+ timing out because of inactivity resulting in the inablilty of Barnyard2 to write
  alerts to the database.  If you can't upgrade, try setting the 'wait-timeout'
  configuration parameter to the maximum value possible in the @<:@mysqld@:>@
  section of my.cnf, e.g. wait-timeout=31536000.  This should give you a good
  year of inactivity before the server terminates the connection ... if your
- network is this clean, you probably don't need to use Snort.
+ network is this clean, you probably don't need to use Barnyard2.
 
 ********************************************************************************
 

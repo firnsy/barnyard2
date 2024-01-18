@@ -149,7 +149,9 @@ static void AlertFull(Packet *p, void *event, uint32_t event_type, void *arg)
 
     data = (SpoAlertFullData *)arg;
 	sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-						ntohl(((Unified2EventCommon *)event)->signature_id));
+			    ntohl(((Unified2EventCommon *)event)->signature_id),
+			    ntohl(((Unified2EventCommon *)event)->signature_revision));
+
 
 
     if(sn != NULL)
@@ -327,8 +329,15 @@ static void AlertFullCleanup(int signal, void *arg, const char* msg)
     DEBUG_WRAP(DebugMessage(DEBUG_LOG, "%s\n", msg););
 
     /* free memory from SpoAlertFullData */
-    if ( data->log ) TextLog_Term(data->log);
-    free(data);
+    if ( data->log ) 
+    {
+	TextLog_Term(data->log);
+    }
+    
+    if(data)
+	free(data);
+    
+    return;
 }
 
 static void AlertFullCleanExit(int signal, void *arg)

@@ -1,5 +1,5 @@
 /* 
-** Copyright (C) 2008-2012 Ian Firns (SecurixLive) <dev@securixlive.com>
+** Copyright (C) 2008-2013 Ian Firns (SecurixLive) <dev@securixlive.com>
 ** Copyright (C) 2002-2005 Robert (Bamm) Visscher <bamm@sguil.net>
 **
 ** This program is free software; you can redistribute it and/or modify
@@ -117,6 +117,7 @@ int SguilRecvAgentMsg(SpoSguilData *, char *);
 char *SguilTimestamp(u_int32_t);
 
 #ifdef ENABLE_TCL
+int SguilAppendIPHdrDataEVT(Tcl_DString *, void *);
 int SguilAppendIPHdrData(Tcl_DString *, Packet *);
 int SguilAppendICMPData(Tcl_DString *, Packet *);
 int SguilAppendTCPData(Tcl_DString *, Packet *);
@@ -212,7 +213,12 @@ void SguilInitFinalize(int unused, void *arg)
     if(BcLogVerbose())
         LogMessage("sguil: Waiting for sid and cid from sensor_agent.\n");
 
-    SguilSensorAgentInit(ssd_data);
+    /* try to connect, if we are not getting retval 0 it timed out
+     * so we try again, and again, and again... */
+    do {
+        if (SguilSensorAgentInit(ssd_data) == 0)
+            break;
+    } while (1);
 
     /* set the preprocessor function into the function list */
     AddFuncToOutputList(Sguil, OUTPUT_TYPE__ALERT, ssd_data);
@@ -251,7 +257,9 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
 
 	/* grab the appropriate signature and classification information */
 	sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-						ntohl(((Unified2EventCommon *)event)->signature_id));
+			    ntohl(((Unified2EventCommon *)event)->signature_id),
+			    ntohl(((Unified2EventCommon *)event)->signature_revision));
+
 	cn = ClassTypeLookupById(barnyard2_conf, ntohl(((Unified2EventCommon *)event)->classification_id));
 
     /* Here we build our RT event to send to sguild. The event is built with a
@@ -408,10 +416,22 @@ void Sguil(Packet *p, void *event, uint32_t event_type, void *arg)
     }
     else
     {
-        /* ack! an event without a packet. Append 32 fillers */
-        int i;
-        for(i = 0; i < 32; ++i)
+        /* ack! an event without a packet. Append IP data from event struct and append
+        27 fillers */
+        if ( (event_type == UNIFIED2_IDS_EVENT_VLAN)||
+                (event_type == UNIFIED2_IDS_EVENT_MPLS) ||
+                (event_type == UNIFIED2_IDS_EVENT_VLAN)){
+            SguilAppendIPHdrDataEVT(&list, event);
+            int i;
+            for(i = 0; i < 27; ++i)
             Tcl_DStringAppendElement(&list, "");
+        } else {
+        /* ack! an event without a packet. and no IP Data in eventAppend 32 fillers */
+            int i;
+            for(i = 0; i < 32; ++i)
+            Tcl_DStringAppendElement(&list, "");
+        }
+
     }
 
     /* send msg to sensor_agent */
@@ -586,6 +606,52 @@ void ParseSguilArgs(SpoSguilData *ssd_data)
 	if (ssd_data->agent_port == 0)
 		ssd_data->agent_port = 7735;
 }
+
+#ifdef ENABLE_TCL
+int SguilAppendIPHdrDataEVT(Tcl_DString *list, void *event)
+{
+    char buffer[TMP_BUFFER];
+
+    memset(buffer, 0, TMP_BUFFER); /* bzero() deprecated, replaced by memset() */
+
+    SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohl(((Unified2IDSEvent *)event)->ip_source));
+    Tcl_DStringAppendElement(list, buffer);
+#if defined(WORDS_BIGENDIAN)
+    SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
+           (((Unified2IDSEvent *)event)->ip_source & 0xff000000) >> 24,
+           (((Unified2IDSEvent *)event)->ip_source & 0x00ff0000) >> 16,
+           (((Unified2IDSEvent *)event)->ip_source & 0x0000ff00) >> 8,
+           (((Unified2IDSEvent *)event)->ip_source & 0x000000ff));
+#else
+    SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
+           (((Unified2IDSEvent *)event)->ip_source & 0x000000ff),
+           (((Unified2IDSEvent *)event)->ip_source & 0x0000ff00) >> 8,
+           (((Unified2IDSEvent *)event)->ip_source & 0x00ff0000) >> 16,
+           (((Unified2IDSEvent *)event)->ip_source & 0xff000000) >> 24);
+#endif
+    Tcl_DStringAppendElement(list, buffer);
+    SnortSnprintf(buffer, TMP_BUFFER, "%u", ntohl(((Unified2IDSEvent *)event)->ip_destination));
+    Tcl_DStringAppendElement(list, buffer);
+#if defined(WORDS_BIGENDIAN)
+    SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
+           (((Unified2IDSEvent *)event)->ip_destination & 0xff000000) >> 24,
+           (((Unified2IDSEvent *)event)->ip_destination & 0x00ff0000) >> 16,
+           (((Unified2IDSEvent *)event)->ip_destination & 0x0000ff00) >> 8,
+           (((Unified2IDSEvent *)event)->ip_destination & 0x000000ff));
+#else
+    SnortSnprintf(buffer, TMP_BUFFER, "%u.%u.%u.%u",
+           (((Unified2IDSEvent *)event)->ip_destination & 0x000000ff),
+           (((Unified2IDSEvent *)event)->ip_destination & 0x0000ff00) >> 8,
+           (((Unified2IDSEvent *)event)->ip_destination & 0x00ff0000) >> 16,
+           (((Unified2IDSEvent *)event)->ip_destination & 0xff000000) >> 24);
+#endif
+    Tcl_DStringAppendElement(list, buffer);
+    SnortSnprintf(buffer, TMP_BUFFER, "%u", ((Unified2IDSEvent *)event)->protocol);
+    Tcl_DStringAppendElement(list, buffer);
+
+    return 0;
+}
+#endif
 
 #ifdef ENABLE_TCL
 int SguilAppendIPHdrData(Tcl_DString *list, Packet *p)
@@ -923,7 +989,10 @@ int SguilSensorAgentConnect(SpoSguilData *ssd_data)
 	return 1;
 }
 
-/* Request sensor ID (sid) and next cid from sensor_agent */
+/* Request sensor ID (sid) and next cid from sensor_agent
+ * return 0 on success
+ * return 1 on timeout
+ */
 int SguilSensorAgentInit(SpoSguilData *ssd_data)
 {
     char tmpSendMsg[MAX_MSG_LEN];
@@ -944,7 +1013,7 @@ int SguilSensorAgentInit(SpoSguilData *ssd_data)
         sguil_agent_setup_timeouts++;
 
         /* timeout, resend */
-        SguilSensorAgentInit(ssd_data);
+        return 1;
     }
     else
     {
@@ -1140,20 +1209,29 @@ void SguilCleanExitFunc(int signal, void *arg)
     /* free allocated memory from SpoSguilData */
 	if (ssd_data)
 	{
-		if (ssd_data->sensor_name)
-			free(ssd_data->sensor_name);
 
-		if (ssd_data->tag_path)
-			free(ssd_data->tag_path);
-
-		if (ssd_data->passwd)
-			free(ssd_data->passwd);
-
-		if (ssd_data->args)
-			free(ssd_data->args);
-
-		free(ssd_data);
+	    if(ssd_data->agent_sock > 0)
+	    {
+		close(ssd_data->agent_sock);
+		ssd_data->agent_sock = -1;
+	    }
+	    
+	    
+	    if (ssd_data->sensor_name)
+		free(ssd_data->sensor_name);
+	    
+	    if (ssd_data->tag_path)
+		free(ssd_data->tag_path);
+	    
+	    if (ssd_data->passwd)
+		free(ssd_data->passwd);
+	    
+	    if (ssd_data->args)
+		free(ssd_data->args);
+	    
+	    free(ssd_data);
 	}
+
 }
 
 void SguilRestartFunc(int signal, void *arg)
@@ -1165,19 +1243,26 @@ void SguilRestartFunc(int signal, void *arg)
     /* free allocated memory from SpoSguilData */
 	if (ssd_data)
 	{
-		if (ssd_data->sensor_name)
-			free(ssd_data->sensor_name);
 
-		if (ssd_data->tag_path)
-			free(ssd_data->tag_path);
-
-		if (ssd_data->passwd)
-			free(ssd_data->passwd);
-
-		if (ssd_data->args)
-			free(ssd_data->args);
-
-		free(ssd_data);
+	    if(ssd_data->agent_sock > 0)
+	    {
+		close(ssd_data->agent_sock);
+		ssd_data->agent_sock = -1;
+	    }
+	    
+	    if (ssd_data->sensor_name)
+		free(ssd_data->sensor_name);
+	    
+	    if (ssd_data->tag_path)
+		free(ssd_data->tag_path);
+	    
+	    if (ssd_data->passwd)
+		free(ssd_data->passwd);
+	    
+	    if (ssd_data->args)
+		free(ssd_data->args);
+	    
+	    free(ssd_data);
 	}
 }
 

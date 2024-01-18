@@ -274,12 +274,7 @@ void AlertArubaAction(Packet *p, void *event, uint32_t event_type, void *arg)
 	}
 
 	snprintf(cmdbufp, xmllenrem, "<ipaddr>%s</ipaddr>",
-#ifdef SUP_IP6
-			inet_ntoa(GET_SRC_ADDR(p))
-#else
-			inet_ntoa(p->iph->ip_src)
-#endif
-        );
+			inet_ntoa(GET_SRC_ADDR(p)));
 
 	xmllenrem -= strlen(cmdbufp);
 	cmdbufp += strlen(cmdbufp);

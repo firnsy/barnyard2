@@ -369,22 +369,24 @@ static void LogTcpdumpSingle(Packet *p, void *event, uint32_t event_type, void *
     size_t dumpSize = SizeOf(p->pkth);
 
     /* roll log file packet linktype is different to the dump linktype and in automode */
-    if ( data->linktype != p->linktype )
-    {
-        if ( data->autolink == 1)
-        {
-            data->linktype = p->linktype;
-            TcpdumpRollLogFile(data);
-        }
+
+//    if ( data->linktype != p->linktype )
+//    {
+//        if ( data->autolink == 1)
+//        {
+//            data->linktype = p->linktype;
+//            TcpdumpRollLogFile(data);
+//        }
         /* otherwise alert that the results will not be as expected */
-        else
-        {
-            LogMessage("tcpdump:  packet linktype is not compatible with dump linktype.\n");
-        }
-    }
+//        else
+//        {
+//            LogMessage("tcpdump:  packet linktype is not compatible with dump linktype.\n");
+//        }
+//    }
+
     /* roll log file if size limit is exceeded */
-    else if ( data->size + dumpSize > data->limit )
-        TcpdumpRollLogFile(data);
+//    else if ( data->size + dumpSize > data->limit )
+//        TcpdumpRollLogFile(data);
 
     pcap_dump((u_char *)data->dumpd, p->pkth, p->pkt);
     data->size += dumpSize;
@@ -471,7 +473,7 @@ static void TcpdumpInitLogFile(LogTcpdumpData *data, int nostamps)
 
     if(!BcTestMode())
     {
-        data->pd = pcap_open_dead(data->linktype, SNAPLEN);
+        data->pd = pcap_open_dead(data->linktype, PKT_SNAPLEN);
         data->dumpd = pcap_dump_open(data->pd, data->logdir);
 
         if(data->dumpd == NULL)
@@ -566,7 +568,7 @@ static void SpoLogTcpdumpCleanup(int signal, void *arg, const char* msg)
         free (data->filename);
     }
 
-    bzero(data, sizeof(LogTcpdumpData));
+    memset(data,'\0',sizeof(LogTcpdumpData));
     free(data);
 }
 

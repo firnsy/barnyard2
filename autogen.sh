@@ -10,5 +10,6 @@ else
   echo "Failed to find libtoolize or glibtoolize, please ensure it is installed and accessible via your PATH env variable"
   exit 1
 fi;
-autoreconf -fv --install
+#autoreconf -fv --install
+autoreconf -fvi
 echo "You can now run \"./configure\" and then \"make\"."

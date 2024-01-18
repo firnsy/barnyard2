@@ -103,16 +103,11 @@ typedef SQLCHAR   ODBC_SQLCHAR;
 #include "plugbase.h"
 
 #ifndef DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN
-#define DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN 32768 /* Should theorically be enough to escape ....alot of queries */
+#define DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN MAX_QUERY_LENGTH /* Should theorically be enough to escape ....alot of queries */
 #endif /* DATABASE_MAX_ESCAPE_STATIC_BUFFER_LEN */
 
-#ifndef MAX_QUERY_LENGTH 
-//#define MAX_QUERY_LENGTH 8192
-#define MAX_QUERY_LENGTH (65536 * 2) /* Lets add some space for payload decoding and query esaping..*/
-#endif  /* MAX_QUERY_LENGTH */
-
 #ifndef MAX_SQL_QUERY_OPS
-#define MAX_SQL_QUERY_OPS 20
+#define MAX_SQL_QUERY_OPS 50 /* In case we get a IP packet with 40 options */
 #endif  /* MAX_SQL_QUERY_OPS */
 
 
@@ -347,7 +342,8 @@ typedef struct _dbReliabilityHandle
     u_int8_t transactionCallFail; /* if(checkTransaction) && error set ! */
     u_int8_t transactionErrorCount; /* Number of transaction fail for a single transaction (Reset by sucessfull commit)*/
     u_int8_t transactionErrorThreshold; /* Consider the transaction threshold to be the same as reconnection maxiumum */
-        
+     
+    u_int8_t disablesigref; /* Allow user to prevent generation and creation of signature reference table */
     
     struct _DatabaseData *dbdata; /* Pointer to parent structure used for call clarity */
     
@@ -427,6 +423,10 @@ typedef struct _DatabaseData
 #ifdef ENABLE_POSTGRESQL
     PGconn * p_connection;
     PGresult * p_result;
+
+#ifdef HAVE_PQPING
+    char p_pingString[1024];
+#endif
 #endif
 #ifdef ENABLE_MYSQL
     MYSQL * m_sock;
@@ -496,9 +496,9 @@ typedef struct _DatabaseData
 #define KEYWORD_IGNOREBPF_YES  "yes"
 #define KEYWORD_IGNOREBPF_ONE  "1"
 
-
 #define KEYWORD_CONNECTION_LIMIT "connection_limit"
 #define KEYWORD_RECONNECT_SLEEP_TIME "reconnect_sleep_time"
+#define KEYWORD_DISABLE_SIGREFTABLE "disable_signature_reference_table"
 
 #define KEYWORD_MYSQL_RECONNECT "mysql_reconnect"
 

@@ -68,6 +68,7 @@
 #include "plugbase.h"
 #include "unified2.h"
 #include "util.h"
+#include "ipv6_port.h"
 
 /* internal functions */
 void LogAsciiInit(char *args);
@@ -116,7 +117,8 @@ void LogAscii(Packet *p, void *event, uint32_t event_type, void *arg)
 	}
 
 	sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-						ntohl(((Unified2EventCommon *)event)->signature_id));
+			    ntohl(((Unified2EventCommon *)event)->signature_id),
+			    ntohl(((Unified2EventCommon *)event)->signature_revision));
 
     if(p)
     { 

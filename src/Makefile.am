@@ -23,6 +23,7 @@ sf_types.h \
 spooler.c spooler.h \
 strlcatu.c strlcatu.h \
 strlcpyu.c strlcpyu.h \
+sf_protocols.h \
 timersub.h \
 twofish.c twofish.h \
 unified2.h \
@@ -34,4 +35,4 @@ sfutil/libsfutil.a
 
 SUBDIRS = sfutil output-plugins input-plugins
 
-INCLUDES = -Isfutil
+AM_CPPFLAGS = -Isfutil

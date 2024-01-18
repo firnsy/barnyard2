@@ -1,22 +1,23 @@
+It's been a minute, sadly I this project has not seen any love in nearly a
+decade and it's probably time to put it out to pasture. Thanks for the 
+memories <3
+
 
 ------------------------------------------------------------------------------
 0. SUMMARY
 ------------------------------------------------------------------------------
 
-Barnyard2 - version 2-1.10
+Barnyard2 - version 2-1.14
 
 This README contains some quick information about how to set up and
 configure barnyard2 to ensure it works as it should.
-
-Distribution Site:
-http://www.securixlive.com/barnyard2
 
 
 ------------------------------------------------------------------------------
 1. COPYRIGHT
 ------------------------------------------------------------------------------
 
-Copyright (C)2008-2012 Ian Firns     <firnsy@securixlive.com>
+Copyright (C)2008-2013 Ian Firns     <firnsy@securixlive.com>
 Copyright (C)2008-2010 SecurixLive   <dev@securixlive.com>
 
 This program is free software; you can redistribute it and/or modify
@@ -156,4 +157,3 @@ Examples:
   2. Using barnyard2 in batch mode
 
     # ./barnyard2 -c /etc/barnyard2.conf -o file1.u2 file2.u2 file3.u2
-

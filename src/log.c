@@ -791,7 +791,7 @@ void PrintEthHeader(FILE * fp, Packet * p)
             p->eh->ether_dst[4], p->eh->ether_dst[5]);
 
     /* protocol and pkt size */
-    fprintf(fp, "type:0x%X len:0x%X\n", ntohs(p->eh->ether_type), p->pkth->len);
+    fprintf(fp, "type:0x%X len:0x%X\n", ntohs(p->eh->ether_type), p->pkth->caplen);
 }
 
 #ifdef MPLS
@@ -799,7 +799,7 @@ void PrintMPLSHeader(FILE* log, Packet* p)
 {
 
     fprintf(log,"label:0x%05X exp:0x%X bos:0x%X ttl:0x%X\n",
-            p->mplsHdr.label, p->mplsHdr.exp, p->mplsHdr.bos, p->mplsHdr.ttl);    
+            p->mplsHdr.label, p->mplsHdr.exp, p->mplsHdr.bos, p->mplsHdr.ttl);
 }
 #endif
 
@@ -842,7 +842,7 @@ void PrintSLLHeader(FILE * fp, Packet * p)
         }
 
     /* mac addr */
-    fprintf(fp, "l/l len: %i l/l type: 0x%X %X:%X:%X:%X:%X:%X\n", 
+    fprintf(fp, "l/l len: %i l/l type: 0x%X %X:%X:%X:%X:%X:%X\n",
             htons(p->sllh->sll_halen), ntohs(p->sllh->sll_hatype),
             p->sllh->sll_addr[0], p->sllh->sll_addr[1], p->sllh->sll_addr[2],
             p->sllh->sll_addr[3], p->sllh->sll_addr[4], p->sllh->sll_addr[5]);
@@ -850,7 +850,7 @@ void PrintSLLHeader(FILE * fp, Packet * p)
     /* protocol and pkt size */
     fprintf(fp, "pkt type:0x%X proto: 0x%X len:0x%X\n",
                  ntohs(p->sllh->sll_pkttype),
-                 ntohs(p->sllh->sll_protocol), p->pkth->len);
+                 ntohs(p->sllh->sll_protocol), p->pkth->caplen);
 }
 
 

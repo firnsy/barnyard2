@@ -68,6 +68,7 @@
 #include "plugbase.h"
 #include "unified2.h"
 #include "util.h"
+#include "ipv6_port.h"
 
 typedef struct _CEFData
 {
@@ -505,7 +506,9 @@ void AlertCEF(Packet *p, void *event, u_int32_t event_type, void *arg)
 
 	data = (CEFData *)arg;
 	sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-						ntohl(((Unified2EventCommon *)event)->signature_id));
+			    ntohl(((Unified2EventCommon *)event)->signature_id),
+			    ntohl(((Unified2EventCommon *)event)->signature_revision));
+
 	cn = ClassTypeLookupById(barnyard2_conf, ntohl(((Unified2EventCommon *)event)->classification_id));
 
     /* Remove this check when we support IPv6 below. */
@@ -569,6 +572,8 @@ void AlertCEFCleanExit(int signal, void *arg)
     /* free memory from SyslogData */
     if(data)
         free(data);
+
+    closelog();
 }
 
 void AlertCEFRestart(int signal, void *arg)
@@ -578,5 +583,7 @@ void AlertCEFRestart(int signal, void *arg)
     /* free memory from SyslogData */
     if(data)
         free(data);
+
+    closelog();
 }
 

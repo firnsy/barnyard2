@@ -19,10 +19,10 @@ spo_common.c spo_common.h \
 spo_log_ascii.c spo_log_ascii.h \
 spo_log_null.c spo_log_null.h \
 spo_log_tcpdump.c spo_log_tcpdump.h \
-spo_platypus.c spo_platypus.h \
 spo_sguil.c spo_sguil.h \
-spo_syslog_full.c spo_syslog.full.h \
+spo_echidna.c spo_echidna.h \
+spo_syslog_full.c spo_syslog_full.h \
 spo_database.c spo_database.h \
 spo_database_cache.c spo_database_cache.h
 
-INCLUDES = -I.. -I ../sfutil
+AM_CPPFLAGS = -I.. -I ../sfutil

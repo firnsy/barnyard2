@@ -895,6 +895,7 @@ void FWsamNewStationKey(FWsamStation *station,FWsamPacket *packet)
  * unlike inet_ntoa which keeps only one. This is used for (s)printf's were two IP
  * addresses are printed.
 */
+/*
 char *inettoa(unsigned long ip)
 {
     struct in_addr ips;
@@ -906,6 +907,7 @@ char *inettoa(unsigned long ip)
     strncpy(addr[toggle],inet_ntoa(ips),18);
     return addr[toggle];
 }
+*/
 #endif
 
 
@@ -1017,7 +1019,9 @@ void AlertFWsam(Packet *p, void *event, uint32_t event_type, void *arg)
 
     optp=NULL;
     sn = GetSigByGidSid(ntohl(((Unified2EventCommon *)event)->generator_id),
-                        ntohl(((Unified2EventCommon *)event)->signature_id));
+                        ntohl(((Unified2EventCommon *)event)->signature_id),
+			ntohl(((Unified2EventCommon *)event)->signature_revision));
+    
     cn = ClassTypeLookupById(barnyard2_conf, ntohl(((Unified2EventCommon *)event)->classification_id));
 
     if(FWsamOptionField)            /* If using the file (field present), let's use that */
@@ -1047,16 +1051,16 @@ void AlertFWsam(Packet *p, void *event, uint32_t event_type, void *arg)
         for(i=0; i<FWSAM_REPET_BLOCKS && len; i++)
         {
             if( ( ( optp->how==FWSAM_HOW_THIS ) ?   /* if blocking mode SERVICE, check for src and dst    */
-                    ( lastbsip[i]==GET_SRC_IP(p) && lastbdip[i]==GET_DST_IP(p) && lastbproto[i]==GET_IPH_PROTO(p) &&
-                      ( IP_HAS_PORTS(p) ? /* check port only of TCP or UDP */
+		  ( lastbsip[i]==(unsigned long)GET_SRC_IP(p) && lastbdip[i]==(unsigned long)GET_DST_IP(p) && lastbproto[i]==GET_IPH_PROTO(p) &&
+		    ( IP_HAS_PORTS(p) ? /* check port only of TCP or UDP */
 /*                  ((optp->who==FWSAM_WHO_SRC)?(lastbsp[i]==record->sp):(lastbdp[i]==record->dp)):TRUE) ): */
                         lastbdp[i]==p->dp : TRUE
                       )
                     ) :
                     (
                       ( optp->who==FWSAM_WHO_SRC) ?
-                        ( lastbsip[i]==GET_SRC_IP(p) ) :
-                        ( lastbdip[i]==GET_DST_IP(p) )
+		      ( lastbsip[i]==(unsigned long)GET_SRC_IP(p) ) :
+		      ( lastbdip[i]==(unsigned long)GET_DST_IP(p) )
                     )
                  ) && /* otherwise if we block source, only compare source. Same for dest. */
                  lastbduration[i]==optp->duration &&
@@ -1073,8 +1077,8 @@ void AlertFWsam(Packet *p, void *event, uint32_t event_type, void *arg)
             if(++lastbpointer>=FWSAM_REPET_BLOCKS)      /* increase repetitive check pointer */
                 lastbpointer=0;
 
-            lastbsip[lastbpointer]=GET_SRC_IP(p);     /* and note packet details */
-            lastbdip[lastbpointer]=GET_DST_IP(p);
+            lastbsip[lastbpointer]=(unsigned long)GET_SRC_IP(p);     /* and note packet details */
+            lastbdip[lastbpointer]=(unsigned long)GET_DST_IP(p);
             lastbduration[lastbpointer]=optp->duration;
             lastbmode[lastbpointer]=optp->how|optp->who|optp->loglevel;
             lastbproto[lastbpointer]=GET_IPH_PROTO(p);
@@ -1169,8 +1173,8 @@ void AlertFWsam(Packet *p, void *event, uint32_t event_type, void *arg)
                         LogMessage("DEBUG => [Alert_FWsam] Src IP     :  %s\n",sfip_ntoa(GET_SRC_IP(p)));
                         LogMessage("DEBUG => [Alert_FWsam] Dest IP    :  %s\n",sfip_ntoa(GET_DST_IP(p)));
 #else
-                        LogMessage("DEBUG => [Alert_FWsam] Src IP     :  %s\n",inet_ntoa(p->iph->ip_src));
-                        LogMessage("DEBUG => [Alert_FWsam] Dest IP    :  %s\n",inet_ntoa(p->iph->ip_dst));
+                        LogMessage("DEBUG => [Alert_FWsam] Src IP     :  %s\n",inet_ntoa(GET_SRC_ADDR(p)));
+                        LogMessage("DEBUG => [Alert_FWsam] Dest IP    :  %s\n",inet_ntoa(GET_DST_ADDR(p)));
 #endif
                         LogMessage("DEBUG => [Alert_FWsam] Src Port   :  %i\n",p->sp);
                         LogMessage("DEBUG => [Alert_FWsam] Dest Port  :  %i\n",p->dp);

@@ -96,11 +96,6 @@ static char _PATH_VARRUN[STD_BUF];
 #define FILE_MAX_UTIL  (PATH_MAX_UTIL + NAME_MAX_UTIL)
 
 
-#ifndef MAX_QUERY_LENGTH
-//#define MAX_QUERY_LENGTH 8192
-#define MAX_QUERY_LENGTH 65536 /* Lets add some space for payload decoding and query esaping..*/
-#endif  /* MAX_QUERY_LENGTH */
-
 
 /****************************************************************************
  *
@@ -150,7 +145,7 @@ int DisplayBanner(void)
         "  ______   -*> Barnyard2 <*-\n"
         " / ,,_  \\  Version %s.%s.%s (Build %s)%s%s\n"
         " |o\"  )~|  By Ian Firns (SecurixLive): http://www.securixlive.com/\n"
-		" + '''' +  (C) Copyright 2008-2012 Ian Firns <firnsy@securixlive.com>\n"
+		" + '''' +  (C) Copyright 2008-2013 Ian Firns <firnsy@securixlive.com>\n"
         "\n"
         , VER_MAJOR, VER_MINOR, VER_REVISION, VER_BUILD,
 #ifdef DEBUG
@@ -598,7 +593,8 @@ NORETURN void FatalError(const char *format,...)
 #endif
     }
 
-    exit(1);
+    CleanExit(1);
+    
 }
 
 
@@ -841,13 +837,15 @@ void DropStats(int exiting)
                "===============================\n");
 
     LogMessage("Record Totals:\n");
-    LogMessage("   Records: " FMTu64("12") "\n", pc.total_records);
-    LogMessage("    Events: " FMTu64("12") " (%.3f%%)\n", pc.total_events,
+    LogMessage("   Records:"     FMTu64("12") "\n", pc.total_records);
+    LogMessage("   Events:"      FMTu64("12") " (%.3f%%)\n", pc.total_events,
                CalcPct(pc.total_events, pc.total_records));
-    LogMessage("   Packets: " FMTu64("12") " (%.3f%%)\n", pc.total_packets,
+    LogMessage("   Packets:"     FMTu64("12") " (%.3f%%)\n", pc.total_packets,
                CalcPct(pc.total_packets, pc.total_records));
-    LogMessage("   Unknown: " FMTu64("12") " (%.3f%%)\n", pc.total_unknown,
+    LogMessage("   Unknown:"     FMTu64("12") " (%.3f%%)\n", pc.total_unknown,
                CalcPct(pc.total_unknown, pc.total_records));
+    LogMessage("   Suppressed:"  FMTu64("12") " (%.3f%%)\n", pc.total_suppressed,
+               CalcPct(pc.total_suppressed, pc.total_records));
 
     total = pc.total_packets;
 
@@ -1023,6 +1021,13 @@ void CleanupProtoNames(void)
             protocol_names[i] = NULL;
         }
     }
+
+    if(protocol_names)
+    {
+	free(protocol_names);
+	protocol_names = NULL;
+    }
+
 }
 
  /****************************************************************************
@@ -1083,9 +1088,9 @@ void GoDaemon(void)
 {
 #ifndef WIN32
     int exit_val = 0;
-	int ret = 0;
+    int ret = 0;
     pid_t fs;
-
+    
     LogMessage("Initializing daemon mode\n");
 
     if (BcDaemonRestart())
@@ -1184,7 +1189,6 @@ void GoDaemon(void)
     ret = dup(0);  /* stderr, fd 0 => fd 2 */
 
     SignalWaitingParent();
-
 #endif /* ! WIN32 */
 }
 
@@ -1795,7 +1799,10 @@ int Move(const char *source, const char *dest)
     }
     else
     {
-        unlink(source);
+        if (unlink(source) != 0) { /* oops, unlink/remove has failed */
+		LogMessage("Failed to unlink \"%s\": %s",
+			source, strerror(errno));
+	}
     }
     return 0;
 }
@@ -2264,8 +2271,8 @@ u_int32_t base64_STATIC(const u_char * xdata, int length,char *output)
 {
     int count, cols, bits, c, char_count;
     unsigned char alpha[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";  /* 64 bytes */
-    char * payloadptr;
     
+
     char_count = 0;
     bits = 0;
     cols = 0;
@@ -2278,7 +2285,6 @@ u_int32_t base64_STATIC(const u_char * xdata, int length,char *output)
     
     memset(output,'\0',MAX_QUERY_LENGTH);
 
-    payloadptr = output;
 
     for(count = 0; count < length; count++)
     {
@@ -2717,3 +2723,35 @@ u_int32_t string_sanitize_character(char *input,char ichar)
     return 0;
 }
 
+
+int BY2Strtoul(char *inStr,unsigned long *ul_ptr)
+{
+    char *endptr = NULL;
+    
+    if( (inStr == NULL) ||
+        (ul_ptr == NULL))
+    {
+        return 1;
+    }
+    
+    *ul_ptr = strtoul(inStr,&endptr,10);
+    
+    if ((errno == ERANGE && ( *ul_ptr == LONG_MAX || *ul_ptr == LONG_MIN)) ||
+        (errno != 0 && *ul_ptr == 0))
+    {
+        FatalError("[%s()], strtoul error : [%s] for [%s]\n",
+                   __FUNCTION__,
+                   strerror(errno),
+                   inStr);
+    }
+    
+    if( *endptr != '\0' || (endptr == inStr))
+    {
+        LogMessage("[%s()], is not a digit [%s] \n",
+                   __FUNCTION__,
+                   inStr);
+        return 1;
+    }
+    
+    return 0;
+}

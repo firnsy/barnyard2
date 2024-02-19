@@ -115,7 +115,7 @@
 #include <sys/filio.h>
 #endif
 
-typedef int SOCKET;
+typedef int BARNYARD2_SOCKET;
 
 #ifndef INVALID_SOCKET
 #define INVALID_SOCKET  -1
@@ -963,7 +963,7 @@ void AlertFWsam(Packet *p, void *event, uint32_t event_type, void *arg)
     FWsamPacket sampacket;
     FWsamStation *station=NULL;
     FWsamList *fwsamlist;
-    SOCKET stationsocket;
+    BARNYARD2_SOCKET stationsocket;
     int i,len,deletestation,stationtry=0;
     char *encbuf,*decbuf;
     static unsigned long lastbsip[FWSAM_REPET_BLOCKS];
@@ -1389,7 +1389,7 @@ void AlertFWsam(Packet *p, void *event, uint32_t event_type, void *arg)
 void FWsamCheckOut(FWsamStation *station)
 {
     FWsamPacket sampacket;
-    SOCKET stationsocket;
+    BARNYARD2_SOCKET stationsocket;
     int i,len;
     char *encbuf,*decbuf;
 
@@ -1540,7 +1540,7 @@ int FWsamCheckIn(FWsamStation *station)
     int i,len,stationok=TRUE;
     FWsamPacket sampacket;
     char *encbuf,*decbuf;
-    SOCKET stationsocket;
+    BARNYARD2_SOCKET stationsocket;
 
 
     /* create a socket for the station */

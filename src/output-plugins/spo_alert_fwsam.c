@@ -115,7 +115,9 @@
 #include <sys/filio.h>
 #endif
 
+#ifndef SOCKET
 typedef int SOCKET;
+#endif
 
 #ifndef INVALID_SOCKET
 #define INVALID_SOCKET  -1

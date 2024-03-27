@@ -141,7 +141,7 @@ AC_CHECK_PROGS(LEX,flex,none)
 #
 
 dnl checking headers
-AC_CHECK_HEADERS([strings.h string.h stdlib.h unistd.h sys/sockio.h paths.h inttypes.h wchar.h math.h])
+AC_CHECK_HEADERS([strings.h string.h stdlib.h unistd.h sys/sockio.h paths.h inttypes.h wchar.h math.h dumbnet.h])
 AC_CHECK_LIB([m],[floor])
 AC_CHECK_LIB([m],[ceil])
 
